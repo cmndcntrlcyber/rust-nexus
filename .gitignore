@@ -1,0 +1,381 @@
+# Rust-Nexus Project .gitignore
+# Comprehensive ignore patterns for C2 framework development
+
+# ===========================================
+# Rust Build Artifacts and Cache
+# ===========================================
+
+# Cargo build outputs
+**/target/
+**/Cargo.lock
+**/*.rs.bk
+**/*.pdb
+
+# Cargo cache and registry
+~/.cargo/registry/
+~/.cargo/git/
+~/.cargo/bin/
+
+# Rust analyzer cache
+**/.rust-analyzer.json
+
+# ===========================================
+# WASM and Web Development
+# ===========================================
+
+# WASM build outputs
+**/dist/
+**/pkg/
+**/*.wasm
+**/*.js.map
+**/wasm-pack.log
+
+# Trunk build artifacts
+**/.trunk/
+
+# Node.js dependencies and cache
+**/node_modules/
+**/.npm/
+**/.pnpm-store/
+**/yarn.log
+**/package-lock.json
+**/pnpm-lock.yaml
+
+# Web development build artifacts
+**/.cache/
+**/.parcel-cache/
+**/coverage/
+**/.nyc_output/
+
+# ===========================================
+# C/C++ Compilation (BOF Development)
+# ===========================================
+
+# Object files
+**/*.o
+**/*.obj
+**/*.so
+**/*.dll
+**/*.dylib
+
+# Executables  
+**/*.exe
+**/*.out
+**/*.app
+
+# Libraries
+**/*.lib
+**/*.a
+
+# Debug files
+**/*.dSYM/
+**/*.su
+**/*.idb
+**/*.pdb
+
+# Precompiled Headers
+**/*.gch
+**/*.pch
+
+# Makefiles outputs
+**/Makefile.in
+**/autom4te.cache/
+**/config.log
+**/config.status
+
+# ===========================================
+# Security and Configuration
+# ===========================================
+
+# Private keys and certificates (CRITICAL - do not commit)
+**/*.key
+**/*.pem
+**/*.p12
+**/*.pfx
+**/*.crt
+**/*.cer
+**/*.csr
+
+# Configuration files with secrets
+**/*-config.toml
+**/*-production.toml
+**/*-staging.toml
+**/nexus.toml
+**/agent.toml
+**/.env
+**/.env.*
+**/secrets/
+**/private/
+
+# API keys and tokens
+**/*-api-key.txt
+**/*-token.txt
+**/cloudflare-token
+**/acme-account.json
+
+# Database files
+**/*.db
+**/*.sqlite
+**/*.sqlite3
+
+# ===========================================
+# Development and IDE Files
+# ===========================================
+
+# Visual Studio Code
+**/.vscode/
+**/*.code-workspace
+
+# IntelliJ IDEA
+**/.idea/
+**/*.iml
+**/*.iws
+
+# Vim
+**/*.swp
+**/*.swo
+**/*~
+**/.netrwhist
+
+# Emacs
+**/*~
+**/#*#
+**/.#*
+
+# Sublime Text
+**/*.sublime-project
+**/*.sublime-workspace
+
+# Atom
+**/.atom/
+
+# ===========================================
+# Operating System Files
+# ===========================================
+
+# Windows
+**/Thumbs.db
+**/ehthumbs.db
+**/Desktop.ini
+**/$RECYCLE.BIN/
+**/*.lnk
+
+# macOS
+**/.DS_Store
+**/.AppleDouble
+**/.LSOverride
+**/Icon?
+**/.Spotlight-V100
+**/.Trashes
+
+# Linux
+**/*~
+**/.fuse_hidden*
+**/.directory
+**/.Trash-*
+
+# ===========================================
+# Log Files and Runtime Data
+# ===========================================
+
+# Application logs
+**/*.log
+**/logs/
+**/log/
+**/.log/
+
+# Runtime directories
+**/tmp/
+**/temp/
+**/.tmp/
+**/.temp/
+
+# Process files
+**/*.pid
+**/*.lock
+
+# Crash dumps
+**/*.dmp
+**/crash-*/
+**/dump-*/
+
+# ===========================================
+# Documentation and Reports
+# ===========================================
+
+# Generated documentation
+**/book/
+**/mdbook-output/
+**/_book/
+
+# Report outputs (may contain sensitive data)
+**/reports/
+**/output/
+**/exports/
+**/*.pdf
+**/*.docx
+**/*.xlsx
+
+# ===========================================
+# Testing and Coverage
+# ===========================================
+
+# Test artifacts
+**/test-results/
+**/test-output/
+**/.coverage/
+**/coverage.xml
+**/lcov.info
+
+# Benchmark results
+**/criterion/
+
+# ===========================================
+# Infrastructure and Deployment
+# ===========================================
+
+# Docker
+**/.dockerignore
+**/Dockerfile.prod
+**/docker-compose.override.yml
+
+# Kubernetes
+**/*-secret.yaml
+**/*-configmap.yaml
+**/kustomization.yaml
+
+# Terraform
+**/*.tfstate
+**/*.tfstate.*
+**/.terraform/
+**/.terraform.lock.hcl
+**/terraform.tfvars
+
+# Ansible
+**/vault_pass.txt
+**/host_vars/
+**/group_vars/
+
+# ===========================================
+# Cloud Provider Files
+# ===========================================
+
+# AWS
+**/.aws/
+**/aws-credentials
+
+# Azure
+**/.azure/
+
+# Google Cloud
+**/gcloud-service-key.json
+**/.gcloud/
+
+# Cloudflare
+**/cloudflare-credentials.json
+
+# ===========================================
+# Backup and Archive Files
+# ===========================================
+
+# Backup files
+**/*.bak
+**/*.backup
+**/*.old
+**/*.orig
+
+# Archive files
+**/*.zip
+**/*.tar
+**/*.tar.gz
+**/*.tgz
+**/*.rar
+**/*.7z
+
+# ===========================================
+# Agent Development Specific
+# ===========================================
+
+# Agent communication logs (may contain sensitive task data)
+**/.communication_message.json
+**/agent-logs/
+**/communication-cache/
+
+# Temporary agent development files
+**/agent-scratch/
+**/temp-implementations/
+**/experimental/
+
+# Agent coordination files with sensitive data
+**/agent-coordination.json
+**/task-assignments.json
+
+# ===========================================
+# Monitoring and Metrics
+# ===========================================
+
+# Monitoring data
+**/metrics/
+**/prometheus-data/
+**/grafana-data/
+
+# Performance profiles
+**/*.prof
+**/perf.data
+
+# ===========================================
+# Research and Development
+# ===========================================
+
+# Research artifacts
+**/research/
+**/notes/
+**/drafts/
+**/experiments/
+
+# Reverse engineering artifacts
+**/analysis/
+**/disassembly/
+**/dumps/
+
+# ===========================================
+# Third-party and Vendored Code
+# ===========================================
+
+# Vendor directories
+**/vendor/
+**/third-party/
+
+# Downloaded dependencies
+**/deps/
+**/lib/
+
+# ===========================================
+# Custom Patterns for This Project
+# ===========================================
+
+# Specific to rust-nexus development
+**/bof-outputs/
+**/compiled-bofs/
+**/agent-builds/
+**/server-builds/
+
+# WASM UI specific
+**/nexus-wasm-ui/dist/
+**/nexus-wasm-ui/pkg/
+**/nexus-wasm-ui/.trunk/
+
+# Documentation artifacts that shouldn't be versioned
+**/docs/generated/
+**/api-docs/
+
+# Example configurations (keep templates, ignore actual configs)
+# Note: Examples are kept, but actual production configs are ignored
+config/production/
+config/staging/
+config/development/
+!config/examples/
+
+# ===========================================
+# End of .gitignore
+# ===========================================

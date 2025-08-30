@@ -1,5 +1,5 @@
 use crate::{NexusError, Result};
-use aes_gcm::{Aes256Gcm, Key, Nonce, aead::{Aead, NewAead}};
+use aes_gcm::{Aes256Gcm, Nonce, aead::Aead, KeyInit};
 use base64::{Engine as _, engine::general_purpose};
 use rand::Rng;
 
@@ -19,8 +19,8 @@ impl Crypto {
     }
 
     pub fn encrypt(&self, data: &str) -> Result<String> {
-        let key = Key::from_slice(&self.key);
-        let cipher = Aes256Gcm::new(key);
+        let cipher = Aes256Gcm::new_from_slice(&self.key)
+            .map_err(|e| NexusError::EncryptionError(e.to_string()))?;
         
         let mut nonce_bytes = [0u8; 12];
         rand::thread_rng().fill(&mut nonce_bytes);
@@ -47,8 +47,8 @@ impl Crypto {
         }
 
         let (nonce_bytes, ciphertext) = decoded.split_at(12);
-        let key = Key::from_slice(&self.key);
-        let cipher = Aes256Gcm::new(key);
+        let cipher = Aes256Gcm::new_from_slice(&self.key)
+            .map_err(|e| NexusError::DecryptionError(e.to_string()))?;
         let nonce = Nonce::from_slice(nonce_bytes);
         
         let plaintext = cipher

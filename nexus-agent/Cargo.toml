@@ -5,13 +5,16 @@ edition = "2021"
 
 [dependencies]
 nexus-common = { path = "../nexus-common" }
+nexus-infra = { path = "../nexus-infra" }
+tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-tokio = { workspace = true }
 uuid = { workspace = true }
-aes-gcm = { workspace = true }
-rand = { workspace = true }
+hostname = { workspace = true }
+local-ip-address = { workspace = true }
 base64 = { workspace = true }
+log = { workspace = true }
+env_logger = { workspace = true }
 thiserror = { workspace = true }
 hostname = { workspace = true }
 local-ip-address = { workspace = true }

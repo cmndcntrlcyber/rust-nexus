@@ -1,6 +1,5 @@
 [workspace]
 members = [
-    "nexus-server",
     "nexus-agent",
     "nexus-common",
     "nexus-infra"
