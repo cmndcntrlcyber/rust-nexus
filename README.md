@@ -123,7 +123,7 @@ rust-nexus/
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/rust-nexus.git
+git clone https://github.com/cmndcntrlcyber/rust-nexus.git
 cd rust-nexus
 
 # Create configuration from template
