@@ -1,0 +1,64 @@
+{
+  "name": "dev-team-platform",
+  "version": "1.0.0",
+  "description": "AI-Powered Multi-Agent Development Team - Microservices Platform",
+  "private": true,
+  "workspaces": [
+    "shared/*",
+    "services/*",
+    "services/agents/*",
+    "frontend"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "dev": "docker-compose up -d",
+    "dev:build": "docker-compose up --build -d",
+    "dev:logs": "docker-compose logs -f",
+    "dev:down": "docker-compose down",
+    "dev:clean": "docker-compose down -v --remove-orphans",
+    "test": "npm test --workspaces",
+    "lint": "npm run lint --workspaces",
+    "type-check": "npm run type-check --workspaces",
+    "setup": "npm install && npm run build:shared",
+    "build:shared": "npm run build -w shared/types -w shared/utils",
+    "db:migrate": "npm run migrate -w services/orchestrator-service",
+    "db:seed": "npm run seed -w services/orchestrator-service"
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "development",
+    "microservices",
+    "automation",
+    "typescript",
+    "react",
+    "nodejs"
+  ],
+  "author": "Dev Team Platform",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "nodemon": "^3.0.0",
+    "concurrently": "^8.0.0",
+    "eslint": "^8.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "prettier": "^3.0.0",
+    "jest": "^29.0.0",
+    "@types/jest": "^29.0.0",
+    "ts-jest": "^29.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dev-team/platform"
+  },
+  "bugs": {
+    "url": "https://github.com/dev-team/platform/issues"
+  },
+  "homepage": "https://github.com/dev-team/platform#readme"
+}

@@ -1,0 +1,50 @@
+[package]
+name = "nexus-web-comms"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Workspace dependencies
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+uuid = { workspace = true }
+log = { workspace = true }
+thiserror = { workspace = true }
+
+# HTTP server and client capabilities
+reqwest = { workspace = true, optional = true }
+warp = { version = "0.3", optional = true }
+
+# WebSocket support for real-time fallback
+tokio-tungstenite = { version = "0.20", optional = true }
+futures-util = "0.3"
+
+# TLS and certificate handling
+rustls = { workspace = true }
+tokio-rustls = { workspace = true }
+
+# Base64 encoding for data obfuscation
+base64 = { workspace = true }
+
+# DNS and domain fronting support
+trust-dns-resolver = { workspace = true, optional = true }
+
+# Timing and intervals for jitter
+rand = { workspace = true, optional = true }
+chrono = { workspace = true }
+
+# URL parsing and manipulation
+url = { version = "2.4", optional = true }
+
+# Local crate dependencies
+nexus-common = { path = "../nexus-common" }
+# Temporarily commented out due to compilation issues
+# nexus-infra = { path = "../nexus-infra" }
+
+[features]
+default = ["http-fallback", "websocket-fallback", "domain-fronting"]
+http-fallback = ["reqwest", "warp"]
+websocket-fallback = ["tokio-tungstenite"]
+domain-fronting = ["trust-dns-resolver", "url"]
+traffic-obfuscation = ["rand"]

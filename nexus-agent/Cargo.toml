@@ -16,8 +16,6 @@ base64 = { workspace = true }
 log = { workspace = true }
 env_logger = { workspace = true }
 thiserror = { workspace = true }
-hostname = { workspace = true }
-local-ip-address = { workspace = true }
 num_cpus = "1.16"
 
 # Windows-specific dependencies
@@ -27,15 +25,3 @@ windows-sys = { workspace = true }
 # Linux-specific dependencies
 [target.'cfg(target_os = "linux")'.dependencies]
 libc = "0.2"
-
-[profile.release]
-opt-level = 3
-lto = true
-codegen-units = 1
-panic = "abort"
-strip = true
-
-# Windows subsystem configuration for stealth
-[target.'cfg(target_os = "windows")'.profile.release]
-opt-level = "z"
-debug = false

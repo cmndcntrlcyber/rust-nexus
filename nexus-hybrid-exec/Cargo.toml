@@ -1,0 +1,51 @@
+[package]
+name = "nexus-hybrid-exec"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Workspace dependencies
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+uuid = { workspace = true }
+log = { workspace = true }
+thiserror = { workspace = true }
+
+# SSH client for remote execution
+russh = { version = "0.40", optional = true }
+russh-keys = { version = "0.40", optional = true }
+
+# WMI and Windows management (Windows only)
+[target.'cfg(windows)'.dependencies]
+wmi = "0.13"
+windows-sys = { workspace = true }
+
+# HTTP client for API-based execution
+reqwest = { workspace = true, optional = true }
+
+# Process management
+tokio-process = "0.2"
+
+# Command line execution
+which = "4.4"
+
+# PowerShell execution support
+pwsh = { version = "0.1.0", optional = true }
+
+# Authentication and security
+ring = "0.17"
+rsa = { version = "0.9", optional = true }
+
+# Local crate dependencies
+nexus-common = { path = "../nexus-common" }
+# Temporarily commented out due to compilation issues
+# nexus-infra = { path = "../nexus-infra" }
+
+[features]
+default = ["ssh", "api", "powershell"]
+ssh = ["russh", "russh-keys", "rsa"]
+wmi = []
+api = ["reqwest"]
+powershell = ["pwsh"]
+cross-platform = ["ssh", "api"]

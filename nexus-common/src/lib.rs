@@ -30,6 +30,8 @@ pub enum NexusError {
     AgentError(String),
     #[error("Task execution failed: {0}")]
     TaskExecutionError(String),
+    #[error("Configuration error: {0}")]
+    ConfigurationError(String),
 }
 
 pub type Result<T> = std::result::Result<T, NexusError>;
