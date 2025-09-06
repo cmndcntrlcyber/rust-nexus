@@ -1,8 +1,13 @@
 [workspace]
+resolver = "2"
 members = [
     "nexus-agent",
     "nexus-common",
-    "nexus-infra"
+    "nexus-infra",
+    "nexus-webui",
+    "nexus-recon",
+    "nexus-hybrid-exec",
+    "nexus-web-comms"
 ]
 
 [workspace.dependencies]

@@ -16,7 +16,7 @@ base64 = { workspace = true }
 rand = { workspace = true }
 
 # gRPC and Protocol Buffers
-tonic = { workspace = true }
+tonic = { workspace = true, features = ["tls", "transport"] }
 prost = { workspace = true }
 prost-types = "0.12"
 async-stream = "0.3"
@@ -52,6 +52,11 @@ chrono = { workspace = true }
 
 # Logging
 log = { workspace = true }
+env_logger = { workspace = true }
+
+# Windows PE/COFF parsing
+goblin = { workspace = true }
+pelite = { workspace = true }
 
 [build-dependencies]
 tonic-build = { workspace = true }

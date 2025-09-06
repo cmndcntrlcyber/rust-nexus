@@ -1,0 +1,295 @@
+version: '3.8'
+
+services:
+  # Infrastructure Services
+  postgres:
+    image: postgres:15-alpine
+    container_name: dev-team-postgres
+    environment:
+      POSTGRES_DB: dev_team_platform
+      POSTGRES_USER: devteam
+      POSTGRES_PASSWORD: devteam_secure_password
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/database/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U devteam -d dev_team_platform"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: dev-team-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  nats:
+    image: nats:2.10-alpine
+    container_name: dev-team-nats
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    command: ["nats-server", "--jetstream", "--http_port", "8222"]
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8222/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Core Services
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    container_name: dev-team-api-gateway
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: your_jwt_secret_change_in_production
+      ORCHESTRATOR_SERVICE_URL: http://orchestrator-service:3001
+      PROJECT_SERVICE_URL: http://project-service:3002
+      TASK_SERVICE_URL: http://task-service:3003
+    depends_on:
+      - redis
+      - orchestrator-service
+      - project-service
+      - task-service
+    restart: unless-stopped
+
+  orchestrator-service:
+    build:
+      context: ./services/orchestrator-service
+      dockerfile: Dockerfile
+    container_name: dev-team-orchestrator
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      DATABASE_URL: postgresql://devteam:devteam_secure_password@postgres:5432/dev_team_platform
+      REDIS_URL: redis://redis:6379
+      NATS_URL: nats://nats:4222
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      TAVILY_API_KEY: ${TAVILY_API_KEY}
+    depends_on:
+      - postgres
+      - redis
+      - nats
+    restart: unless-stopped
+
+  project-service:
+    build:
+      context: ./services/project-service
+      dockerfile: Dockerfile
+    container_name: dev-team-project-service
+    ports:
+      - "3002:3002"
+    environment:
+      NODE_ENV: development
+      PORT: 3002
+      DATABASE_URL: postgresql://devteam:devteam_secure_password@postgres:5432/dev_team_platform
+      REDIS_URL: redis://redis:6379
+      NATS_URL: nats://nats:4222
+    volumes:
+      - project_files:/app/data/projects
+    depends_on:
+      - postgres
+      - redis
+      - nats
+    restart: unless-stopped
+
+  task-service:
+    build:
+      context: ./services/task-service
+      dockerfile: Dockerfile
+    container_name: dev-team-task-service
+    ports:
+      - "3003:3003"
+    environment:
+      NODE_ENV: development
+      PORT: 3003
+      DATABASE_URL: postgresql://devteam:devteam_secure_password@postgres:5432/dev_team_platform
+      REDIS_URL: redis://redis:6379
+      NATS_URL: nats://nats:4222
+    depends_on:
+      - postgres
+      - redis
+      - nats
+    restart: unless-stopped
+
+  # Agent Services
+  agent-architecture:
+    build:
+      context: ./services/agents/architecture
+      dockerfile: Dockerfile
+    container_name: dev-team-agent-architecture
+    ports:
+      - "3010:3010"
+    environment:
+      NODE_ENV: development
+      PORT: 3010
+      AGENT_ID: architecture-lead-001
+      AGENT_TYPE: ARCHITECTURE_LEAD
+      NATS_URL: nats://nats:4222
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      TAVILY_API_KEY: ${TAVILY_API_KEY}
+    depends_on:
+      - nats
+    restart: unless-stopped
+
+  agent-frontend:
+    build:
+      context: ./services/agents/frontend
+      dockerfile: Dockerfile
+    container_name: dev-team-agent-frontend
+    ports:
+      - "3011:3011"
+    environment:
+      NODE_ENV: development
+      PORT: 3011
+      AGENT_ID: frontend-core-001
+      AGENT_TYPE: FRONTEND_CORE
+      NATS_URL: nats://nats:4222
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+    depends_on:
+      - nats
+    restart: unless-stopped
+
+  agent-backend:
+    build:
+      context: ./services/agents/backend
+      dockerfile: Dockerfile
+    container_name: dev-team-agent-backend
+    ports:
+      - "3012:3012"
+    environment:
+      NODE_ENV: development
+      PORT: 3012
+      AGENT_ID: backend-integration-001
+      AGENT_TYPE: BACKEND_INTEGRATION
+      NATS_URL: nats://nats:4222
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+    depends_on:
+      - nats
+    restart: unless-stopped
+
+  agent-qa:
+    build:
+      context: ./services/agents/qa
+      dockerfile: Dockerfile
+    container_name: dev-team-agent-qa
+    ports:
+      - "3013:3013"
+    environment:
+      NODE_ENV: development
+      PORT: 3013
+      AGENT_ID: qa-001
+      AGENT_TYPE: QUALITY_ASSURANCE
+      NATS_URL: nats://nats:4222
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+    depends_on:
+      - nats
+    restart: unless-stopped
+
+  agent-devops:
+    build:
+      context: ./services/agents/devops
+      dockerfile: Dockerfile
+    container_name: dev-team-agent-devops
+    ports:
+      - "3014:3014"
+    environment:
+      NODE_ENV: development
+      PORT: 3014
+      AGENT_ID: devops-001
+      AGENT_TYPE: DEVOPS
+      NATS_URL: nats://nats:4222
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+    depends_on:
+      - nats
+    restart: unless-stopped
+
+  agent-mcp:
+    build:
+      context: ./services/agents/mcp
+      dockerfile: Dockerfile
+    container_name: dev-team-agent-mcp
+    ports:
+      - "3015:3015"
+    environment:
+      NODE_ENV: development
+      PORT: 3015
+      AGENT_ID: mcp-integration-001
+      AGENT_TYPE: MCP_INTEGRATION
+      NATS_URL: nats://nats:4222
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+    depends_on:
+      - nats
+    restart: unless-stopped
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: dev-team-frontend
+    ports:
+      - "3080:3080"
+    environment:
+      NODE_ENV: development
+      PORT: 3080
+      REACT_APP_API_URL: http://localhost:3000
+      REACT_APP_WS_URL: ws://localhost:3000
+    depends_on:
+      - api-gateway
+    restart: unless-stopped
+
+  # Monitoring (Optional)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: dev-team-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    restart: unless-stopped
+    profiles: ["monitoring"]
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: dev-team-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    restart: unless-stopped
+    profiles: ["monitoring"]
+
+volumes:
+  postgres_data:
+  redis_data:
+  project_files:
+  grafana_data:
+
+networks:
+  default:
+    driver: bridge
