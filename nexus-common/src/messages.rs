@@ -137,7 +137,7 @@ impl TaskData {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct TaskResult {
+pub struct TaskResultMessage {
     pub task_id: String,
     pub status: String, // "success", "error", "timeout"
     pub output: String,
@@ -146,7 +146,7 @@ pub struct TaskResult {
     pub timestamp: u64,
 }
 
-impl TaskResult {
+impl TaskResultMessage {
     pub fn success(task_id: String, output: String, execution_time_ms: u64) -> Self {
         Self {
             task_id,

@@ -200,7 +200,6 @@ use nexus_infra::{CertManager, OriginCertConfig};
 let origin_config = OriginCertConfig {
     cert_path: PathBuf::from("/opt/nexus/certs/origin.crt"),
     key_path: PathBuf::from("/opt/nexus/certs/origin.key"),
-    ca_cert_path: PathBuf::from("/opt/nexus/certs/origin_ca.crt"),
     pin_validation: true,
     validity_days: 5475, // 15 years
 };

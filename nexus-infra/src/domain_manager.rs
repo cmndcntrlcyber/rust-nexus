@@ -1,6 +1,6 @@
 //! Domain management system with dynamic DNS and rotation capabilities
 
-use crate::{InfraError, InfraResult, DomainConfig, CloudflareManager, generate_subdomain, validate_domain};
+use crate::{InfraError, InfraResult, config::DomainConfig, CloudflareManager, generate_subdomain, validate_domain};
 use chrono::{DateTime, Utc, Duration};
 use hickory_resolver::{Resolver, config::*};
 use log::{info, warn, debug, error};
@@ -141,12 +141,7 @@ impl DomainManager {
             }
         }
         
-        Err(InfraError::NetworkError(
-            reqwest::Error::from(std::io::Error::new(
-                std::io::ErrorKind::TimedOut,
-                "Failed to detect public IP from all services"
-            ))
-        ))
+        Err(InfraError::DnsError("Failed to detect public IP from all services".to_string()))
     }
     
     /// Ensure minimum number of active domains
@@ -388,10 +383,19 @@ impl DomainManager {
     async fn check_single_domain_health(&self, domain: &str) -> InfraResult<DomainHealth> {
         let start_time = std::time::Instant::now();
         
-        // Perform DNS lookup
+        // Perform DNS lookup with timeout
+        let resolver = self.resolver.clone();
+        let domain_owned = domain.to_string(); // Clone to avoid lifetime issues
+        let lookup_future = async move {
+            // Spawn the blocking DNS lookup in a thread
+            tokio::task::spawn_blocking(move || {
+                resolver.lookup_ip(domain_owned)
+            }).await
+        };
+        
         let lookup_result = timeout(
             TokioDuration::from_secs(self.config.dns_timeout),
-            self.resolver.lookup_ip(domain)
+            lookup_future
         ).await;
         
         let response_time_ms = start_time.elapsed().as_millis() as u64;
@@ -413,14 +417,19 @@ impl DomainManager {
         health.response_time_ms = Some(response_time_ms);
         
         match lookup_result {
-            Ok(Ok(_lookup)) => {
+            Ok(Ok(Ok(_lookup))) => {
                 health.status = DomainStatus::Active;
                 health.success_count += 1;
             }
-            Ok(Err(e)) => {
+            Ok(Ok(Err(e))) => {
                 health.status = DomainStatus::Failed;
                 health.error_count += 1;
                 return Err(InfraError::DnsError(format!("DNS lookup failed: {}", e)));
+            }
+            Ok(Err(_join_error)) => {
+                health.status = DomainStatus::Failed;
+                health.error_count += 1;
+                return Err(InfraError::DnsError("DNS task join failed".to_string()));
             }
             Err(_) => {
                 health.status = DomainStatus::Failed;

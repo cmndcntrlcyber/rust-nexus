@@ -52,7 +52,6 @@ cert_storage_dir = "./certs"
 # Paths to origin certificate files
 cert_path = "./certs/origin.crt"
 key_path = "./certs/origin.key"
-ca_cert_path = "./certs/origin_ca.crt"
 
 # Enable certificate pinning validation
 pin_validation = true

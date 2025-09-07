@@ -4,6 +4,7 @@ members = [
     "nexus-agent",
     "nexus-common",
     "nexus-infra",
+    "nexus-server",
     "nexus-webui",
     "nexus-recon",
     "nexus-hybrid-exec",
@@ -43,8 +44,6 @@ rustls-pemfile = "1.0"
 x509-parser = "0.15"
 
 # DNS and networking
-trust-dns-resolver = "0.23"
-hickory-dns = "0.24"
 hickory-resolver = "0.24"
 
 # HTTP client for Cloudflare API

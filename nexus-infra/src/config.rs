@@ -271,7 +271,7 @@ impl Default for OriginCertConfig {
         Self {
             cert_path: PathBuf::from("./certs/origin.crt"),
             key_path: PathBuf::from("./certs/origin.key"),
-            ca_cert_path: PathBuf::from("./certs/origin_ca.crt"),
+            ca_cert_path: PathBuf::from("./certs/ca.crt"),
             pin_validation: true,
             validity_days: 365,
         }

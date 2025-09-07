@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
-use crate::{current_timestamp, generate_uuid, Result, NexusError};
-use std::time::Duration;
+use crate::{current_timestamp, generate_uuid};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Task {

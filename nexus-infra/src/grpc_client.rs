@@ -154,7 +154,7 @@ impl GrpcClient {
             if attempt < self.config.max_retry_attempts {
                 let delay = self.config.retry_delay * attempt; // Exponential backoff
                 debug!("Waiting {:?} before retry", delay);
-                sleep(TokioDuration::from_std(delay).unwrap()).await;
+                sleep(TokioDuration::from_secs(delay.as_secs())).await;
             }
         }
         

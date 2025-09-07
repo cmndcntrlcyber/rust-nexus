@@ -30,7 +30,6 @@ rustls-pemfile = { workspace = true }
 x509-parser = { workspace = true }
 
 # DNS and networking
-hickory-dns = { workspace = true }
 hickory-resolver = { workspace = true }
 
 # HTTP client for APIs
@@ -49,6 +48,7 @@ serde_yaml = "0.9"
 
 # Date and time
 chrono = { workspace = true }
+time = "0.3"
 
 # Logging
 log = { workspace = true }

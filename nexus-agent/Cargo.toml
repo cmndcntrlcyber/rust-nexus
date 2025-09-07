@@ -17,6 +17,15 @@ log = { workspace = true }
 env_logger = { workspace = true }
 thiserror = { workspace = true }
 num_cpus = "1.16"
+rand = "0.8"
+
+# gRPC dependencies
+tonic = { workspace = true }
+prost = { workspace = true }
+prost-types = "0.12"
+tokio-rustls = { workspace = true }
+rustls = { workspace = true }
+webpki-roots = { workspace = true }
 
 # Windows-specific dependencies
 [target.'cfg(target_os = "windows")'.dependencies]
@@ -25,3 +34,6 @@ windows-sys = { workspace = true }
 # Linux-specific dependencies
 [target.'cfg(target_os = "linux")'.dependencies]
 libc = "0.2"
+
+[build-dependencies]
+tonic-build = { workspace = true }

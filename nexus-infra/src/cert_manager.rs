@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc, Duration};
 use log::{info, warn, debug, error};
 use rcgen::{Certificate, CertificateParams, DistinguishedName, DnType, KeyPair, PKCS_ECDSA_P256_SHA256};
 use rustls::{Certificate as RustlsCert, PrivateKey, ServerConfig, ClientConfig};
-use rustls_pemfile::{certs, private_key};
+use rustls_pemfile::{certs, rsa_private_keys, pkcs8_private_keys, ec_private_keys};
 use std::fs;
 use std::io::BufReader;
 use std::path::Path;
@@ -47,7 +47,6 @@ pub struct CertManager {
     config: OriginCertConfig,
     server_cert_chain: Vec<RustlsCert>,
     server_private_key: PrivateKey,
-    ca_certificates: Vec<RustlsCert>,
 }
 
 impl CertManager {
@@ -61,16 +60,12 @@ impl CertManager {
         // Load server private key
         let server_private_key = Self::load_private_key(&config.key_path)?;
         
-        // Load CA certificates
-        let ca_certificates = Self::load_certificate_chain(&config.ca_cert_path)?;
-        
         info!("Successfully loaded certificates and private key");
         
         Ok(Self {
             config,
             server_cert_chain,
             server_private_key,
-            ca_certificates,
         })
     }
     
@@ -107,11 +102,39 @@ impl CertManager {
             .map_err(|e| InfraError::CertificateError(format!("Failed to open private key file: {}", e)))?;
         
         let mut reader = BufReader::new(key_file);
-        let private_key = private_key(&mut reader)
-            .map_err(|e| InfraError::CertificateError(format!("Failed to parse private key: {}", e)))?
-            .ok_or_else(|| InfraError::CertificateError("No private key found in file".to_string()))?;
         
-        Ok(PrivateKey(private_key))
+        // Try PKCS#8 format first
+        if let Ok(mut keys) = pkcs8_private_keys(&mut reader) {
+            if !keys.is_empty() {
+                return Ok(PrivateKey(keys.remove(0)));
+            }
+        }
+        
+        // Reset reader for next attempt
+        let key_file = fs::File::open(path)
+            .map_err(|e| InfraError::CertificateError(format!("Failed to open private key file: {}", e)))?;
+        let mut reader = BufReader::new(key_file);
+        
+        // Try RSA format
+        if let Ok(mut keys) = rsa_private_keys(&mut reader) {
+            if !keys.is_empty() {
+                return Ok(PrivateKey(keys.remove(0)));
+            }
+        }
+        
+        // Reset reader for next attempt
+        let key_file = fs::File::open(path)
+            .map_err(|e| InfraError::CertificateError(format!("Failed to open private key file: {}", e)))?;
+        let mut reader = BufReader::new(key_file);
+        
+        // Try EC format
+        if let Ok(mut keys) = ec_private_keys(&mut reader) {
+            if !keys.is_empty() {
+                return Ok(PrivateKey(keys.remove(0)));
+            }
+        }
+        
+        Err(InfraError::CertificateError("No supported private key format found in file".to_string()))
     }
     
     /// Create server TLS configuration
@@ -128,22 +151,15 @@ impl CertManager {
         Ok(Arc::new(config))
     }
     
-    /// Create client TLS configuration with certificate pinning
+    /// Create client TLS configuration
     pub fn create_client_config(&self, verify_hostname: bool) -> InfraResult<Arc<ClientConfig>> {
         use rustls::RootCertStore;
         
         let mut root_store = RootCertStore::empty();
         
-        // Add CA certificates to root store
-        for ca_cert in &self.ca_certificates {
-            root_store
-                .add(ca_cert)
-                .map_err(|e| InfraError::TlsError(format!("Failed to add CA certificate: {:?}", e)))?;
-        }
-        
-        // Add system CA certificates as fallback
-        root_store.add_server_trust_anchors(
-            webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|ta| {
+        // Add system CA certificates
+        root_store.add_trust_anchors(
+            webpki_roots::TLS_SERVER_ROOTS.iter().map(|ta| {
                 rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
                     ta.subject,
                     ta.spki,
@@ -152,12 +168,10 @@ impl CertManager {
             }),
         );
         
-        let mut config_builder = ClientConfig::builder()
-            .with_safe_defaults()
-            .with_root_certificates(root_store);
-        
         let config = if verify_hostname {
-            config_builder
+            ClientConfig::builder()
+                .with_safe_defaults()
+                .with_root_certificates(root_store)
                 .with_no_client_auth()
         } else {
             // Create config with no hostname verification (for domain fronting)
@@ -221,9 +235,9 @@ impl CertManager {
             params.subject_alt_names.push(rcgen::SanType::DnsName(domain.clone()));
         }
         
-        // Set validity period
-        let not_before = chrono::Utc::now();
-        let not_after = not_before + chrono::Duration::days(validity_days as i64);
+        // Set validity period - use time crate for rcgen compatibility
+        let not_before = ::time::OffsetDateTime::now_utc();
+        let not_after = not_before + ::time::Duration::days(validity_days as i64);
         params.not_before = not_before;
         params.not_after = not_after;
         
@@ -247,10 +261,10 @@ impl CertManager {
     
     /// Parse certificate information
     pub fn parse_certificate_info(&self, cert_pem: &[u8]) -> InfraResult<CertInfo> {
-        let pem = pem::parse(cert_pem)
+        let pem = ::pem::parse(cert_pem)
             .map_err(|e| InfraError::CertificateError(format!("Failed to parse PEM: {}", e)))?;
         
-        let (_, cert) = X509Certificate::from_der(&pem.contents)
+        let (_, cert) = X509Certificate::from_der(pem.contents())
             .map_err(|e| InfraError::CertificateError(format!("Failed to parse certificate: {}", e)))?;
         
         let subject = cert.subject().to_string();
@@ -264,12 +278,13 @@ impl CertManager {
             .ok_or_else(|| InfraError::CertificateError("Invalid not_after timestamp".to_string()))?;
         
         // Calculate SHA-256 fingerprint
-        let fingerprint = format!("{:x}", sha2::Sha256::digest(&pem.contents));
+        let digest = sha2::Sha256::digest(pem.contents());
+        let fingerprint = digest.iter().map(|b| format!("{:02x}", b)).collect::<String>();
         
         // Extract SAN domains
         let mut san_domains = Vec::new();
         if let Ok(Some(san_ext)) = cert.subject_alternative_name() {
-            for name in &san_ext.general_names {
+            for name in &san_ext.value.general_names {
                 if let x509_parser::extensions::GeneralName::DNSName(domain) = name {
                     san_domains.push(domain.to_string());
                 }
@@ -369,10 +384,6 @@ impl CertManager {
         &self.server_private_key
     }
     
-    /// Get CA certificates
-    pub fn get_ca_certificates(&self) -> &[RustlsCert] {
-        &self.ca_certificates
-    }
     
     /// Get configuration reference
     pub fn config(&self) -> &OriginCertConfig {
@@ -428,7 +439,7 @@ mod tests {
         let config = OriginCertConfig {
             cert_path: temp_dir.path().join("cert.pem"),
             key_path: temp_dir.path().join("key.pem"),
-            ca_cert_path: temp_dir.path().join("ca.pem"),
+            ca_cert_path: temp_dir.path().join("ca.crt"),
             pin_validation: true,
             validity_days: 365,
         };
@@ -443,7 +454,6 @@ mod tests {
         // Save to temp files
         fs::write(&config.cert_path, &cert_pem).unwrap();
         fs::write(&config.key_path, &key_pem).unwrap();
-        fs::write(&config.ca_cert_path, &cert_pem).unwrap(); // Use self as CA for test
         
         let cert_manager = CertManager::new(config).unwrap();
         let validation = cert_manager.validate_certificate(&cert_pem).unwrap();
@@ -457,7 +467,7 @@ mod tests {
         let config = OriginCertConfig {
             cert_path: temp_dir.path().join("cert.pem"),
             key_path: temp_dir.path().join("key.pem"),
-            ca_cert_path: temp_dir.path().join("ca.pem"),
+            ca_cert_path: temp_dir.path().join("ca.crt"),
             pin_validation: true,
             validity_days: 365,
         };
@@ -471,7 +481,6 @@ mod tests {
         
         fs::write(&config.cert_path, &cert_pem).unwrap();
         fs::write(&config.key_path, &key_pem).unwrap();
-        fs::write(&config.ca_cert_path, &cert_pem).unwrap();
         
         let cert_manager = CertManager::new(config).unwrap();
         

@@ -216,7 +216,7 @@ impl BOFLoader {
             .map_err(|e| InfraError::BofError(format!("Failed to parse COFF: {}", e)))?;
         
         debug!("COFF parsed: {} sections, {} symbols", 
-               coff.sections.len(), coff.symbols.len());
+               coff.sections.len(), coff.symbols.iter().count());
         
         // Calculate total size needed
         let total_size = self.calculate_image_size(&coff)?;
@@ -341,11 +341,22 @@ impl BOFLoader {
     fn build_symbol_table(&self, coff: &Coff, base_address: *mut u8) -> InfraResult<HashMap<String, BofSymbol>> {
         let mut symbols = HashMap::new();
         
-        for (i, symbol) in coff.symbols.iter().enumerate() {
-            let name = symbol.name(&coff.strings)
-                .map_err(|e| InfraError::BofError(format!("Failed to get symbol name: {}", e)))?;
+        // The symbol table API has changed - symbols are now tuples (index, name, symbol)
+        for (_index, name_opt, symbol) in coff.symbols.iter() {
+            let name = match name_opt {
+                Some(name) => name,
+                None => {
+                    warn!("Symbol with no name, skipping");
+                    continue;
+                }
+            };
             
-            let address = if symbol.section_number == 0 {
+            // Access symbol fields directly from the Symbol struct
+            let section_number = symbol.section_number;
+            let value = symbol.value;
+            let storage_class = symbol.storage_class;
+            
+            let address = if section_number == 0 {
                 // External symbol - try to resolve from API resolver
                 if let Some(&api_addr) = self.api_resolver.get(name) {
                     api_addr
@@ -355,14 +366,14 @@ impl BOFLoader {
                 }
             } else {
                 // Internal symbol
-                (base_address as usize) + (symbol.value as usize)
+                (base_address as usize) + (value as usize)
             };
             
             let bof_symbol = BofSymbol {
                 name: name.to_string(),
                 address,
-                is_function: symbol.storage_class == 2, // EXTERNAL function
-                is_imported: symbol.section_number == 0,
+                is_function: storage_class == 2, // EXTERNAL function
+                is_imported: section_number == 0,
             };
             
             symbols.insert(name.to_string(), bof_symbol);
