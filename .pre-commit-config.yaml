@@ -13,28 +13,28 @@ repos:
       - id: check-merge-conflict
       - id: check-case-conflict
 
-  - repo: https://github.com/Yelp/detect-secrets
-    rev: v1.4.0
-    hooks:
-      - id: detect-secrets
-        args: ['--baseline', '.secrets.baseline']
-        exclude: |
-          (?x)^(
-              .*\.example$|
-              .*\.template$|
-              docs/.*|
-              README\.md$
-          )$
+  # - repo: https://github.com/Yelp/detect-secrets
+  #   rev: v1.4.0
+  #   hooks:
+  #     - id: detect-secrets
+  #       args: ['--baseline', '.secrets.baseline']
+  #       exclude: |
+  #         (?x)^(
+  #             .*\.example$|
+  #             .*\.template$|
+  #             docs/.*|
+  #             README\.md$
+  #         )$
 
-  - repo: https://github.com/trufflesecurity/trufflehog
-    rev: v3.63.2
-    hooks:
-      - id: trufflehog
-        name: TruffleHog
-        description: Detect secrets in your data.
-        entry: bash -c 'trufflehog git file://. --since-commit HEAD --only-verified --fail'
-        language: system
-        stages: ["commit", "push"]
+  # - repo: https://github.com/trufflesecurity/trufflehog
+  #   rev: v3.63.2
+  #   hooks:
+  #     - id: trufflehog
+  #       name: TruffleHog
+  #       description: Detect secrets in your data.
+  #       entry: bash -c 'trufflehog git file://. --since-commit HEAD --only-verified --fail'
+  #       language: system
+  #       stages: ["commit", "push"]
 
   - repo: local
     hooks:

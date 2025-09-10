@@ -34,7 +34,7 @@ async fn main() -> Result<()> {
 
     // Parse command line arguments with proper flag handling
     let args: Vec<String> = env::args().collect();
-    let mut server_addr = "https://c2.attck-deploy.net:8443".to_string(); // Use 8443 to match server config
+    let mut server_addr = "https://c2.your-domain.com:8443".to_string(); // Use 8443 to match server config
     
     // Parse --grpc-endpoint flag properly
     for i in 1..args.len() {
