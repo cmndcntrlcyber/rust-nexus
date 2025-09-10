@@ -101,6 +101,7 @@
 **/*-production.toml
 **/*-staging.toml
 **/nexus.toml
+**/nexus-working.toml
 **/agent.toml
 **/.env
 **/.env.*

@@ -1,0 +1,69 @@
+# Rust-Nexus Working Configuration
+# Corrected configuration that matches the expected schema
+
+[cloudflare]
+api_token = "mQ1XlyuocaCl5JxG40LAH1lEzZ6ekPHFmZg7S97A"
+zone_id = "a15535dbfd0c2457061146a0783a0606"
+domain = "attck-deploy.net"
+proxy_enabled = true
+ttl = 300
+geographic_regions = ["US", "EU", "APAC"]
+
+# Custom headers must be a proper HashMap
+[cloudflare.custom_headers]
+
+[letsencrypt]
+contact_email = "attck.community@gmail.com"
+challenge_type = "Dns01"
+cert_renewal_days = 30
+wildcard_enabled = true
+acme_directory_url = "https://acme-v02.api.letsencrypt.org/directory"
+cert_storage_dir = "./certs"
+
+[origin_cert]
+cert_path = "./certs/origin.crt"
+key_path = "./certs/origin.key"
+ca_cert_path = "./certs/ca.crt"
+pin_validation = true
+validity_days = 365
+
+[grpc_server]
+bind_address = "0.0.0.0"
+port = 8443
+mutual_tls = false
+max_connections = 1000
+connection_timeout = 30
+keepalive_interval = 60
+max_message_size = 16777216
+
+[domains]
+primary_domains = [
+    "c2.attck-deploy.net",
+    "api.attck-deploy.net"
+]
+backup_domains = [
+    "backup.attck-deploy.net",
+    "cdn.attck-deploy.net"
+]
+rotation_interval = 24
+max_subdomains = 10
+health_monitoring = true
+dns_timeout = 5
+
+# Subdomain pattern as enum variant
+subdomain_pattern = { Random = { length = 8 } }
+
+[security]
+additional_encryption = true
+traffic_obfuscation = true
+
+[security.anti_analysis]
+vm_detection = true
+debugger_detection = true
+sandbox_detection = true
+detection_action = "Exit"
+
+[security.rate_limiting]
+max_requests_per_minute = 60
+burst_size = 10
+per_ip_limiting = true
