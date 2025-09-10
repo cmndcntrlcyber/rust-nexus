@@ -29,6 +29,14 @@ Rust-Nexus combines traditional C2 capabilities with cutting-edge infrastructure
 - ✅ **Traffic Obfuscation**: Legitimate-looking HTTPS patterns
 - ✅ **Geographic Distribution**: Leverage Cloudflare's global network
 
+### 🖥️ **Interactive Interfaces**
+- ✅ **Web UI Dashboard**: Modern browser-based management interface
+- ✅ **Real-time Updates**: WebSocket-powered live data and notifications
+- ✅ **Session Management**: Comprehensive agent lifecycle and task tracking
+- ✅ **Interactive Shell**: Live command execution with real-time output
+- ✅ **File Management**: Drag-and-drop file transfers with progress monitoring
+- ✅ **REST & gRPC APIs**: Complete programmatic access for automation
+
 ### ⚡ **Enhanced Execution**
 - ✅ **BOF/COFF Support**: Windows Beacon Object File execution
 - ✅ **Fiber Techniques**: Direct fiber execution and process hollowing
@@ -74,6 +82,12 @@ rust-nexus/
 │       ├── grpc_server.rs  # gRPC server implementation
 │       ├── bof_loader.rs   # BOF/COFF execution engine
 │       └── config.rs       # Configuration management
+├── nexus-webui/            # 🆕 Modern web interface
+│   └── src/
+│       ├── handlers.rs     # HTTP request handlers
+│       ├── websocket.rs    # Real-time WebSocket support
+│       ├── static_files.rs # Static asset serving
+│       └── templates.rs    # UI template rendering
 ├── nexus-common/           # Shared libraries
 │   └── src/
 │       ├── crypto.rs       # AES-256-GCM + RSA encryption
@@ -302,12 +316,21 @@ cargo test -p nexus-infra bof_loader
 
 ## 📚 Documentation
 
+### Infrastructure & Configuration
 - **[Infrastructure Setup](docs/infrastructure/README.md)** - Complete infrastructure guide
 - **[Cloudflare Integration](docs/infrastructure/cloudflare-setup.md)** - DNS API setup
 - **[Certificate Management](docs/infrastructure/certificates.md)** - TLS and Let's Encrypt
-- **[BOF Development](docs/execution/bof-guide.md)** - BOF creation and execution
 - **[Production Deployment](docs/configuration/production-setup.md)** - Enterprise deployment
-- **[API Reference](docs/api/grpc-reference.md)** - Complete API documentation
+
+### Interactive Interfaces & Operations
+- **[Interactive Server Management](docs/operations/interactive-server.md)** - CLI and server interaction
+- **[Web UI User Guide](docs/operations/web-interface.md)** - Browser-based management interface
+- **[Session Management Guide](docs/operations/session-management.md)** - Agent lifecycle and task tracking
+
+### API & Development
+- **[Interactive API Reference](docs/api/interactive-reference.md)** - Complete REST, gRPC, and CLI reference
+- **[Real-time Interaction Guide](docs/api/real-time-api.md)** - WebSocket and live updates
+- **[BOF Development](docs/execution/bof-guide.md)** - BOF creation and execution
 
 ## 🎯 Use Cases
 

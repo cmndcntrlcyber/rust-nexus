@@ -1,7 +1,7 @@
 use nexus_common::*;
 use std::process::Command;
 use base64::{Engine as _, engine::general_purpose};
-use log::{info, warn, error};
+use log::{debug, info, error};
 
 #[cfg(target_os = "windows")]
 use crate::fiber_execution::FiberExecutor;

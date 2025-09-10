@@ -110,24 +110,30 @@ impl GrpcServer {
             .parse()
             .map_err(|e| InfraError::GrpcError(format!("Invalid bind address: {}", e)))?;
         
-        // Create TLS identity from certificates
-        let cert_chain = self.cert_manager.get_certificate_chain();
-        let private_key = self.cert_manager.get_private_key();
+        // Create TLS identity from raw PEM data with full certificate chain
+        let cert_chain_pem = self.cert_manager.get_full_chain_pem_data();
+        let key_pem = self.cert_manager.get_key_pem_data();
         
-        if cert_chain.is_empty() {
-            return Err(InfraError::GrpcError("No certificate chain available".to_string()));
+        if cert_chain_pem.is_empty() {
+            return Err(InfraError::GrpcError("No certificate chain data available".to_string()));
         }
         
-        let identity = Identity::from_pem(
-            &cert_chain[0].0, // Certificate
-            &private_key.0,   // Private key
-        );
+        info!("Creating TLS identity with certificate chain ({} bytes)", cert_chain_pem.len());
+        let identity = Identity::from_pem(cert_chain_pem, key_pem);
         
-        // Configure server TLS
+        // Configure server TLS with proper mutual TLS support
         let tls_config = if self.config.mutual_tls {
-            warn!("Mutual TLS requested but no CA certificates available - using standard TLS");
-            ServerTlsConfig::new().identity(identity)
+            if let Some(ca_cert_data) = self.cert_manager.get_ca_cert_data() {
+                info!("Configuring mutual TLS with client certificate verification");
+                ServerTlsConfig::new()
+                    .identity(identity)
+                    .client_ca_root(tonic::transport::Certificate::from_pem(ca_cert_data))
+            } else {
+                warn!("Mutual TLS requested but no CA certificates available - using standard TLS");
+                ServerTlsConfig::new().identity(identity)
+            }
         } else {
+            info!("Configuring standard TLS (no client certificate verification)");
             ServerTlsConfig::new().identity(identity)
         };
         
@@ -547,6 +553,7 @@ mod tests {
         let cert_config = OriginCertConfig {
             cert_path: temp_dir.path().join("cert.pem"),
             key_path: temp_dir.path().join("key.pem"),
+            ca_cert_path: temp_dir.path().join("ca.crt"),
             pin_validation: true,
             validity_days: 365,
         };

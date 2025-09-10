@@ -1,7 +1,7 @@
 use nexus_common::*;
 use std::time::Duration;
 use tokio::time::timeout;
-use tonic::transport::{Channel, Endpoint};
+use tonic::transport::{Channel, Endpoint, Identity, ClientTlsConfig};
 
 // Include the generated gRPC code
 pub mod nexus {
@@ -35,12 +35,54 @@ impl NetworkClient {
         self
     }
 
-    /// Establish gRPC connection
+    /// Establish gRPC connection with mutual TLS
     async fn ensure_connection(&mut self) -> Result<&Channel> {
         if self.channel.is_none() {
-            let endpoint = Endpoint::from_shared(self.server_url.clone())
+            let mut endpoint = Endpoint::from_shared(self.server_url.clone())
                 .map_err(|e| NexusError::NetworkError(format!("Invalid endpoint: {}", e)))?
                 .timeout(self.connection_timeout);
+
+            // Configure TLS if this is an HTTPS endpoint
+            if self.server_url.starts_with("https://") {
+                // Try to load client certificate and key for mutual TLS
+                if std::path::Path::new("./certs/client.crt").exists() && 
+                   std::path::Path::new("./certs/client.key").exists() {
+                    
+                    match (std::fs::read("./certs/client.crt"), std::fs::read("./certs/client.key")) {
+                        (Ok(client_cert), Ok(client_key)) => {
+                            // Create client identity for mutual TLS
+                            let identity = Identity::from_pem(&client_cert, &client_key);
+                            
+                            // Configure TLS with client certificate
+                            let tls_config = ClientTlsConfig::new()
+                                .identity(identity);
+
+                            endpoint = endpoint.tls_config(tls_config)
+                                .map_err(|e| NexusError::NetworkError(format!("TLS configuration failed: {}", e)))?;
+                            
+                            #[cfg(debug_assertions)]
+                            println!("Configured mutual TLS with client certificate");
+                        }
+                        _ => {
+                            // Configure TLS with relaxed certificate validation for testing
+                            let tls_config = ClientTlsConfig::new();
+                            endpoint = endpoint.tls_config(tls_config)
+                                .map_err(|e| NexusError::NetworkError(format!("TLS configuration failed: {}", e)))?;
+                            
+                            #[cfg(debug_assertions)]
+                            println!("Configured TLS with relaxed certificate validation (no client certificate)");
+                        }
+                    }
+                } else {
+                    // Configure TLS with relaxed certificate validation for testing
+                    let tls_config = ClientTlsConfig::new();
+                    endpoint = endpoint.tls_config(tls_config)
+                        .map_err(|e| NexusError::NetworkError(format!("TLS configuration failed: {}", e)))?;
+                    
+                    #[cfg(debug_assertions)]
+                    println!("Configured TLS with relaxed certificate validation (no client certificate files found)");
+                }
+            }
 
             let channel = timeout(
                 self.connection_timeout,
@@ -144,7 +186,7 @@ impl NetworkClient {
     }
 
     /// Submit task result  
-    pub async fn submit_task_result(&mut self, agent_id: &str, task_result: nexus::v1::TaskResult) -> Result<()> {
+    pub async fn submit_task_result(&mut self, _agent_id: &str, task_result: nexus::v1::TaskResult) -> Result<()> {
         let channel = self.ensure_connection().await?;
         let mut client = nexus_c2_client::NexusC2Client::new(channel.clone());
 

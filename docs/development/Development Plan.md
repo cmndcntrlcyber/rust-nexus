@@ -1,5 +1,3 @@
-Certainly! I'll help you create a cross-platform Command & Control framework in Rust that works on both Windows and Linux targets. Drawing from modern C2 development practices and Rust's powerful features, here's a comprehensive solutionustNexus is a modern, high-performance Command & Control (C2) framework built in Rust. It provides secure communication channels between the server and implants, with cross-platform support for Windows and Linux targets. The framework leverages Rust's memory to create a reliable and efficient C2 infrastructure.
-
 [CODE_NAME]
 RustNexus
 

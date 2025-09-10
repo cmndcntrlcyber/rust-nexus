@@ -47,6 +47,10 @@ pub struct CertManager {
     config: OriginCertConfig,
     server_cert_chain: Vec<RustlsCert>,
     server_private_key: PrivateKey,
+    cert_pem_data: Vec<u8>,
+    key_pem_data: Vec<u8>,
+    ca_cert_data: Option<Vec<u8>>,
+    full_chain_pem_data: Vec<u8>,
 }
 
 impl CertManager {
@@ -54,11 +58,29 @@ impl CertManager {
     pub fn new(config: OriginCertConfig) -> InfraResult<Self> {
         info!("Initializing certificate manager");
         
+        // Load raw PEM data for gRPC server configuration
+        let cert_pem_data = fs::read(&config.cert_path)
+            .map_err(|e| InfraError::CertificateError(format!("Failed to read certificate file: {}", e)))?;
+        
+        let key_pem_data = fs::read(&config.key_path)
+            .map_err(|e| InfraError::CertificateError(format!("Failed to read key file: {}", e)))?;
+        
+        // Load CA certificate if available
+        let ca_cert_data = if config.ca_cert_path.exists() {
+            Some(fs::read(&config.ca_cert_path)
+                .map_err(|e| InfraError::CertificateError(format!("Failed to read CA certificate file: {}", e)))?)
+        } else {
+            None
+        };
+        
         // Load server certificate chain
         let server_cert_chain = Self::load_certificate_chain(&config.cert_path)?;
         
         // Load server private key
         let server_private_key = Self::load_private_key(&config.key_path)?;
+        
+        // Create full certificate chain by combining origin cert and CA cert
+        let full_chain_pem_data = Self::create_full_certificate_chain(&cert_pem_data, &ca_cert_data)?;
         
         info!("Successfully loaded certificates and private key");
         
@@ -66,6 +88,10 @@ impl CertManager {
             config,
             server_cert_chain,
             server_private_key,
+            cert_pem_data,
+            key_pem_data,
+            ca_cert_data,
+            full_chain_pem_data,
         })
     }
     
@@ -88,6 +114,29 @@ impl CertManager {
             .collect();
         
         Ok(cert_chain)
+    }
+    
+    /// Create full certificate chain by combining origin cert and CA cert
+    fn create_full_certificate_chain(
+        cert_pem_data: &[u8], 
+        ca_cert_data: &Option<Vec<u8>>
+    ) -> InfraResult<Vec<u8>> {
+        let mut full_chain = Vec::new();
+        
+        // Add the origin certificate first
+        full_chain.extend_from_slice(cert_pem_data);
+        
+        // Add the CA certificate if available
+        if let Some(ca_data) = ca_cert_data {
+            // Ensure there's a newline between certificates
+            if !cert_pem_data.ends_with(b"\n") {
+                full_chain.push(b'\n');
+            }
+            full_chain.extend_from_slice(ca_data);
+        }
+        
+        info!("Created full certificate chain ({} bytes)", full_chain.len());
+        Ok(full_chain)
     }
     
     /// Load private key from PEM file
@@ -384,6 +433,26 @@ impl CertManager {
         &self.server_private_key
     }
     
+    
+    /// Get raw certificate PEM data
+    pub fn get_cert_pem_data(&self) -> &[u8] {
+        &self.cert_pem_data
+    }
+    
+    /// Get raw private key PEM data
+    pub fn get_key_pem_data(&self) -> &[u8] {
+        &self.key_pem_data
+    }
+    
+    /// Get CA certificate PEM data if available
+    pub fn get_ca_cert_data(&self) -> Option<&[u8]> {
+        self.ca_cert_data.as_deref()
+    }
+    
+    /// Get full certificate chain PEM data (origin cert + CA cert)
+    pub fn get_full_chain_pem_data(&self) -> &[u8] {
+        &self.full_chain_pem_data
+    }
     
     /// Get configuration reference
     pub fn config(&self) -> &OriginCertConfig {

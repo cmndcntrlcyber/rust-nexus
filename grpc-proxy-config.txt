@@ -1,0 +1,38 @@
+# Custom Nginx Configuration for gRPC Reverse Proxy
+# Add this to the "Advanced" tab -> "Custom Nginx Configuration" in your proxy settings
+
+# gRPC specific location block
+location / {
+    # Use grpc_pass instead of proxy_pass for gRPC traffic
+    grpc_pass grpc://192.168.1.124:8443;
+    
+    # Essential gRPC headers
+    grpc_set_header Host $host;
+    grpc_set_header X-Real-IP $remote_addr;
+    grpc_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    grpc_set_header X-Forwarded-Proto $scheme;
+    
+    # Increase timeouts for gRPC long-lived connections
+    grpc_read_timeout 300s;
+    grpc_send_timeout 300s;
+    client_body_timeout 300s;
+    
+    # Handle gRPC errors and retries
+    grpc_next_upstream error timeout invalid_header http_500 http_502 http_503 http_504;
+    
+    # Optional: Enable gRPC buffering for better performance
+    grpc_buffer_size 4k;
+    grpc_buffers 8 4k;
+}
+
+# Alternative configuration if the backend expects HTTP/2 without TLS
+# (uncomment if the above doesn't work)
+#
+# location / {
+#     grpc_pass grpc://192.168.1.124:8443;
+#     # ... (same headers as above)
+# }
+
+# For debugging - log gRPC specific information
+error_log /var/log/nginx/grpc_error.log debug;
+access_log /var/log/nginx/grpc_access.log combined;
