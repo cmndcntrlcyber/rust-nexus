@@ -4,7 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "nexus-agent"
+name = "nexus-agent-linux"
+path = "src/main.rs"
+
+[[bin]]
+name = "nexus-agent-windows"
 path = "src/main.rs"
 
 [dependencies]
