@@ -65,11 +65,28 @@ cd nexus-common
 cargo build --release
 cd ..
 
-# Build agent for current platform
-echo -e "${BLUE}🔧 Building nexus-agent for current platform...${NC}"
+# Build platform-specific agents
+echo -e "${BLUE}🔧 Building platform-specific nexus-agents...${NC}"
 cd nexus-agent
-cargo build --release
-cp target/release/nexus-agent* ../target/builds/ 2>/dev/null || true
+
+# Build Linux agent
+if cargo build --release --bin nexus-agent-linux; then
+    echo -e "${GREEN}✅ Successfully built Linux agent${NC}"
+    cp target/release/nexus-agent-linux ../target/builds/ 2>/dev/null || true
+else
+    echo -e "${RED}❌ Failed to build Linux agent${NC}"
+fi
+
+# Build Windows agent if cross-compilation target is available
+if rustup target list --installed | grep -q "x86_64-pc-windows-gnu"; then
+    if cargo build --release --bin nexus-agent-windows --target x86_64-pc-windows-gnu; then
+        echo -e "${GREEN}✅ Successfully built Windows agent${NC}"
+        cp target/x86_64-pc-windows-gnu/release/nexus-agent-windows.exe ../target/builds/ 2>/dev/null || true
+    else
+        echo -e "${RED}❌ Failed to build Windows agent${NC}"
+    fi
+fi
+
 cd ..
 
 # Cross-compilation targets
@@ -165,51 +182,21 @@ if [ "$PLATFORM" = "all" ] || [ "$PLATFORM" = "server" ]; then
     build_server
 fi
 
-# Build for cross-compilation targets
-for TARGET in "${TARGETS[@]}"; do
-    if [ "$PLATFORM" = "all" ] || [ "$PLATFORM" = "agents" ]; then
-        if [[ "$TARGET" == *"windows"* ]]; then
-            build_platform_agent "$TARGET" "Windows" "agent-windows.toml"
-        elif [[ "$TARGET" == *"linux"* ]]; then
-            build_platform_agent "$TARGET" "Linux" "agent-linux.toml"
-        fi
-    fi
-done
-
-# Build native agent if not covered by cross-compilation
+# Copy configuration files to build output
 if [ "$PLATFORM" = "all" ] || [ "$PLATFORM" = "agents" ]; then
-    echo -e "${BLUE}🔧 Building native nexus-agent...${NC}"
-    cd nexus-agent
+    echo -e "${BLUE}🔧 Copying configuration files...${NC}"
 
-    # Determine current platform
-    case "$(uname -s)" in
-        Linux*)
-            local features="--features linux-specific,elf-loading,systemd-integration"
-            local config_file="agent-linux.toml"
-            ;;
-        CYGWIN*|MINGW32*|MSYS*|MINGW*)
-            local features="--features windows-specific,bof-loading,wmi-execution"
-            local config_file="agent-windows.toml"
-            ;;
-        *)
-            local features=""
-            local config_file=""
-            ;;
-    esac
-
-    if cargo build --release $features; then
-        echo -e "${GREEN}✅ Successfully built native nexus-agent${NC}"
-        cp target/release/nexus-agent* "../${OUTPUT_DIR}/" 2>/dev/null || true
-
-        # Copy appropriate config
-        if [ -f "../${CONFIG_DIR}/${config_file}" ]; then
-            cp "../${CONFIG_DIR}/${config_file}" "../${OUTPUT_DIR}/"
-        fi
-    else
-        echo -e "${RED}❌ Failed to build native nexus-agent${NC}"
+    # Copy Linux agent configuration
+    if [ -f "${CONFIG_DIR}/agent-linux.toml.example" ]; then
+        cp "${CONFIG_DIR}/agent-linux.toml.example" "${OUTPUT_DIR}/agent-linux.toml.example"
+        echo -e "${GREEN}✅ Copied Linux agent configuration${NC}"
     fi
 
-    cd ..
+    # Copy Windows agent configuration
+    if [ -f "${CONFIG_DIR}/agent-windows.toml.example" ]; then
+        cp "${CONFIG_DIR}/agent-windows.toml.example" "${OUTPUT_DIR}/agent-windows.toml.example"
+        echo -e "${GREEN}✅ Copied Windows agent configuration${NC}"
+    fi
 fi
 
 # Create build info

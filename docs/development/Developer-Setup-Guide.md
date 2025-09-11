@@ -270,11 +270,12 @@ cors = true
 ### **Daily Development Cycle**
 
 ```bash
-# 1. Start development server (automatic rebuild on changes)
-trunk serve --open
+# 1. Build platform-specific agents
+cargo build --release --bin nexus-agent-linux        # Linux agent
+cargo build --release --bin nexus-agent-windows --target x86_64-pc-windows-gnu  # Windows agent
 
 # 2. Run tests in watch mode (separate terminal)
-cargo watch -x "test --target wasm32-unknown-unknown"
+cargo watch -x "test --all-targets --all-features"
 
 # 3. Format code on save (configured in editor)
 # Alternatively, manual formatting:
@@ -285,6 +286,9 @@ cargo clippy -- -D warnings
 
 # 5. Run full test suite
 cargo test --all-targets --all-features
+
+# 6. Test cross-compilation
+cargo build --release --target x86_64-pc-windows-gnu  # Verify Windows builds work
 ```
 
 ### **Git Workflow for Agent Development**

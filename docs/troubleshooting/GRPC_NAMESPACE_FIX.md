@@ -107,7 +107,7 @@ cargo build -p nexus-server
 ./target/debug/nexus-server --config nexus.toml
 
 # Start agent in separate terminal
-./target/debug/nexus-agent-linux --config config/agent-linux.toml
+./target/debug/nexus-agent-linux --grpc-endpoint https://your-c2-domain.com:8443
 ```
 
 ### 3. Expected Success Indicators

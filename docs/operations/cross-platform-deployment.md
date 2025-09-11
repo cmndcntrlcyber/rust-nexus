@@ -55,28 +55,31 @@ The Rust-Nexus framework now supports streamlined cross-platform deployment with
 
 ### Platform-Specific Build Scripts
 
-#### Linux Agents (`scripts/build-linux.sh`)
+#### Linux Agents
 ```bash
-# Build Linux agents for all available architectures
-./scripts/build-linux.sh
+# Build Linux agent (native)
+cargo build --release --bin nexus-agent-linux
 
-# Outputs:
-# - nexus-agent-linux-x86_64
-# - nexus-agent-linux-aarch64
-# - nexus-agent-linux-armv7
-# - Deployment package with installation scripts
+# Output: target/release/nexus-agent-linux
 ```
 
-#### Windows Agents (`scripts/build-windows.ps1`)
-```powershell
-# Build Windows agents for all available architectures
-.\scripts\build-windows.ps1
+#### Windows Agents (Cross-compilation from Linux)
+```bash
+# Build Windows agent with cross-compilation
+cargo build --release --bin nexus-agent-windows --target x86_64-pc-windows-gnu
+
+# Output: target/x86_64-pc-windows-gnu/release/nexus-agent-windows.exe
+```
+
+#### Using Build Scripts
+```bash
+# Use enhanced build script for all platforms
+./scripts/build.sh release agents
 
 # Outputs:
-# - nexus-agent-windows-x86_64-msvc.exe
-# - nexus-agent-windows-i686-msvc.exe
-# - nexus-agent-windows-*-gnu.exe variants
-# - Deployment package with installation scripts
+# - target/builds/nexus-agent-linux
+# - target/builds/nexus-agent-windows-x86_64-pc-windows-gnu.exe
+# - Platform-specific configuration files
 ```
 
 ### Cross-Compilation Setup
@@ -205,9 +208,13 @@ sudo ./install.sh
 
 #### Manual Installation
 ```bash
-# Copy appropriate binary
-sudo cp nexus-agent-linux-x86_64 /opt/nexus/nexus-agent
-sudo cp agent-linux-x86_64.toml /opt/nexus/agent.toml
+# Copy Linux agent binary (use correct path from build)
+sudo cp target/release/nexus-agent-linux /opt/nexus/nexus-agent
+# Or if using cross-compilation build output:
+# sudo cp target/builds/nexus-agent-linux /opt/nexus/nexus-agent
+
+# Copy platform-specific configuration
+sudo cp config/agent-linux.toml.example /opt/nexus/agent.toml
 
 # Configure
 sudo nano /opt/nexus/agent.toml
@@ -237,9 +244,13 @@ cd nexus-windows-YYYYMMDD_HHMMSS
 
 #### Manual Installation
 ```batch
-REM Copy binary
-copy nexus-agent-windows-x86_64-msvc.exe "C:\Program Files\Nexus\nexus-agent.exe"
-copy agent-windows-x86_64-msvc.toml "C:\Program Files\Nexus\agent.toml"
+REM Copy Windows agent binary (use correct path from cross-compilation build)
+copy target\x86_64-pc-windows-gnu\release\nexus-agent-windows.exe "C:\Program Files\Nexus\nexus-agent.exe"
+REM Or if using build script output:
+REM copy target\builds\nexus-agent-windows-x86_64-pc-windows-gnu.exe "C:\Program Files\Nexus\nexus-agent.exe"
+
+REM Copy platform-specific configuration
+copy config\agent-windows.toml.example "C:\Program Files\Nexus\agent.toml"
 
 REM Create service
 sc create "NexusAgent" binPath= "\"C:\Program Files\Nexus\nexus-agent.exe\" --config \"C:\Program Files\Nexus\agent.toml\"" start= auto
