@@ -40,6 +40,10 @@ acme-lib = { workspace = true }
 rcgen = { workspace = true }
 pem = "3.0"
 
+# OpenSSL with vendored feature for cross-compilation
+openssl = { version = "0.10", features = ["vendored"] }
+openssl-sys = { version = "0.9", features = ["vendored"] }
+
 # Configuration
 config = { workspace = true }
 dirs = { workspace = true }
