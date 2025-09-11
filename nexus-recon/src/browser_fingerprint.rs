@@ -8,7 +8,7 @@ impl BrowserFingerprinter {
     pub fn new() -> Self {
         Self
     }
-    
+
     pub async fn collect_fingerprint(&self, _url: &str) -> Result<BrowserFingerprint> {
         // Stub implementation
         Ok(BrowserFingerprint {

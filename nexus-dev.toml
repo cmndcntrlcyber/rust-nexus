@@ -1,0 +1,61 @@
+# Rust-Nexus Development Configuration
+# This file is configured for local development and testing
+
+[cloudflare]
+api_token = "dev_placeholder_token"
+zone_id = "dev_placeholder_zone"
+domain = "dev.example.com"
+proxy_enabled = false
+ttl = 60
+geographic_regions = ["US"]
+
+[cloudflare.custom_headers]
+
+[letsencrypt]
+contact_email = "dev@localhost"
+challenge_type = "Dns01"
+cert_renewal_days = 7
+wildcard_enabled = false
+acme_directory_url = "https://acme-staging-v02.api.letsencrypt.org/directory"
+cert_storage_dir = "./certs"
+
+[origin_cert]
+cert_path = "./certs/origin.crt"
+key_path = "./certs/origin.key"
+ca_cert_path = "./certs/client.crt"
+pin_validation = false
+validity_days = 365
+
+[grpc_server]
+bind_address = "127.0.0.1"
+port = 8443
+mutual_tls = false
+max_connections = 100
+connection_timeout = 10
+keepalive_interval = 30
+max_message_size = 16777216
+
+[domains]
+primary_domains = ["dev.example.com", "api.example.com"]
+backup_domains = ["backup.example.com", "test.example.com"]
+rotation_interval = 1
+max_subdomains = 5
+health_monitoring = false
+dns_timeout = 2
+subdomain_pattern = { Random = { length = 4 } }
+
+[security]
+additional_encryption = false
+encryption_key = ""
+traffic_obfuscation = false
+
+[security.anti_analysis]
+vm_detection = false
+debugger_detection = false
+sandbox_detection = false
+detection_action = "Exit"
+
+[security.rate_limiting]
+max_requests_per_minute = 1000
+burst_size = 100
+per_ip_limiting = false

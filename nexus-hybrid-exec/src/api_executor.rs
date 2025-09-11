@@ -10,7 +10,7 @@ impl ApiExecutor {
     pub fn new(config: HybridExecConfig) -> Result<Self> {
         Ok(Self { config })
     }
-    
+
     pub async fn execute(&self, _request: &ExecutionRequest) -> Result<ExecutionResult> {
         // Stub implementation
         Ok(ExecutionResult {

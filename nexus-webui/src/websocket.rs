@@ -1,8 +1,8 @@
 //! WebSocket handler for real-time updates
 
-use tokio_tungstenite::{tungstenite::Message, WebSocketStream};
-use futures_util::{SinkExt, StreamExt};
 use crate::WebUIState;
+use futures_util::{SinkExt, StreamExt};
+use tokio_tungstenite::{tungstenite::Message, WebSocketStream};
 
 /// Handle WebSocket connection
 pub async fn handle_websocket(
@@ -13,10 +13,7 @@ pub async fn handle_websocket(
 }
 
 /// Handle individual WebSocket connection
-async fn handle_websocket_connection(
-    ws: warp::ws::WebSocket,
-    state: WebUIState,
-) {
+async fn handle_websocket_connection(ws: warp::ws::WebSocket, state: WebUIState) {
     let (mut ws_tx, mut ws_rx) = ws.split();
     let mut broadcast_rx = state.broadcast_tx.subscribe();
 

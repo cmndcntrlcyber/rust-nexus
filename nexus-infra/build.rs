@@ -13,6 +13,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Tell cargo to recompile if the proto file changes
     println!("cargo:rerun-if-changed={}", proto_file);
-    
+
     Ok(())
 }

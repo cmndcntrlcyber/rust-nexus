@@ -37,6 +37,12 @@ pwsh = { version = "0.1.0", optional = true }
 ring = "0.17"
 rsa = { version = "0.9", optional = true }
 
+# Date and time handling
+chrono = { workspace = true }
+
+# System information
+hostname = { workspace = true }
+
 # Local crate dependencies
 nexus-common = { path = "../nexus-common" }
 # Temporarily commented out due to compilation issues

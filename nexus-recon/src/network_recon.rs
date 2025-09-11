@@ -10,7 +10,7 @@ impl NetworkScanner {
     pub fn new(config: ReconConfig) -> Self {
         Self { config }
     }
-    
+
     pub async fn scan_target(&self, _target: &str) -> Result<NetworkReconResult> {
         // Stub implementation
         Ok(NetworkReconResult {

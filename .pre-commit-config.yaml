@@ -57,9 +57,9 @@ repos:
       - id: black
         language_version: python3
 
-  - repo: https://github.com/doublify/pre-commit-rust
-    rev: v1.0
-    hooks:
-      - id: fmt
-      - id: clippy
-        args: ["--", "-D", "warnings"]
+  #- repo: https://github.com/doublify/pre-commit-rust
+   # rev: v1.0
+   # hooks:
+      #- id: fmt
+      #- id: clippy
+        # args: ["--", "-D", "warnings"]

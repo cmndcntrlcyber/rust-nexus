@@ -15,14 +15,14 @@ thiserror = { workspace = true }
 base64 = { workspace = true }
 rand = { workspace = true }
 
-# gRPC and Protocol Buffers
-tonic = { workspace = true, features = ["tls", "transport"] }
+# gRPC and Protocol Buffers - using rustls-based TLS
+tonic = { workspace = true, features = ["tls-roots", "transport"] }
 prost = { workspace = true }
 prost-types = "0.12"
 async-stream = "0.3"
 tokio-stream = "0.1"
 
-# TLS and certificates
+# TLS and certificates - rustls only
 rustls = { workspace = true }
 tokio-rustls = { workspace = true }
 webpki-roots = { workspace = true }
@@ -32,7 +32,7 @@ x509-parser = { workspace = true }
 # DNS and networking
 hickory-resolver = { workspace = true }
 
-# HTTP client for APIs
+# HTTP client for APIs - using rustls
 reqwest = { workspace = true }
 
 # Let's Encrypt ACME
@@ -57,6 +57,10 @@ env_logger = { workspace = true }
 # Windows PE/COFF parsing
 goblin = { workspace = true }
 pelite = { workspace = true }
+
+# Windows-specific dependencies
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { workspace = true }
 
 [build-dependencies]
 tonic-build = { workspace = true }

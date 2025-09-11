@@ -58,7 +58,7 @@
 **/*.dll
 **/*.dylib
 
-# Executables  
+# Executables
 **/*.exe
 **/*.out
 **/*.app
@@ -103,6 +103,8 @@
 **/nexus.toml
 **/nexus-working.toml
 **/agent.toml
+**/agent-linux.toml
+**/agent-windows.toml
 **/.env
 **/.env.*
 **/secrets/
@@ -361,6 +363,28 @@
 **/agent-builds/
 **/server-builds/
 
+# Cross-platform build artifacts
+**/target/builds/
+**/nexus-agent-linux-*
+**/nexus-agent-windows-*
+**/nexus-server-linux*
+**/nexus-server-windows*
+**/agent-linux-*.toml
+**/agent-windows-*.toml
+**/BUILD_INFO.txt
+
+# Deployment packages and archives
+**/nexus-linux-*/
+**/nexus-windows-*/
+**/nexus-linux-*.tar.gz
+**/nexus-windows-*.zip
+**/deployment-packages/
+
+# Platform-specific build temporaries
+**/build-temp/
+**/cross-compile-cache/
+**/platform-builds/
+
 # WASM UI specific
 **/nexus-wasm-ui/dist/
 **/nexus-wasm-ui/pkg/
@@ -376,6 +400,8 @@ config/production/
 config/staging/
 config/development/
 !config/examples/
+!config/agent-linux.toml.example
+!config/agent-windows.toml.example
 
 # ===========================================
 # End of .gitignore

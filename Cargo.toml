@@ -21,7 +21,7 @@ rand = "0.8"
 base64 = "0.21"
 windows-sys = { version = "0.52", features = [
     "Win32_Foundation",
-    "Win32_System_Threading", 
+    "Win32_System_Threading",
     "Win32_System_Memory",
     "Win32_System_Diagnostics_Debug",
     "Win32_System_LibraryLoader",
@@ -31,12 +31,12 @@ thiserror = "1.0"
 hostname = "0.3"
 local-ip-address = "0.5"
 
-# gRPC and Protocol Buffers
-tonic = "0.10"
+# gRPC and Protocol Buffers - using rustls for TLS
+tonic = { version = "0.10", features = ["tls-roots"] }
 prost = "0.12"
 tonic-build = "0.10"
 
-# TLS and certificates
+# TLS and certificates - rustls only
 rustls = "0.21"
 tokio-rustls = "0.24"
 webpki-roots = "0.25"
@@ -46,7 +46,7 @@ x509-parser = "0.15"
 # DNS and networking
 hickory-resolver = "0.24"
 
-# HTTP client for Cloudflare API
+# HTTP client for Cloudflare API - using rustls
 reqwest = { version = "0.11", features = ["json", "rustls-tls"] }
 
 # Let's Encrypt ACME client

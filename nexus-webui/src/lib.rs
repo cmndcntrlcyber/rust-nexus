@@ -1,19 +1,19 @@
 //! Nexus Web UI Module
-//! 
+//!
 //! Provides a modern web-based management interface for the rust-nexus C2 framework.
 //! Integrates tauri-executor's web interface technology with rust-nexus's enterprise features.
 
-use std::sync::Arc;
-use warp::Filter;
+use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
 use uuid::Uuid;
-use log::{info, warn, error, debug};
+use warp::Filter;
 
 pub mod handlers;
-pub mod websocket;
 pub mod static_files;
 pub mod templates;
+pub mod websocket;
 
 use nexus_common::*;
 // Temporarily commented out due to nexus-infra compilation issues
@@ -24,11 +24,15 @@ pub struct GrpcClient;
 pub struct DomainManager;
 
 impl GrpcClient {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl DomainManager {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 /// Web UI server configuration
@@ -92,10 +96,23 @@ pub enum AgentStatus {
 pub enum WebUIEvent {
     AgentConnected(AgentConnection),
     AgentDisconnected(String),
-    AgentStatusUpdate { agent_id: String, status: AgentStatus },
-    TaskResult { agent_id: String, task_id: String, result: String },
-    SystemAlert { level: String, message: String },
-    DomainRotation { old_domain: String, new_domain: String },
+    AgentStatusUpdate {
+        agent_id: String,
+        status: AgentStatus,
+    },
+    TaskResult {
+        agent_id: String,
+        task_id: String,
+        result: String,
+    },
+    SystemAlert {
+        level: String,
+        message: String,
+    },
+    DomainRotation {
+        old_domain: String,
+        new_domain: String,
+    },
 }
 
 /// Main Web UI server
@@ -111,7 +128,7 @@ impl WebUIServer {
         domain_manager: Arc<DomainManager>,
     ) -> Result<Self> {
         let (broadcast_tx, _) = broadcast::channel(1000);
-        
+
         let state = WebUIState {
             config,
             grpc_client,
@@ -126,23 +143,24 @@ impl WebUIServer {
     /// Start the web UI server
     pub async fn start(self) -> Result<()> {
         let state = self.state.clone();
-        
-        info!("Starting Nexus Web UI server on {}:{}", state.config.bind_address, state.config.port);
+
+        info!(
+            "Starting Nexus Web UI server on {}:{}",
+            state.config.bind_address, state.config.port
+        );
 
         // Health check endpoint
-        let health = warp::path("health")
-            .and(warp::get())
-            .map(|| {
-                warp::reply::json(&serde_json::json!({
-                    "status": "healthy",
-                    "service": "nexus-webui",
-                    "timestamp": chrono::Utc::now().to_rfc3339()
-                }))
-            });
+        let health = warp::path("health").and(warp::get()).map(|| {
+            warp::reply::json(&serde_json::json!({
+                "status": "healthy",
+                "service": "nexus-webui",
+                "timestamp": chrono::Utc::now().to_rfc3339()
+            }))
+        });
 
         // API routes
         let api_routes = self.build_api_routes().await;
-        
+
         // WebSocket routes (always enabled for now)
         let ws_routes = self.build_websocket_routes().await;
 
@@ -151,7 +169,14 @@ impl WebUIServer {
 
         // CORS configuration
         let cors = warp::cors()
-            .allow_origins(state.config.cors_origins.iter().map(|s| s.as_str()).collect::<Vec<_>>())
+            .allow_origins(
+                state
+                    .config
+                    .cors_origins
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>(),
+            )
             .allow_methods(vec!["GET", "POST", "PUT", "DELETE", "OPTIONS"])
             .allow_headers(vec!["content-type", "authorization"])
             .build();
@@ -169,15 +194,15 @@ impl WebUIServer {
             .parse::<std::net::SocketAddr>()
             .map_err(|e| NexusError::ConfigurationError(format!("Invalid bind address: {}", e)))?;
 
-        warp::serve(routes)
-            .run(addr)
-            .await;
+        warp::serve(routes).run(addr).await;
 
         Ok(())
     }
 
     /// Build API routes
-    async fn build_api_routes(&self) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+    async fn build_api_routes(
+        &self,
+    ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         let state = self.state.clone();
 
         // Agent management routes
@@ -235,7 +260,9 @@ impl WebUIServer {
     }
 
     /// Build static file routes
-    async fn build_static_routes(&self) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+    async fn build_static_routes(
+        &self,
+    ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         // Serve embedded static files (filesystem serving temporarily disabled for type compatibility)
         static_files::embedded_files()
     }
@@ -255,7 +282,8 @@ impl WebUIServer {
         drop(connections);
 
         // Broadcast the update
-        self.broadcast_event(WebUIEvent::AgentConnected(agent)).await;
+        self.broadcast_event(WebUIEvent::AgentConnected(agent))
+            .await;
     }
 
     /// Remove disconnected agent
@@ -265,7 +293,8 @@ impl WebUIServer {
         drop(connections);
 
         // Broadcast the disconnection
-        self.broadcast_event(WebUIEvent::AgentDisconnected(agent_id.to_string())).await;
+        self.broadcast_event(WebUIEvent::AgentDisconnected(agent_id.to_string()))
+            .await;
     }
 }
 
@@ -321,7 +350,7 @@ mod tests {
 
         let serialized = serde_json::to_string(&agent).unwrap();
         let deserialized: AgentConnection = serde_json::from_str(&serialized).unwrap();
-        
+
         assert_eq!(agent.agent_id, deserialized.agent_id);
         assert_eq!(agent.hostname, deserialized.hostname);
     }

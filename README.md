@@ -9,7 +9,7 @@ Rust-Nexus combines traditional C2 capabilities with cutting-edge infrastructure
 ### Core Framework Components
 
 1. **🏗️ Infrastructure Management (`nexus-infra`)**: Automated DNS, certificates, and domain rotation
-2. **🔧 Agent Framework (`nexus-agent`)**: Advanced execution with fiber techniques and BOF support  
+2. **🔧 Agent Framework (`nexus-agent`)**: Advanced execution with fiber techniques and BOF support
 3. **🖥️ C2 Server (`nexus-server`)**: gRPC-based server with agent management
 4. **📚 Common Library (`nexus-common`)**: Shared utilities and cryptographic functions
 
@@ -46,7 +46,7 @@ Rust-Nexus combines traditional C2 capabilities with cutting-edge infrastructure
 
 ### 🛡️ **Security & Stealth**
 - ✅ **Anti-Analysis**: VM, debugger, and sandbox detection
-- ✅ **Timing Evasion**: Jitter and randomization techniques  
+- ✅ **Timing Evasion**: Jitter and randomization techniques
 - ✅ **Certificate Validation**: Multi-layer TLS security
 - ✅ **Operational Security**: Automated infrastructure rotation
 - ✅ **Traffic Legitimacy**: CDN-fronted communications
@@ -127,6 +127,12 @@ rust-nexus/
 
 ## 🚀 Quick Start
 
+> **📚 New to Rust-Nexus?** Check out our **[Complete Setup and Deployment Guide](docs/COMPLETE_SETUP_GUIDE.md)** for comprehensive step-by-step instructions from prerequisites to production deployment.
+
+### Fast Track Setup
+
+For experienced users, here's the essential setup:
+
 ### Prerequisites
 - Rust 1.70+ with cargo
 - Cloudflare account with API token
@@ -141,10 +147,10 @@ git clone https://github.com/cmndcntrlcyber/rust-nexus.git
 cd rust-nexus
 
 # Create configuration from template
-cp config/examples/nexus-config.toml ./nexus.toml
+cp nexus.toml.example nexus.toml
 
 # Edit configuration with your Cloudflare details
-vim nexus.toml  # Add your API token, zone ID, and domain
+nano nexus.toml  # Add your API token, zone ID, and domain
 ```
 
 ### 2. **Build Framework**
@@ -154,10 +160,14 @@ vim nexus.toml  # Add your API token, zone ID, and domain
 cargo build --release
 
 # Or build specific components
-cargo build --release -p nexus-infra
-cargo build --release -p nexus-server  
-cargo build --release -p nexus-agent
-```
+cargo build --release --bin nexus-infra
+cargo build --release --bin nexus-server
+
+# Build Linux Agent
+cargo build --release --bin nexus-agent --config ./config/agent-linux.toml
+
+# Build Windows Agent
+cargo build --release --bin nexus-agent --config ./config/agent-windows.toml
 
 ### 3. **Deploy Infrastructure**
 
@@ -169,8 +179,10 @@ cargo build --release -p nexus-agent
 ./target/release/nexus-server --config nexus.toml
 
 # Deploy agents to targets
-./target/release/nexus-agent --config agent.toml
+./target/release/nexus-agent --config nexus.toml
 ```
+
+> **⚠️ First Time Setup?** The quick start assumes familiarity with the framework. For detailed configuration, troubleshooting, and production deployment, see the **[Complete Setup Guide](docs/COMPLETE_SETUP_GUIDE.md)**.
 
 ## 🔧 Configuration
 
@@ -256,7 +268,7 @@ let cert = cert_manager.request_certificate(&domain.full_domain, &[]).await?;
 
 ### Health Monitoring
 ```bash
-# Check infrastructure health  
+# Check infrastructure health
 nexus-cli status --all
 
 # Domain health check
@@ -292,7 +304,7 @@ nexus-cli certificates renew --all
 - **Geographic Distribution**: Global edge location utilization
 - **Traffic Legitimacy**: Indistinguishable from normal CDN traffic
 
-### **Anti-Analysis** 
+### **Anti-Analysis**
 - **Infrastructure Level**: Domain rotation defeats long-term analysis
 - **Certificate Level**: Valid TLS certificates prevent SSL inspection
 - **Application Level**: Enhanced VM/debugger/sandbox detection
@@ -377,6 +389,28 @@ cargo build --features "enterprise,monitoring"
 
 ## 🔍 Troubleshooting
 
+### Known Issues & Solutions
+
+**❌ gRPC Compilation Errors: "failed to resolve use of unresolved module 'proto'"**
+
+This indicates a namespace issue with protobuf-generated code that was resolved in the latest version.
+
+```bash
+# Quick diagnosis
+cargo build -p nexus-infra 2>&1 | grep -E "(proto|nexus_c2_server|nexus_c2_client)"
+
+# If you see namespace errors, the fix has been documented
+# See: docs/troubleshooting/GRPC_NAMESPACE_FIX.md
+```
+
+**✅ Solution**: The namespace fix has been applied to ensure:
+- Clean builds with only warnings (no compilation errors)
+- Successful agent-server gRPC communication
+- Working task management and file operations
+- Cross-platform builds (Linux and Windows targets)
+
+**Reference**: [Complete gRPC Namespace Fix Guide](docs/troubleshooting/GRPC_NAMESPACE_FIX.md)
+
 ### Common Issues
 
 **❌ Cloudflare API Connection Failed**
@@ -409,7 +443,7 @@ RUST_LOG=debug ./target/release/nexus-agent --config agent.toml
 
 ### Performance Tuning
 - **Connection Pools**: Adjust `max_connections` for load
-- **Domain Health**: Configure `health_monitoring` intervals  
+- **Domain Health**: Configure `health_monitoring` intervals
 - **Certificate Cache**: Tune renewal thresholds
 - **Task Queues**: Optimize task distribution patterns
 
@@ -431,7 +465,7 @@ RUST_LOG=debug ./target/release/nexus-agent --config agent.toml
 
 ### **Compliance & Monitoring**
 - **Audit Logging**: Comprehensive operation logging
-- **Certificate Lifecycle**: Automated compliance tracking  
+- **Certificate Lifecycle**: Automated compliance tracking
 - **Infrastructure Changes**: Detailed change management
 - **Agent Activity**: Real-time monitoring dashboards
 
@@ -461,7 +495,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - **Rust Community**: Exceptional tooling and ecosystem
 - **Cloudflare**: Robust API and global infrastructure
-- **Let's Encrypt**: Free, automated certificate authority  
+- **Let's Encrypt**: Free, automated certificate authority
 - **Sliver Framework**: Inspiration for gRPC architecture
 - **BOF Community**: Windows internals research and techniques
 - **Maldev Academy**: Fiber execution and evasion techniques
@@ -470,11 +504,13 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🚀 Getting Started
 
-Ready to deploy? Check out our [Infrastructure Setup Guide](docs/infrastructure/README.md) for step-by-step instructions.
+Ready to deploy? Start with our **[Complete Setup and Deployment Guide](docs/COMPLETE_SETUP_GUIDE.md)** for comprehensive step-by-step instructions from prerequisites to production.
 
-For BOF development, see the [BOF Development Guide](docs/execution/bof-guide.md).
+### Additional Resources
 
-For production deployments, review the [Enterprise Setup Guide](docs/configuration/production-setup.md).
+- **[Infrastructure Setup Guide](docs/infrastructure/README.md)** - Deep dive into infrastructure automation
+- **[BOF Development Guide](docs/execution/bof-guide.md)** - Advanced payload development
+- **[Enterprise Setup Guide](docs/configuration/production-setup.md)** - Production deployment considerations
 
 ---
 

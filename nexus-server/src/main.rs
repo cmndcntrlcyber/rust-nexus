@@ -1,15 +1,13 @@
 //! Nexus C2 gRPC Server
-//! 
+//!
 //! Main binary for the Nexus C2 framework's gRPC server.
 //! Provides enterprise-grade C2 capabilities with advanced infrastructure management.
 
 use anyhow::{Context, Result};
 use clap::{Arg, ArgMatches, Command};
-use futures::future;
 use log::{error, info, warn};
 use nexus_infra::{
-    CertManager, GrpcServer, NexusConfig, OriginCertConfig,
-    InfraError, InfraResult,
+    CertManager, GrpcServer, InfraError, InfraResult, NexusConfig, OriginCertConfig,
 };
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -20,21 +18,26 @@ use tokio::time::Duration;
 async fn main() -> Result<()> {
     // Initialize logging
     init_logging();
-    
+
     // Parse command line arguments
     let matches = create_cli().get_matches();
-    
+
     // Load configuration
-    let config_path = matches.get_one::<String>("config")
+    let config_path = matches
+        .get_one::<String>("config")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("nexus.toml"));
-    
-    let config = load_config(&config_path)
-        .with_context(|| format!("Failed to load configuration from {}", config_path.display()))?;
-    
+
+    let config = load_config(&config_path).with_context(|| {
+        format!(
+            "Failed to load configuration from {}",
+            config_path.display()
+        )
+    })?;
+
     info!("Nexus C2 Server starting...");
     info!("Configuration loaded from: {}", config_path.display());
-    
+
     // Handle different commands
     match matches.subcommand() {
         Some(("start", sub_matches)) => {
@@ -51,7 +54,7 @@ async fn main() -> Result<()> {
             start_server(config, &matches).await?;
         }
     }
-    
+
     Ok(())
 }
 
@@ -100,12 +103,9 @@ fn create_cli() -> Command {
                         .long("daemon")
                         .action(clap::ArgAction::SetTrue)
                         .help("Run as daemon in background"),
-                )
+                ),
         )
-        .subcommand(
-            Command::new("validate")
-                .about("Validate configuration and exit")
-        )
+        .subcommand(Command::new("validate").about("Validate configuration and exit"))
         .subcommand(
             Command::new("init")
                 .about("Initialize infrastructure (domains and certificates)")
@@ -115,7 +115,7 @@ fn create_cli() -> Command {
                         .long("force")
                         .action(clap::ArgAction::SetTrue)
                         .help("Force initialization even if already configured"),
-                )
+                ),
         )
 }
 
@@ -125,7 +125,7 @@ fn init_logging() {
         Ok(_) => return, // Let user's RUST_LOG take precedence
         Err(_) => "nexus_server=info,nexus_infra=info",
     };
-    
+
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(log_level))
         .format_timestamp_secs()
         .init();
@@ -139,10 +139,10 @@ fn load_config(config_path: &PathBuf) -> Result<NexusConfig> {
             config_path.display()
         ));
     }
-    
+
     let config = NexusConfig::from_file(config_path)
         .map_err(|e| anyhow::anyhow!("Configuration error: {}", e))?;
-    
+
     info!("Configuration validated successfully");
     Ok(config)
 }
@@ -153,31 +153,36 @@ async fn start_server(mut config: NexusConfig, matches: &ArgMatches) -> Result<(
     if let Some(bind_address) = matches.get_one::<String>("bind") {
         config.grpc_server.bind_address = bind_address.clone();
     }
-    
+
     if let Some(port) = matches.get_one::<u16>("port") {
         config.grpc_server.port = *port;
     }
-    
-    info!("Starting Nexus C2 Server on {}:{}", 
-          config.grpc_server.bind_address, config.grpc_server.port);
-    
+
+    info!(
+        "Starting Nexus C2 Server on {}:{}",
+        config.grpc_server.bind_address, config.grpc_server.port
+    );
+
     // Initialize certificate manager
     let cert_manager = initialize_cert_manager(&config.origin_cert)
         .await
         .with_context(|| "Failed to initialize certificate manager")?;
-    
+
     // Create gRPC server
     let server = GrpcServer::new(config.grpc_server.clone(), cert_manager);
-    
+
     // Start the server
-    server.start()
+    server
+        .start()
         .await
         .with_context(|| "Failed to start gRPC server")?;
-    
+
     info!("✅ Nexus C2 Server is running");
-    info!("🌐 Listening on: https://{}:{}", 
-          config.grpc_server.bind_address, config.grpc_server.port);
-    
+    info!(
+        "🌐 Listening on: https://{}:{}",
+        config.grpc_server.bind_address, config.grpc_server.port
+    );
+
     // Start cleanup task for inactive agents
     let server_clone = Arc::new(server);
     let cleanup_server = server_clone.clone();
@@ -191,20 +196,20 @@ async fn start_server(mut config: NexusConfig, matches: &ArgMatches) -> Result<(
             }
         }
     });
-    
+
     // Wait for shutdown signal
     wait_for_shutdown().await;
-    
+
     info!("🛑 Shutdown signal received, stopping server...");
-    
+
     // Cancel cleanup task
     cleanup_task.abort();
-    
+
     // Stop the server
     if let Err(e) = server_clone.stop().await {
         error!("Error stopping server: {}", e);
     }
-    
+
     info!("✅ Server stopped gracefully");
     Ok(())
 }
@@ -212,93 +217,98 @@ async fn start_server(mut config: NexusConfig, matches: &ArgMatches) -> Result<(
 /// Validate configuration and exit
 fn validate_configuration(config: NexusConfig) -> Result<()> {
     info!("Validating configuration...");
-    
+
     // Configuration was already validated during loading
     info!("✅ Configuration is valid");
-    
+
     // Print configuration summary
     println!("\n📋 Configuration Summary:");
     println!("  Domain: {}", config.cloudflare.domain);
     println!("  Primary domains: {:?}", config.domains.primary_domains);
-    println!("  gRPC Server: {}:{}", config.grpc_server.bind_address, config.grpc_server.port);
+    println!(
+        "  gRPC Server: {}:{}",
+        config.grpc_server.bind_address, config.grpc_server.port
+    );
     println!("  Mutual TLS: {}", config.grpc_server.mutual_tls);
     println!("  Max connections: {}", config.grpc_server.max_connections);
-    println!("  Domain rotation: {} hours", config.domains.rotation_interval);
-    
+    println!(
+        "  Domain rotation: {} hours",
+        config.domains.rotation_interval
+    );
+
     Ok(())
 }
 
 /// Initialize infrastructure components
 async fn init_infrastructure(config: NexusConfig, matches: &ArgMatches) -> Result<()> {
     let force = matches.get_flag("force");
-    
+
     info!("🔧 Initializing Nexus infrastructure...");
-    
+
     // Check if already initialized (unless force is specified)
     if !force && is_infrastructure_initialized(&config) {
         warn!("Infrastructure appears to already be initialized. Use --force to override.");
         return Ok(());
     }
-    
+
     // Initialize certificate directories
     std::fs::create_dir_all(config.origin_cert.cert_path.parent().unwrap())
         .with_context(|| "Failed to create certificate directory")?;
-    
+
     std::fs::create_dir_all(&config.letsencrypt.cert_storage_dir)
         .with_context(|| "Failed to create Let's Encrypt storage directory")?;
-    
+
     // Initialize certificate manager
     let _cert_manager = initialize_cert_manager(&config.origin_cert).await?;
-    
+
     // TODO: Initialize Cloudflare DNS records
     // TODO: Request Let's Encrypt certificates
     // TODO: Create initial domain records
-    
+
     info!("✅ Infrastructure initialization complete");
-    
+
     Ok(())
 }
 
 /// Initialize the certificate manager
 async fn initialize_cert_manager(cert_config: &OriginCertConfig) -> InfraResult<Arc<CertManager>> {
     info!("Initializing certificate manager...");
-    
-    // Check if certificates exist, generate self-signed if not
-    if !cert_config.cert_path.exists() || !cert_config.key_path.exists() || !cert_config.ca_cert_path.exists() {
-        warn!("Origin certificates not found, generating self-signed certificates for development");
-        
-        // Generate self-signed certificate for development
-        let (cert_pem, key_pem) = CertManager::generate_self_signed_cert(
-            "localhost",
-            &["127.0.0.1".to_string(), "::1".to_string()],
-            365,
-        )?;
-        
-        std::fs::write(&cert_config.cert_path, &cert_pem)
-            .map_err(|e| InfraError::IoError(e))?;
-        std::fs::write(&cert_config.key_path, key_pem)
-            .map_err(|e| InfraError::IoError(e))?;
-        
-        // For self-signed certificates, use the same cert as CA cert
-        std::fs::write(&cert_config.ca_cert_path, cert_pem)
-            .map_err(|e| InfraError::IoError(e))?;
-        
-        info!("✅ Self-signed certificates generated for development");
-    } else {
-        info!("✅ Using existing origin certificates");
+
+    // Verify that all required certificates exist
+    if !cert_config.cert_path.exists() {
+        return Err(InfraError::ConfigError(format!(
+            "Certificate file not found: {}. Please provide a valid certificate.",
+            cert_config.cert_path.display()
+        )));
     }
-    
+
+    if !cert_config.key_path.exists() {
+        return Err(InfraError::ConfigError(format!(
+            "Private key file not found: {}. Please provide a valid private key.",
+            cert_config.key_path.display()
+        )));
+    }
+
+    if !cert_config.ca_cert_path.exists() {
+        return Err(InfraError::ConfigError(format!(
+            "CA certificate file not found: {}. Please provide a valid CA certificate.",
+            cert_config.ca_cert_path.display()
+        )));
+    }
+
+    info!("✅ Using existing origin certificates");
+
     // Now create the certificate manager with existing certificates
     let cert_manager = CertManager::new(cert_config.clone())?;
-    
+
     Ok(Arc::new(cert_manager))
 }
 
 /// Check if infrastructure is already initialized
 fn is_infrastructure_initialized(config: &NexusConfig) -> bool {
-    config.origin_cert.cert_path.exists() && 
-    config.origin_cert.key_path.exists() &&
-    config.letsencrypt.cert_storage_dir.exists()
+    config.origin_cert.cert_path.exists()
+        && config.origin_cert.key_path.exists()
+        && config.letsencrypt.cert_storage_dir.exists()
 }
 
 /// Wait for shutdown signal (SIGINT or SIGTERM)
@@ -318,13 +328,13 @@ async fn wait_for_shutdown() {
     };
 
     #[cfg(not(unix))]
-    let terminate = future::pending::<()>();
+    let terminate = std::future::pending::<()>();
 
     tokio::select! {
         _ = ctrl_c => {},
         _ = terminate => {},
     }
-    
+
     info!("Shutdown signal received");
 }
 
@@ -337,7 +347,7 @@ mod tests {
     fn test_cli_creation() {
         let cli = create_cli();
         assert_eq!(cli.get_name(), "nexus-server");
-        
+
         // Test default config argument
         let matches = cli.try_get_matches_from(&["nexus-server"]).unwrap();
         assert_eq!(matches.get_one::<String>("config").unwrap(), "nexus.toml");
@@ -346,15 +356,20 @@ mod tests {
     #[test]
     fn test_cli_arguments() {
         let cli = create_cli();
-        
+
         // Test with custom config
-        let matches = cli.try_get_matches_from(&[
-            "nexus-server", 
-            "--config", "test.toml",
-            "--bind", "127.0.0.1",
-            "--port", "8443"
-        ]).unwrap();
-        
+        let matches = cli
+            .try_get_matches_from(&[
+                "nexus-server",
+                "--config",
+                "test.toml",
+                "--bind",
+                "127.0.0.1",
+                "--port",
+                "8443",
+            ])
+            .unwrap();
+
         assert_eq!(matches.get_one::<String>("config").unwrap(), "test.toml");
         assert_eq!(matches.get_one::<String>("bind").unwrap(), "127.0.0.1");
         assert_eq!(*matches.get_one::<u16>("port").unwrap(), 8443);
@@ -364,19 +379,19 @@ mod tests {
     fn test_infrastructure_check() {
         let temp_dir = tempdir().unwrap();
         let mut config = NexusConfig::default();
-        
+
         config.origin_cert.cert_path = temp_dir.path().join("cert.pem");
         config.origin_cert.key_path = temp_dir.path().join("key.pem");
         config.letsencrypt.cert_storage_dir = temp_dir.path().join("letsencrypt");
-        
+
         // Should not be initialized initially
         assert!(!is_infrastructure_initialized(&config));
-        
+
         // Create the files
         std::fs::write(&config.origin_cert.cert_path, "dummy cert").unwrap();
         std::fs::write(&config.origin_cert.key_path, "dummy key").unwrap();
         std::fs::create_dir_all(&config.letsencrypt.cert_storage_dir).unwrap();
-        
+
         // Should now be initialized
         assert!(is_infrastructure_initialized(&config));
     }

@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::{current_timestamp, generate_uuid};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum MessageType {
@@ -40,7 +40,11 @@ impl Message {
     }
 
     pub fn heartbeat(agent_id: String) -> Self {
-        Self::new(MessageType::Heartbeat, "heartbeat".to_string(), Some(agent_id))
+        Self::new(
+            MessageType::Heartbeat,
+            "heartbeat".to_string(),
+            Some(agent_id),
+        )
     }
 
     pub fn task_assignment(content: String, agent_id: String) -> Self {
@@ -105,16 +109,21 @@ impl TaskData {
 
     pub fn fiber_shellcode(shellcode_b64: String) -> Self {
         let mut task = Self::new("fiber_shellcode".to_string(), "execute".to_string());
-        task.parameters.insert("shellcode".to_string(), shellcode_b64);
-        task.parameters.insert("method".to_string(), "direct_fiber".to_string());
+        task.parameters
+            .insert("shellcode".to_string(), shellcode_b64);
+        task.parameters
+            .insert("method".to_string(), "direct_fiber".to_string());
         task
     }
 
     pub fn fiber_hollowing(shellcode_b64: String, target_process: String) -> Self {
         let mut task = Self::new("fiber_hollowing".to_string(), "execute".to_string());
-        task.parameters.insert("shellcode".to_string(), shellcode_b64);
-        task.parameters.insert("target_process".to_string(), target_process);
-        task.parameters.insert("method".to_string(), "process_hollowing".to_string());
+        task.parameters
+            .insert("shellcode".to_string(), shellcode_b64);
+        task.parameters
+            .insert("target_process".to_string(), target_process);
+        task.parameters
+            .insert("method".to_string(), "process_hollowing".to_string());
         task
     }
 
@@ -193,7 +202,7 @@ impl FileData {
     pub fn new(filename: String, content: Vec<u8>) -> Self {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let file_size = content.len() as u64;
         let mut hasher = DefaultHasher::new();
         content.hash(&mut hasher);
@@ -265,7 +274,13 @@ mod tests {
     fn test_fiber_shellcode_task() {
         let task = TaskData::fiber_shellcode("base64_shellcode".to_string());
         assert_eq!(task.task_type, "fiber_shellcode");
-        assert_eq!(task.parameters.get("shellcode"), Some(&"base64_shellcode".to_string()));
-        assert_eq!(task.parameters.get("method"), Some(&"direct_fiber".to_string()));
+        assert_eq!(
+            task.parameters.get("shellcode"),
+            Some(&"base64_shellcode".to_string())
+        );
+        assert_eq!(
+            task.parameters.get("method"),
+            Some(&"direct_fiber".to_string())
+        );
     }
 }

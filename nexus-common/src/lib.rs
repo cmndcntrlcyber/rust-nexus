@@ -1,14 +1,14 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 
+pub mod agent;
 pub mod crypto;
 pub mod messages;
-pub mod agent;
 pub mod tasks;
 
+pub use agent::*;
 pub use crypto::*;
 pub use messages::*;
-pub use agent::*;
 pub use tasks::*;
 
 #[derive(Error, Debug)]

