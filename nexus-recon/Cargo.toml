@@ -23,7 +23,7 @@ html5ever = { version = "0.26", optional = true }
 rquickjs = { version = "0.4", optional = true }
 
 # Networking and DNS resolution
-trust-dns-resolver = { workspace = true, optional = true }
+hickory-resolver = { workspace = true, optional = true }
 local-ip-address = { workspace = true }
 
 # Base64 encoding for data transmission
@@ -47,4 +47,4 @@ nexus-common = { path = "../nexus-common" }
 default = ["javascript", "advanced-fingerprinting"]
 javascript = ["rquickjs"]
 advanced-fingerprinting = ["scraper", "html5ever"]
-network-recon = ["trust-dns-resolver"]
+network-recon = ["hickory-resolver"]

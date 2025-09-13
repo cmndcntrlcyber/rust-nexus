@@ -24,4 +24,29 @@ windows-sys = { workspace = true }
 
 # Linux-specific dependencies
 [target.'cfg(target_os = "linux")'.dependencies]
-libc = "0.2"
+libc = { version = "0.2", optional = true }
+
+[build-dependencies]
+tonic-build = { workspace = true }
+
+[features]
+default = []
+
+# Platform-specific features
+windows-specific = []
+linux-specific = ["libc"]
+
+# Execution capabilities
+bof-loading = []
+wmi-execution = []
+elf-loading = []
+systemd-integration = []
+
+# Communication features
+domain-fronting = []
+http-fallback = []
+
+# Evasion features
+anti-debug = []
+anti-vm = []
+process-injection = []

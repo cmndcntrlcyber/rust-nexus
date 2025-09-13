@@ -15,8 +15,8 @@ thiserror = { workspace = true }
 base64 = { workspace = true }
 rand = { workspace = true }
 
-# gRPC and Protocol Buffers
-tonic = { workspace = true, features = ["tls", "transport"] }
+# gRPC and Protocol Buffers - using rustls-based TLS
+tonic = { workspace = true, features = ["tls-roots", "transport"] }
 prost = { workspace = true }
 prost-types = "0.12"
 async-stream = "0.3"
@@ -57,6 +57,10 @@ env_logger = { workspace = true }
 # Windows PE/COFF parsing
 goblin = { workspace = true }
 pelite = { workspace = true }
+
+# Windows-specific dependencies
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { workspace = true }
 
 [build-dependencies]
 tonic-build = { workspace = true }

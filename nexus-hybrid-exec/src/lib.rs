@@ -1,5 +1,5 @@
 //! Nexus Hybrid Execution Module
-//! 
+//!
 //! Integrates tauri-executor's cross-platform execution capabilities with rust-nexus's
 //! enterprise C2 framework, providing multiple execution protocols and fallback methods.
 
@@ -159,14 +159,23 @@ impl HybridExecutor {
     }
 
     /// Execute a command using the specified method with automatic fallback
-    pub async fn execute(&self, request: ExecutionRequest) -> Result<ExecutionResult> {
-        info!("Executing command on {} via {:?}", request.target_endpoint, request.execution_method);
-        
+    pub async fn execute(
+        &self,
+        request: ExecutionRequest,
+    ) -> Result<ExecutionResult> {
+        info!(
+            "Executing command on {} via {:?}",
+            request.target_endpoint, request.execution_method
+        );
+
         let start_time = std::time::Instant::now();
         let mut last_error = None;
 
         // Try primary execution method
-        match self.execute_with_method(&request, &request.execution_method).await {
+        match self
+            .execute_with_method(&request, &request.execution_method)
+            .await
+        {
             Ok(mut result) => {
                 result.duration = start_time.elapsed();
                 return Ok(result);
@@ -181,7 +190,7 @@ impl HybridExecutor {
         if self.config.fallback_enabled {
             for fallback_method in &request.fallback_methods {
                 info!("Trying fallback method: {:?}", fallback_method);
-                
+
                 match self.execute_with_method(&request, fallback_method).await {
                     Ok(mut result) => {
                         result.duration = start_time.elapsed();
@@ -235,9 +244,12 @@ impl HybridExecutor {
     }
 
     /// Execute command locally
-    async fn execute_local(&self, request: &ExecutionRequest) -> Result<ExecutionResult> {
+    async fn execute_local(
+        &self,
+        request: &ExecutionRequest,
+    ) -> Result<ExecutionResult> {
         let start_time = std::time::Instant::now();
-        
+
         #[cfg(target_os = "windows")]
         let mut cmd = Command::new("cmd");
         #[cfg(target_os = "windows")]
@@ -249,14 +261,22 @@ impl HybridExecutor {
         cmd.args(&["-c", &request.command]);
 
         // Set timeout
-        let timeout_duration = std::time::Duration::from_secs(
-            request.timeout.unwrap_or(self.config.default_timeout),
-        );
+        let timeout_duration =
+            std::time::Duration::from_secs(request.timeout.unwrap_or(self.config.default_timeout));
 
         let output = tokio::time::timeout(timeout_duration, cmd.output())
             .await
-            .map_err(|_| NexusError::TaskExecutionError("Command execution timeout".to_string()))?
-            .map_err(|e| NexusError::TaskExecutionError(format!("Command execution failed: {}", e)))?;
+            .map_err(|_| {
+                NexusError::TaskExecutionError(
+                    "Command execution timeout".to_string(),
+                )
+            })?
+            .map_err(|e| {
+                NexusError::TaskExecutionError(format!(
+                    "Command execution failed: {}",
+                    e
+                ))
+            })?;
 
         Ok(ExecutionResult {
             success: output.status.success(),
@@ -276,7 +296,7 @@ impl HybridExecutor {
 
     /// Get supported execution methods for the current platform
     pub fn get_supported_methods(&self) -> Vec<ExecutionProtocol> {
-        let mut methods = vec![
+        let methods = vec![
             ExecutionProtocol::Local,
             ExecutionProtocol::Ssh,
             ExecutionProtocol::Api,
@@ -290,7 +310,11 @@ impl HybridExecutor {
     }
 
     /// Test connectivity to a target endpoint
-    pub async fn test_connectivity(&self, endpoint: &str, method: &ExecutionProtocol) -> Result<bool> {
+    pub async fn test_connectivity(
+        &self,
+        endpoint: &str,
+        method: &ExecutionProtocol,
+    ) -> Result<bool> {
         let test_request = ExecutionRequest {
             target_endpoint: endpoint.to_string(),
             execution_method: method.clone(),
@@ -311,7 +335,7 @@ impl HybridExecutor {
     fn get_test_command(&self) -> String {
         #[cfg(target_os = "windows")]
         return "echo test".to_string();
-        
+
         #[cfg(not(target_os = "windows"))]
         return "echo test".to_string();
     }
@@ -328,7 +352,7 @@ impl HybridExecutor {
         parameters.insert("endpoint".to_string(), endpoint);
         parameters.insert("command".to_string(), command);
         parameters.insert("method".to_string(), format!("{:?}", method));
-        
+
         if let Some(creds) = credentials {
             parameters.insert("credentials".to_string(), 
                 serde_json::to_string(&creds).unwrap_or_default());
@@ -377,18 +401,15 @@ impl HybridExecutor {
                 .args(&["/C", "systeminfo | findstr \"System Boot Time\""])
                 .output()
                 .await?;
-            
+
             // Parse Windows systeminfo output (simplified)
             Ok(3600) // Placeholder - would need proper parsing
         }
 
         #[cfg(not(target_os = "windows"))]
         {
-            let output = Command::new("cat")
-                .args(&["/proc/uptime"])
-                .output()
-                .await?;
-            
+            let output = Command::new("cat").args(&["/proc/uptime"]).output().await?;
+
             let uptime_str = String::from_utf8_lossy(&output.stdout);
             let uptime_float: f64 = uptime_str
                 .split_whitespace()
@@ -396,7 +417,7 @@ impl HybridExecutor {
                 .unwrap_or("0")
                 .parse()
                 .unwrap_or(0.0);
-            
+
             Ok(uptime_float as u64)
         }
     }
@@ -461,7 +482,7 @@ mod tests {
 
         let serialized = serde_json::to_string(&request).unwrap();
         let deserialized: ExecutionRequest = serde_json::from_str(&serialized).unwrap();
-        
+
         assert_eq!(request.target_endpoint, deserialized.target_endpoint);
         assert_eq!(request.execution_method, deserialized.execution_method);
         assert_eq!(request.command, deserialized.command);
@@ -471,7 +492,7 @@ mod tests {
     async fn test_local_execution() {
         let config = HybridExecConfig::default();
         let executor = HybridExecutor::new(config).unwrap();
-        
+
         let request = ExecutionRequest {
             target_endpoint: "localhost".to_string(),
             execution_method: ExecutionProtocol::Local,
@@ -484,7 +505,7 @@ mod tests {
 
         let result = executor.execute_local(&request).await;
         assert!(result.is_ok());
-        
+
         let execution_result = result.unwrap();
         assert!(execution_result.success);
         assert!(execution_result.output.contains("test"));
@@ -494,7 +515,7 @@ mod tests {
     fn test_supported_methods() {
         let config = HybridExecConfig::default();
         let executor = HybridExecutor::new(config).unwrap();
-        
+
         let methods = executor.get_supported_methods();
         assert!(methods.contains(&ExecutionProtocol::Local));
         assert!(methods.contains(&ExecutionProtocol::Ssh));

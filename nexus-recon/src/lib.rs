@@ -1,5 +1,5 @@
 //! Nexus Reconnaissance Module
-//! 
+//!
 //! Integrates the browser fingerprinting and reconnaissance capabilities from the catch system
 //! into the rust-nexus framework for comprehensive target profiling and information gathering.
 
@@ -238,7 +238,7 @@ impl ReconEngine {
     /// Create a new reconnaissance engine
     pub fn new(config: ReconConfig) -> Result<Self> {
         let mut headers = reqwest::header::HeaderMap::new();
-        
+
         // Add custom headers
         for (key, value) in &config.custom_headers {
             headers.insert(
@@ -277,13 +277,13 @@ impl ReconEngine {
     /// Execute JavaScript-based fingerprinting (integrating catch fingerprint.js logic)
     async fn javascript_based_fingerprinting(&self, target_url: &str) -> Result<BrowserFingerprint> {
         use crate::javascript_engine::JSEngine;
-        
+
         let js_engine = JSEngine::new()?;
-        
+
         // Load and execute the fingerprinting JavaScript code (placeholder for now)
         let fingerprint_js = "// Browser fingerprinting JavaScript code would be loaded here";
         let result = js_engine.execute_fingerprinting(fingerprint_js, target_url).await?;
-        
+
         Ok(result)
     }
 
@@ -395,7 +395,7 @@ impl ReconEngine {
     /// Perform network reconnaissance on a target
     pub async fn network_reconnaissance(&self, target: &str) -> Result<NetworkReconResult> {
         info!("Starting network reconnaissance for target: {}", target);
-        
+
         use crate::network_recon::NetworkScanner;
         let scanner = NetworkScanner::new(self.config.clone());
         scanner.scan_target(target).await
@@ -404,7 +404,7 @@ impl ReconEngine {
     /// Generate comprehensive system profile
     pub async fn system_profiling(&self, targets: &[String]) -> Result<Vec<SystemProfile>> {
         info!("Starting system profiling for {} targets", targets.len());
-        
+
         use crate::system_profiler::SystemProfiler;
         let profiler = SystemProfiler::new(self.config.clone());
         profiler.profile_systems(targets).await
@@ -413,7 +413,7 @@ impl ReconEngine {
     /// Calculate fingerprint hash from collected data
     async fn calculate_fingerprint_hash(&self, data: &HashMap<String, String>) -> String {
         use sha2::{Sha256, Digest};
-        
+
         let serialized = serde_json::to_string(data).unwrap_or_default();
         let mut hasher = Sha256::new();
         hasher.update(serialized.as_bytes());
@@ -498,7 +498,7 @@ mod tests {
 
         let serialized = serde_json::to_string(&browser_info).unwrap();
         let deserialized: BrowserInfo = serde_json::from_str(&serialized).unwrap();
-        
+
         assert_eq!(browser_info.user_agent, deserialized.user_agent);
         assert_eq!(browser_info.language, deserialized.language);
     }

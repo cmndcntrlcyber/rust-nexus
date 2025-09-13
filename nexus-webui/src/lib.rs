@@ -1,5 +1,5 @@
 //! Nexus Web UI Module
-//! 
+//!
 //! Provides a modern web-based management interface for the rust-nexus C2 framework.
 //! Integrates tauri-executor's web interface technology with rust-nexus's enterprise features.
 
@@ -111,7 +111,7 @@ impl WebUIServer {
         domain_manager: Arc<DomainManager>,
     ) -> Result<Self> {
         let (broadcast_tx, _) = broadcast::channel(1000);
-        
+
         let state = WebUIState {
             config,
             grpc_client,
@@ -126,7 +126,7 @@ impl WebUIServer {
     /// Start the web UI server
     pub async fn start(self) -> Result<()> {
         let state = self.state.clone();
-        
+
         info!("Starting Nexus Web UI server on {}:{}", state.config.bind_address, state.config.port);
 
         // Health check endpoint
@@ -142,7 +142,7 @@ impl WebUIServer {
 
         // API routes
         let api_routes = self.build_api_routes().await;
-        
+
         // WebSocket routes (always enabled for now)
         let ws_routes = self.build_websocket_routes().await;
 
@@ -321,7 +321,7 @@ mod tests {
 
         let serialized = serde_json::to_string(&agent).unwrap();
         let deserialized: AgentConnection = serde_json::from_str(&serialized).unwrap();
-        
+
         assert_eq!(agent.agent_id, deserialized.agent_id);
         assert_eq!(agent.hostname, deserialized.hostname);
     }

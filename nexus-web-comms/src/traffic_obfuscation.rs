@@ -10,7 +10,7 @@ impl DataObfuscator {
     pub fn new(config: &ObfuscationConfig) -> Self {
         Self { config: config.clone() }
     }
-    
+
     pub fn obfuscate(&self, data: &str) -> Result<String> {
         if self.config.base64_encode {
             Ok(general_purpose::STANDARD.encode(data))
@@ -18,7 +18,7 @@ impl DataObfuscator {
             Ok(data.to_string())
         }
     }
-    
+
     pub fn deobfuscate(&self, data: &str) -> Result<String> {
         if self.config.base64_encode {
             let decoded = general_purpose::STANDARD

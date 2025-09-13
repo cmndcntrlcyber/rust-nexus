@@ -13,7 +13,7 @@ pub async fn list_agents(state: WebUIState) -> Result<impl Reply, warp::Rejectio
 /// Get agent details by ID
 pub async fn get_agent_details(agent_id: String, state: WebUIState) -> Result<Box<dyn Reply>, warp::Rejection> {
     let agents = state.agent_connections.read().await;
-    
+
     if let Some(agent) = agents.get(&agent_id) {
         Ok(Box::new(warp::reply::json(agent)))
     } else {
@@ -38,7 +38,7 @@ pub async fn execute_task(
         error: None,
         timestamp: chrono::Utc::now(),
     };
-    
+
     Ok(warp::reply::json(&response))
 }
 
@@ -62,6 +62,6 @@ pub async fn get_system_info(state: WebUIState) -> Result<impl Reply, warp::Reje
         "agents_connected": state.agent_connections.read().await.len(),
         "timestamp": chrono::Utc::now()
     });
-    
+
     Ok(warp::reply::json(&info))
 }

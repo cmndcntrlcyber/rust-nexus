@@ -10,7 +10,7 @@ impl WmiExecutor {
     pub fn new(config: HybridExecConfig) -> Result<Self> {
         Ok(Self { config })
     }
-    
+
     pub async fn execute(&self, _request: &ExecutionRequest) -> Result<ExecutionResult> {
         // Stub implementation
         #[cfg(target_os = "windows")]
@@ -26,10 +26,12 @@ impl WmiExecutor {
                 timestamp: chrono::Utc::now(),
             })
         }
-        
+
         #[cfg(not(target_os = "windows"))]
         {
-            Err(NexusError::TaskExecutionError("WMI execution only available on Windows".to_string()))
+            Err(NexusError::TaskExecutionError(
+                "WMI execution only available on Windows".to_string(),
+            ))
         }
     }
 }

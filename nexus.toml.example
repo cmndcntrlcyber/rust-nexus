@@ -42,7 +42,7 @@ cert_renewal_days = 30
 wildcard_enabled = true
 
 # Let's Encrypt directory URL
-# Production: https://acme-v02.api.letsencrypt.org/directory  
+# Production: https://acme-v02.api.letsencrypt.org/directory
 # Staging: https://acme-staging-v02.api.letsencrypt.org/directory
 acme_directory_url = "https://acme-v02.api.letsencrypt.org/directory"
 
@@ -53,7 +53,7 @@ cert_storage_dir = "./certs"
 # Paths to origin certificate files
 cert_path = "./certs/origin.crt"
 key_path = "./certs/origin.key"
-ca_cert_path = "./certs/origin_ca.crt"
+ca_cert_path = "./certs/ca.crt"
 
 # Enable certificate pinning validation
 pin_validation = true
@@ -120,7 +120,7 @@ length = 8
 # wordlist = "./wordlists/subdomains.txt"
 
 # Custom template pattern:
-# type = "Custom"  
+# type = "Custom"
 # template = "api-{random}-{timestamp}"
 
 [security]

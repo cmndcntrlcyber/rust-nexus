@@ -1,16 +1,16 @@
-# Rust-Nexus: Enterprise C2 Framework
+# Rust-Nexus: Enterprise Network Management Framework
 
-An advanced Command & Control framework built in Rust featuring enterprise-grade infrastructure automation, dynamic domain management, automated certificate provisioning, gRPC communication, and enhanced BOF/COFF execution capabilities.
+An advanced network management framework built in Rust featuring enterprise-grade infrastructure automation, dynamic domain management, automated certificate provisioning, gRPC communication, and cross-platform execution capabilities.
 
 ## 🚀 Overview
 
-Rust-Nexus combines traditional C2 capabilities with cutting-edge infrastructure automation to create a sophisticated, enterprise-ready framework that rivals commercial solutions.
+Rust-Nexus combines distributed system capabilities with cutting-edge infrastructure automation to create a sophisticated, enterprise-ready framework for network management and automation.
 
 ### Core Framework Components
 
 1. **🏗️ Infrastructure Management (`nexus-infra`)**: Automated DNS, certificates, and domain rotation
-2. **🔧 Agent Framework (`nexus-agent`)**: Advanced execution with fiber techniques and BOF support  
-3. **🖥️ C2 Server (`nexus-server`)**: gRPC-based server with agent management
+2. **🔧 Agent Framework (`nexus-agent`)**: Cross-platform execution with advanced techniques  
+3. **🖥️ Management Server (`nexus-server`)**: gRPC-based server with node management
 4. **📚 Common Library (`nexus-common`)**: Shared utilities and cryptographic functions
 
 ## ✨ Key Features
@@ -199,10 +199,10 @@ anti_analysis = { vm_detection = true, debugger_detection = true }
 
 ```bash
 # Register agent with gRPC server
-./nexus-agent --grpc-endpoint https://c2.example.com:443
+./nexus-agent --grpc-endpoint https://api.example.com:443
 
-# Execute BOF with arguments
-nexus-cli bof-execute agent-123 "whoami.obj" "go"
+# Execute commands with arguments
+nexus-cli execute agent-123 "system-info.obj" "go"
 
 # Domain rotation
 nexus-cli domain rotate --immediate
