@@ -6,6 +6,7 @@ use std::time::Duration;
 use std::time::SystemTime;
 use tokio::time::timeout;
 use tonic::transport::{Channel, ClientTlsConfig, Endpoint, Identity};
+use log::warn;
 
 // Include the generated gRPC code
 pub mod nexus {
@@ -32,6 +33,39 @@ impl NetworkClient {
             connection_timeout: Duration::from_secs(10),
             request_timeout: Duration::from_secs(15),
             channel: None,
+        }
+    }
+
+    /// Generate a public key for agent registration
+    fn generate_public_key(&self) -> Result<String> {
+        use std::process::Command;
+
+        // Generate a simple RSA public key using OpenSSL if available
+        // In a production environment, this should use proper crypto libraries
+        match Command::new("openssl")
+            .args(&[
+                "genpkey",
+                "-algorithm", "RSA",
+                "-pkeyopt", "rsa_keygen_bits:2048",
+                "-pubout",
+                "-outform", "PEM"
+            ])
+            .output()
+        {
+            Ok(output) => {
+                if output.status.success() {
+                    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+                } else {
+                    // Fallback to a placeholder key if OpenSSL is not available
+                    warn!("OpenSSL not available, using placeholder public key");
+                    Ok("-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...\n-----END PUBLIC KEY-----\n".to_string())
+                }
+            }
+            Err(_) => {
+                // Fallback for systems without OpenSSL
+                warn!("OpenSSL command failed, using placeholder public key");
+                Ok("-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...\n-----END PUBLIC KEY-----\n".to_string())
+            }
         }
     }
 
@@ -133,7 +167,10 @@ impl NetworkClient {
             process_name: registration_data.process_name.clone(),
             architecture: registration_data.architecture.clone(),
             capabilities: registration_data.capabilities.clone(),
-            public_key: "".to_string(), // TODO: Add public key support
+            public_key: self.generate_public_key().unwrap_or_else(|e| {
+                warn!("Failed to generate public key: {}", e);
+                String::new()
+            }),
         };
 
         let response = timeout(

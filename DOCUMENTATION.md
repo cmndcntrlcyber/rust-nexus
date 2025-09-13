@@ -9,6 +9,11 @@ Welcome to the comprehensive documentation for Rust-Nexus, an enterprise-grade C
 - **[Basic Deployment Example](examples/basic-deployment/README.md)** - Simple setup walkthrough
 - **[Configuration Template](config/examples/nexus-config.toml)** - Annotated configuration file
 
+### **🖥️ Client Interface**
+- **[Client User Guide](docs/client/CLIENT_USER_GUIDE.md)** - Complete operator guide for the desktop client
+- **[Client README](nexus-client/README.md)** - Technical development information
+- **[Interface Components](nexus-client/src/)** - Frontend implementation details
+
 ### **🏗️ Infrastructure Management**
 - **[Infrastructure Overview](docs/infrastructure/README.md)** - Complete infrastructure guide
 - **[Cloudflare Integration](docs/infrastructure/cloudflare-setup.md)** - DNS API setup and usage
@@ -203,7 +208,7 @@ markdownlint docs/
 - Test security features in isolated environments
 - Regular dependency updates and security audits
 
-### **Production Security** 
+### **Production Security**
 - Implement all security hardening measures
 - Monitor certificate transparency logs
 - Regular infrastructure rotation
@@ -265,7 +270,7 @@ markdownlint docs/
 
 ### For Experienced Users
 1. Review [Production Setup](docs/configuration/production-setup.md) for enterprise deployment
-2. Implement [Security Hardening](docs/configuration/security-hardening.md) measures  
+2. Implement [Security Hardening](docs/configuration/security-hardening.md) measures
 3. Set up [Monitoring](docs/operations/monitoring.md) and alerting
 4. Contribute to the project via GitHub
 

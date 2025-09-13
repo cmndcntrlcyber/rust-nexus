@@ -5,7 +5,7 @@
 location / {
     # Use grpc_pass instead of proxy_pass for gRPC traffic
 
-    grpc_pass grpc://192.168.1.124:8443;
+    #grpc_pass grpc://192.168.1.124:8443;
 
     # For production configurations
     # grpc_pass grpcs://192.168.1.124:8443;

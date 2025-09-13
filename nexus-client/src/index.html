@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nexus C2 Client</title>
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/components.css">
+    <link rel="stylesheet" href="styles/themes.css">
+
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Terminal CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Main Application Container -->
+        <div class="app-container">
+            <!-- Top Navigation Bar -->
+            <nav class="top-nav">
+                <div class="nav-left">
+                    <div class="logo">
+                        <i class="fas fa-network-wired"></i>
+                        <span>Nexus C2</span>
+                    </div>
+                    <div class="connection-status" id="connection-status">
+                        <span class="status-indicator disconnected"></span>
+                        <span class="status-text">Disconnected</span>
+                    </div>
+                </div>
+
+                <div class="nav-center">
+                    <div class="server-info" id="server-info">
+                        <span id="server-endpoint">Not connected</span>
+                    </div>
+                </div>
+
+                <div class="nav-right">
+                    <button class="btn btn-icon" id="notifications-btn" title="Notifications">
+                        <i class="fas fa-bell"></i>
+                        <span class="notification-badge" id="notification-count">0</span>
+                    </button>
+                    <button class="btn btn-icon" id="settings-btn" title="Settings">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                    <button class="btn btn-icon" id="minimize-btn" title="Minimize">
+                        <i class="fas fa-window-minimize"></i>
+                    </button>
+                </div>
+            </nav>
+
+            <!-- Main Content Area -->
+            <div class="main-content">
+                <!-- Sidebar -->
+                <div class="sidebar">
+                    <div class="sidebar-section">
+                        <h3>Sessions</h3>
+                        <div class="session-stats">
+                            <div class="stat-item">
+                                <span class="stat-label">Active:</span>
+                                <span class="stat-value" id="active-agents">0</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Total:</span>
+                                <span class="stat-value" id="total-agents">0</span>
+                            </div>
+                        </div>
+                        <div class="agents-list" id="agents-list">
+                            <div class="empty-state">
+                                <i class="fas fa-robot"></i>
+                                <p>No agents connected</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="sidebar-section">
+                        <h3>Infrastructure</h3>
+                        <div class="infra-controls">
+                            <button class="btn btn-small" id="rotate-domain-btn">
+                                <i class="fas fa-sync-alt"></i>
+                                Rotate Domain
+                            </button>
+                            <button class="btn btn-small" id="cert-status-btn">
+                                <i class="fas fa-certificate"></i>
+                                Certificates
+                            </button>
+                        </div>
+                        <div class="domain-status" id="domain-status">
+                            <div class="domain-item">
+                                <span class="domain-name">Loading...</span>
+                                <span class="domain-health unknown">?</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="sidebar-section">
+                        <h3>Tools</h3>
+                        <div class="tool-buttons">
+                            <button class="btn btn-small" id="bof-manager-btn">
+                                <i class="fas fa-code"></i>
+                                BOF Library
+                            </button>
+                            <button class="btn btn-small" id="file-manager-btn">
+                                <i class="fas fa-folder"></i>
+                                Files
+                            </button>
+                            <button class="btn btn-small" id="process-manager-btn">
+                                <i class="fas fa-tasks"></i>
+                                Processes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Main Panel -->
+                <div class="main-panel">
+                    <!-- Tab Navigation -->
+                    <div class="tab-container">
+                        <div class="tab-nav" id="tab-nav">
+                            <div class="tab-item active" data-tab="dashboard">
+                                <i class="fas fa-tachometer-alt"></i>
+                                <span>Dashboard</span>
+                            </div>
+                        </div>
+                        <div class="tab-actions">
+                            <button class="btn btn-icon" id="new-tab-btn" title="New Tab">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Tab Content -->
+                    <div class="tab-content" id="tab-content">
+                        <!-- Dashboard Tab -->
+                        <div class="tab-panel active" id="dashboard-panel">
+                            <div class="dashboard-grid">
+                                <div class="dashboard-card">
+                                    <div class="card-header">
+                                        <h3>System Overview</h3>
+                                        <i class="fas fa-chart-line"></i>
+                                    </div>
+                                    <div class="card-content">
+                                        <div class="overview-stats">
+                                            <div class="stat-card">
+                                                <div class="stat-number" id="dashboard-agents">0</div>
+                                                <div class="stat-label">Active Agents</div>
+                                            </div>
+                                            <div class="stat-card">
+                                                <div class="stat-number" id="dashboard-tasks">0</div>
+                                                <div class="stat-label">Running Tasks</div>
+                                            </div>
+                                            <div class="stat-card">
+                                                <div class="stat-number" id="dashboard-domains">0</div>
+                                                <div class="stat-label">Active Domains</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="dashboard-card">
+                                    <div class="card-header">
+                                        <h3>Recent Activity</h3>
+                                        <i class="fas fa-history"></i>
+                                    </div>
+                                    <div class="card-content">
+                                        <div class="activity-feed" id="activity-feed">
+                                            <div class="empty-state">
+                                                <i class="fas fa-clock"></i>
+                                                <p>No recent activity</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="dashboard-card">
+                                    <div class="card-header">
+                                        <h3>Quick Actions</h3>
+                                        <i class="fas fa-bolt"></i>
+                                    </div>
+                                    <div class="card-content">
+                                        <div class="quick-actions">
+                                            <button class="btn btn-primary" id="connect-server-btn">
+                                                <i class="fas fa-plug"></i>
+                                                Connect to Server
+                                            </button>
+                                            <button class="btn btn-secondary" id="import-bof-btn">
+                                                <i class="fas fa-upload"></i>
+                                                Import BOF
+                                            </button>
+                                            <button class="btn btn-secondary" id="export-data-btn">
+                                                <i class="fas fa-download"></i>
+                                                Export Session
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="dashboard-card">
+                                    <div class="card-header">
+                                        <h3>Team Chat</h3>
+                                        <i class="fas fa-comments"></i>
+                                    </div>
+                                    <div class="card-content">
+                                        <div class="chat-container">
+                                            <div class="chat-messages" id="chat-messages">
+                                                <div class="empty-state">
+                                                    <i class="fas fa-comment"></i>
+                                                    <p>No messages</p>
+                                                </div>
+                                            </div>
+                                            <div class="chat-input">
+                                                <input type="text" id="chat-input" placeholder="Type a message..." />
+                                                <button class="btn btn-icon" id="send-message-btn">
+                                                    <i class="fas fa-paper-plane"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Agent Interaction Panels (dynamically created) -->
+                        <!-- Terminal, File Browser, etc. will be created here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Status Bar -->
+            <div class="status-bar">
+                <div class="status-left">
+                    <span id="status-message">Ready</span>
+                </div>
+                <div class="status-right">
+                    <span id="websocket-status">WS: Disconnected</span>
+                    <span id="task-count">Tasks: 0</span>
+                    <span id="current-time"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modals and Overlays -->
+        <div class="modal-overlay" id="modal-overlay">
+            <!-- Settings Modal -->
+            <div class="modal" id="settings-modal">
+                <div class="modal-header">
+                    <h3>Settings</h3>
+                    <button class="btn btn-icon modal-close" data-modal="settings-modal">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <form id="settings-form">
+                        <div class="form-group">
+                            <label for="server-endpoint">Server Endpoint:</label>
+                            <input type="text" id="server-endpoint-input" placeholder="127.0.0.1" />
+                        </div>
+                        <div class="form-group">
+                            <label for="server-port">Server Port:</label>
+                            <input type="number" id="server-port-input" placeholder="8443" />
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="use-tls-input" checked />
+                                Use TLS/SSL
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label for="username">Username:</label>
+                            <input type="text" id="username-input" placeholder="operator" />
+                        </div>
+                        <div class="form-group">
+                            <label for="team-name">Team Name:</label>
+                            <input type="text" id="team-name-input" placeholder="red_team" />
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary modal-close" data-modal="settings-modal">Cancel</button>
+                    <button class="btn btn-primary" id="save-settings-btn">Save Settings</button>
+                </div>
+            </div>
+
+            <!-- Notifications Modal -->
+            <div class="modal" id="notifications-modal">
+                <div class="modal-header">
+                    <h3>Notifications</h3>
+                    <button class="btn btn-icon modal-close" data-modal="notifications-modal">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="notifications-list" id="notifications-list">
+                        <div class="empty-state">
+                            <i class="fas fa-bell-slash"></i>
+                            <p>No notifications</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" id="clear-notifications-btn">Clear All</button>
+                    <button class="btn btn-primary modal-close" data-modal="notifications-modal">Close</button>
+                </div>
+            </div>
+
+            <!-- Certificate Upload Modal -->
+            <div class="modal" id="certificate-modal">
+                <div class="modal-header">
+                    <h3>Upload Certificates</h3>
+                    <button class="btn btn-icon modal-close" data-modal="certificate-modal">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="certificate-upload-form">
+                        <div class="upload-section">
+                            <label for="client-cert-input">Client Certificate (client.crt):</label>
+                            <div class="file-upload-area" id="client-cert-upload">
+                                <input type="file" id="client-cert-input" accept=".crt,.pem" hidden>
+                                <div class="upload-content">
+                                    <i class="fas fa-certificate"></i>
+                                    <p>Click to select or drag client.crt file here</p>
+                                    <div class="upload-status" id="client-cert-status"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="upload-section">
+                            <label for="client-key-input">Client Private Key (client.key):</label>
+                            <div class="file-upload-area" id="client-key-upload">
+                                <input type="file" id="client-key-input" accept=".key,.pem" hidden>
+                                <div class="upload-content">
+                                    <i class="fas fa-key"></i>
+                                    <p>Click to select or drag client.key file here</p>
+                                    <div class="upload-status" id="client-key-status"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="upload-section">
+                            <label for="ca-cert-input">Certificate Authority (ca.crt):</label>
+                            <div class="file-upload-area" id="ca-cert-upload">
+                                <input type="file" id="ca-cert-input" accept=".crt,.pem" hidden>
+                                <div class="upload-content">
+                                    <i class="fas fa-shield-alt"></i>
+                                    <p>Click to select or drag ca.crt file here</p>
+                                    <div class="upload-status" id="ca-cert-status"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="certificate-info" id="certificate-info" style="display: none;">
+                            <h4>Certificate Information</h4>
+                            <div class="cert-details" id="cert-details"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary modal-close" data-modal="certificate-modal">Cancel</button>
+                    <button class="btn btn-primary" id="upload-certificates-btn" disabled>Upload Certificates</button>
+                </div>
+            </div>
+
+            <!-- Connection Configuration Modal -->
+            <div class="modal large" id="connection-config-modal">
+                <div class="modal-header">
+                    <h3>Server Connection Configuration</h3>
+                    <button class="btn btn-icon modal-close" data-modal="connection-config-modal">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <form id="connection-config-form">
+                        <div class="config-sections">
+                            <!-- Server Settings Section -->
+                            <div class="config-section">
+                                <h4><i class="fas fa-server"></i> Server Settings</h4>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="domain-input">Domain/Server Endpoint *</label>
+                                        <input type="text" id="domain-input" placeholder="example.com" required>
+                                        <small class="form-help">Server domain or IP address</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="port-input">Port *</label>
+                                        <input type="number" id="port-input" value="443" min="1" max="65535" required>
+                                        <small class="form-help">Server port (typically 443 for HTTPS)</small>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="websocket-endpoint-display">WebSocket Endpoint (Auto-generated)</label>
+                                    <input type="text" id="websocket-endpoint-display" readonly class="readonly">
+                                    <small class="form-help">Automatically generated from domain and port</small>
+                                </div>
+                            </div>
+
+                            <!-- User Credentials Section -->
+                            <div class="config-section">
+                                <h4><i class="fas fa-user"></i> User Credentials</h4>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="username-config-input">Username *</label>
+                                        <input type="text" id="username-config-input" value="operator" required>
+                                        <small class="form-help">Your operator username</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="team-name-input">Team Name *</label>
+                                        <input type="text" id="team-name-input" value="red_team" required>
+                                        <small class="form-help">Your team identifier</small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Certificate Upload Section -->
+                            <div class="config-section">
+                                <h4><i class="fas fa-certificate"></i> TLS Certificates</h4>
+                                <div class="cert-upload-grid">
+                                    <div class="upload-section">
+                                        <label>Client Certificate (client.crt) *</label>
+                                        <div class="file-upload-area" id="config-client-cert-upload">
+                                            <input type="file" id="config-client-cert-input" accept=".crt,.pem" hidden>
+                                            <div class="upload-content">
+                                                <i class="fas fa-certificate"></i>
+                                                <p>Click to upload client.crt</p>
+                                                <div class="upload-status" id="config-client-cert-status"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="upload-section">
+                                        <label>Client Private Key (client.key) *</label>
+                                        <div class="file-upload-area" id="config-client-key-upload">
+                                            <input type="file" id="config-client-key-input" accept=".key,.pem" hidden>
+                                            <div class="upload-content">
+                                                <i class="fas fa-key"></i>
+                                                <p>Click to upload client.key</p>
+                                                <div class="upload-status" id="config-client-key-status"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="upload-section">
+                                        <label>CA Certificate (ca.crt) *</label>
+                                        <div class="file-upload-area" id="config-ca-cert-upload">
+                                            <input type="file" id="config-ca-cert-input" accept=".crt,.pem" hidden>
+                                            <div class="upload-content">
+                                                <i class="fas fa-shield-alt"></i>
+                                                <p>Click to upload ca.crt</p>
+                                                <div class="upload-status" id="config-ca-cert-status"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Advanced Settings Section -->
+                            <div class="config-section">
+                                <h4><i class="fas fa-cog"></i> Advanced Settings</h4>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="update-interval-input">Update Interval (ms)</label>
+                                        <input type="number" id="update-interval-input" value="5000" min="1000" max="60000">
+                                        <small class="form-help">How often to check for updates (1000-60000ms)</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="max-tasks-input">Max Concurrent Tasks</label>
+                                        <select id="max-tasks-input">
+                                            <option value="1">1</option>
+                                            <option value="2">2</option>
+                                            <option value="3">3</option>
+                                            <option value="4">4</option>
+                                            <option value="5">5</option>
+                                            <option value="6">6</option>
+                                            <option value="7">7</option>
+                                            <option value="8">8</option>
+                                            <option value="9">9</option>
+                                            <option value="10" selected>10</option>
+                                        </select>
+                                        <small class="form-help">Maximum number of concurrent tasks</small>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="log-level-input">Log Level</label>
+                                    <select id="log-level-input">
+                                        <option value="debug">Debug</option>
+                                        <option value="info" selected>Info</option>
+                                        <option value="warn">Warning</option>
+                                        <option value="error">Error</option>
+                                    </select>
+                                    <small class="form-help">Logging verbosity level</small>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary modal-close" data-modal="connection-config-modal">Cancel</button>
+                    <button class="btn btn-outline" id="save-config-only-btn" disabled>Save Configuration</button>
+                    <button class="btn btn-primary" id="connect-with-new-config-btn" disabled>Connect to Server</button>
+                </div>
+            </div>
+
+            <!-- Config File Selection Modal -->
+            <div class="modal" id="config-modal">
+                <div class="modal-header">
+                    <h3>Select Configuration File</h3>
+                    <button class="btn btn-icon modal-close" data-modal="config-modal">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="config-selection">
+                        <div class="upload-section">
+                            <label for="config-file-input">Configuration File (nexus-client-config.json):</label>
+                            <div class="file-upload-area" id="config-file-upload">
+                                <input type="file" id="config-file-input" accept=".json" hidden>
+                                <div class="upload-content">
+                                    <i class="fas fa-cog"></i>
+                                    <p>Click to select nexus-client-config.json file</p>
+                                    <div class="upload-status" id="config-file-status"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="config-preview" id="config-preview" style="display: none;">
+                            <h4>Configuration Preview</h4>
+                            <div class="config-details" id="config-details"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary modal-close" data-modal="config-modal">Cancel</button>
+                    <button class="btn btn-primary" id="connect-with-config-btn" disabled>Connect with Configuration</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Progress Overlay -->
+        <div class="progress-overlay" id="progress-overlay">
+            <div class="progress-card">
+                <div class="progress-header">
+                    <h4 id="progress-title">Processing...</h4>
+                </div>
+                <div class="progress-body">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill"></div>
+                    </div>
+                    <div class="progress-text" id="progress-text">0%</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+
+    <!-- Tauri API -->
+    <script type="module">
+        import { invoke } from '@tauri-apps/api/tauri';
+        import { listen } from '@tauri-apps/api/event';
+        import { appWindow } from '@tauri-apps/api/window';
+
+        // Make Tauri APIs available globally
+        window.__TAURI__ = { invoke, listen, appWindow };
+    </script>
+
+    <!-- Application Scripts -->
+    <script type="module" src="js/utils/api.js"></script>
+    <script type="module" src="js/utils/websocket.js"></script>
+    <script type="module" src="js/components/terminal.js"></script>
+    <script type="module" src="js/components/file-browser.js"></script>
+    <script type="module" src="js/components/session-table.js"></script>
+    <script type="module" src="js/components/chat.js"></script>
+    <script type="module" src="js/components/bof-manager.js"></script>
+    <script type="module" src="js/views/dashboard.js"></script>
+    <script type="module" src="js/views/settings.js"></script>
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>

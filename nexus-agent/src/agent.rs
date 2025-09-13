@@ -63,13 +63,26 @@ impl NexusAgent {
     }
 
     pub async fn run_cycle(&mut self) -> Result<()> {
+        #[cfg(debug_assertions)]
+        println!("Starting agent run cycle...");
+
         // Register if not already registered
         if !self.registered {
+            #[cfg(debug_assertions)]
+            println!("Agent not registered, attempting registration...");
             self.register().await?;
+        } else {
+            #[cfg(debug_assertions)]
+            println!("Agent already registered, proceeding to heartbeat...");
         }
 
         // Send heartbeat and check for tasks
+        #[cfg(debug_assertions)]
+        println!("Sending heartbeat and checking for tasks...");
         let tasks = self.heartbeat().await?;
+
+        #[cfg(debug_assertions)]
+        println!("Received {} tasks", tasks.len());
 
         // Execute any received tasks
         for task_data in tasks {
@@ -78,6 +91,9 @@ impl NexusAgent {
                 eprintln!("Task execution error: {}", e);
             }
         }
+
+        #[cfg(debug_assertions)]
+        println!("Agent run cycle completed successfully");
 
         Ok(())
     }
@@ -194,15 +210,15 @@ impl NexusAgent {
             Ok(Ok(output)) => TaskResult::success(
                 task_id.clone(),
                 output,
-                (current_timestamp() - start_time) * 1000,
+                start_time,
             ),
             Ok(Err(e)) => TaskResult::failure(
                 task_id.clone(),
                 e.to_string(),
-                (current_timestamp() - start_time) * 1000,
+                start_time,
             ),
             Err(_) => {
-                TaskResult::timeout(task_id.clone(), (current_timestamp() - start_time) * 1000)
+                TaskResult::timeout(task_id.clone(), start_time)
             }
         };
 
@@ -218,17 +234,59 @@ impl NexusAgent {
             .as_ref()
             .ok_or_else(|| NexusError::AgentError("Agent not registered".to_string()))?;
 
-        let message = Message::task_result(serde_json::to_string(&task_result)?, agent_id.clone());
-        let encrypted_message = self.crypto.encrypt(&serde_json::to_string(&message)?)?;
+        // Convert internal TaskResult to gRPC TaskResult
+        let grpc_task_result = self.convert_task_result_to_grpc(task_result, agent_id)?;
 
-        // Send with timeout
-        let _response = timeout(
+        // Send via gRPC with timeout
+        timeout(
             Duration::from_secs(15),
-            self.network_client.send_message(&encrypted_message),
+            self.network_client.submit_task_result(agent_id, grpc_task_result),
         )
         .await??;
 
         Ok(())
+    }
+
+    /// Convert internal TaskResult to gRPC TaskResult format
+    fn convert_task_result_to_grpc(
+        &self,
+        task_result: TaskResult,
+        agent_id: &str,
+    ) -> Result<crate::communication::nexus::v1::TaskResult> {
+        use crate::communication::nexus::v1::{TaskResult as GrpcTaskResult, TaskExecutionStatus};
+        use prost_types::Timestamp;
+
+        let status = match task_result.status {
+            TaskStatus::Completed => TaskExecutionStatus::Completed as i32,
+            TaskStatus::Failed => TaskExecutionStatus::Failed as i32,
+            TaskStatus::Timeout => TaskExecutionStatus::Timeout as i32,
+            TaskStatus::Running => TaskExecutionStatus::Running as i32,
+            TaskStatus::Pending => TaskExecutionStatus::Pending as i32,
+            TaskStatus::Cancelled => TaskExecutionStatus::Cancelled as i32,
+        };
+
+        let start_time = Some(Timestamp {
+            seconds: task_result.start_time as i64,
+            nanos: 0,
+        });
+
+        let end_time = Some(Timestamp {
+            seconds: task_result.end_time as i64,
+            nanos: 0,
+        });
+
+        Ok(GrpcTaskResult {
+            task_id: task_result.task_id,
+            agent_id: agent_id.to_string(),
+            status,
+            output: task_result.output,
+            error_message: task_result.error_message.unwrap_or_default(),
+            start_time,
+            end_time,
+            execution_duration_ms: task_result.execution_duration_ms,
+            exit_code: task_result.exit_code.unwrap_or(0),
+            artifacts: vec![], // Convert artifacts if needed in the future
+        })
     }
 
     pub fn get_id(&self) -> Option<&String> {

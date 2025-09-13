@@ -1,0 +1,57 @@
+[package]
+name = "nexus-client"
+version = "0.1.0"
+description = "Nexus C2 Framework - Desktop Client Interface"
+authors = ["Nexus Team"]
+license = "MIT"
+repository = "https://github.com/cmndcntrlcyber/rust-nexus"
+edition = "2021"
+
+# Make this package independent from the main workspace
+[workspace]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[build-dependencies]
+tauri-build = { version = "1.5", features = [] }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+tauri = { version = "1.5", features = [ "process-relaunch", "fs-read-dir", "fs-copy-file", "fs-read-file", "fs-exists", "dialog-message", "process-exit", "fs-remove-dir", "fs-create-dir", "dialog-confirm", "dialog-save", "dialog-open", "fs-rename-file", "fs-write-file", "dialog-ask", "fs-remove-file", "shell-open",
+  "http-all",
+  "notification-all",
+  "path-all",
+  "system-tray"] }
+
+# Local dependencies for gRPC and common functionality
+nexus-common = { path = "../../nexus-common" }
+nexus-infra = { path = "../../nexus-infra" }
+
+# Async and gRPC dependencies
+tokio = { version = "1.0", features = ["full"] }
+tonic = "0.10"
+prost = "0.12"
+
+# Web client for REST API communication
+reqwest = { version = "0.11", features = ["json", "rustls-tls"], default-features = false }
+
+# WebSocket client for real-time updates
+tokio-tungstenite = { version = "0.20", features = ["rustls-tls-native-roots"] }
+futures-util = "0.3"
+
+# Utilities
+uuid = { version = "1.0", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+log = "0.4"
+env_logger = "0.10"
+anyhow = "1.0"
+sha2 = "0.10"
+tokio-stream = "0.1"
+prost-types = "0.12"
+
+[features]
+# by default Tauri runs in production mode
+# when `tauri dev` runs it is executed with `cargo run --no-default-features` if `devPath` is an URL
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
