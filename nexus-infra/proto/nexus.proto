@@ -306,3 +306,530 @@ message AgentInfoResponse {
   repeated string active_tasks = 5;
   bool is_online = 6;
 }
+
+// =============================================================================
+// SOC Detection Service
+// =============================================================================
+
+// SOC telemetry and detection service
+service NexusSOC {
+  // Agent registration for detection mode
+  rpc RegisterDetectionAgent(DetectionAgentRegistration) returns (DetectionAgentResponse);
+
+  // Telemetry submission from agents
+  rpc SubmitTelemetry(TelemetryBatch) returns (TelemetryResponse);
+  rpc StreamTelemetry(stream TelemetryEvent) returns (stream TelemetryAck);
+
+  // Detection events
+  rpc SubmitDetectionEvent(DetectionEventRequest) returns (DetectionEventResponse);
+  rpc GetDetectionEvents(DetectionEventQuery) returns (stream DetectionEventProto);
+
+  // Detection tasks for agents
+  rpc GetDetectionTasks(DetectionTaskRequest) returns (stream DetectionTask);
+  rpc UpdateDetectionStatus(DetectionStatusUpdate) returns (DetectionStatusResponse);
+
+  // Signature and rule management
+  rpc GetSignatureUpdates(SignatureUpdateRequest) returns (SignatureUpdateResponse);
+  rpc GetCorrelationRules(CorrelationRuleRequest) returns (CorrelationRuleResponse);
+
+  // Sample submission for sandbox analysis
+  rpc SubmitSample(SampleSubmission) returns (SampleSubmissionResponse);
+  rpc GetAnalysisResult(AnalysisResultRequest) returns (AnalysisResultResponse);
+
+  // Health and status
+  rpc AgentHealthCheck(AgentHealthRequest) returns (AgentHealthResponse);
+}
+
+// Detection agent registration
+message DetectionAgentRegistration {
+  string hostname = 1;
+  string os_type = 2;
+  string os_version = 3;
+  string ip_address = 4;
+  string agent_version = 5;
+  AgentMode mode = 6;
+  repeated DetectionCapability capabilities = 7;
+  map<string, string> metadata = 8;
+}
+
+enum AgentMode {
+  AGENT_MODE_UNSPECIFIED = 0;
+  AGENT_MODE_DETECTION = 1;    // EDR-style detection
+  AGENT_MODE_MONITOR = 2;      // Passive monitoring only
+  AGENT_MODE_RESPONSE = 3;     // Detection + response
+  AGENT_MODE_HYBRID = 4;       // Both C2 and detection (for testing)
+}
+
+enum DetectionCapability {
+  DETECTION_CAPABILITY_UNSPECIFIED = 0;
+  DETECTION_CAPABILITY_PROCESS_MONITORING = 1;
+  DETECTION_CAPABILITY_NETWORK_MONITORING = 2;
+  DETECTION_CAPABILITY_FILE_MONITORING = 3;
+  DETECTION_CAPABILITY_REGISTRY_MONITORING = 4;
+  DETECTION_CAPABILITY_MEMORY_SCANNING = 5;
+  DETECTION_CAPABILITY_BEHAVIORAL_ANALYSIS = 6;
+  DETECTION_CAPABILITY_SIGNATURE_SCANNING = 7;
+  DETECTION_CAPABILITY_SAMPLE_COLLECTION = 8;
+}
+
+message DetectionAgentResponse {
+  string agent_id = 1;
+  bool success = 2;
+  string message = 3;
+  DetectionConfig config = 4;
+  repeated SignatureSet initial_signatures = 5;
+}
+
+// Detection configuration
+message DetectionConfig {
+  uint32 telemetry_interval_secs = 1;
+  uint32 heartbeat_interval_secs = 2;
+  repeated string enabled_detectors = 3;
+  SeverityLevel min_severity = 4;
+  bool enable_sample_collection = 5;
+  uint64 max_sample_size_bytes = 6;
+  map<string, string> settings = 7;
+}
+
+enum SeverityLevel {
+  SEVERITY_LEVEL_UNSPECIFIED = 0;
+  SEVERITY_LEVEL_INFO = 1;
+  SEVERITY_LEVEL_LOW = 2;
+  SEVERITY_LEVEL_MEDIUM = 3;
+  SEVERITY_LEVEL_HIGH = 4;
+  SEVERITY_LEVEL_CRITICAL = 5;
+}
+
+// Telemetry messages
+message TelemetryBatch {
+  string agent_id = 1;
+  repeated TelemetryEvent events = 2;
+  google.protobuf.Timestamp batch_time = 3;
+  uint64 sequence_number = 4;
+}
+
+message TelemetryEvent {
+  string event_id = 1;
+  string agent_id = 2;
+  TelemetryType telemetry_type = 3;
+  google.protobuf.Timestamp timestamp = 4;
+  oneof payload {
+    ProcessTelemetry process = 10;
+    NetworkTelemetry network = 11;
+    FileTelemetry file = 12;
+    RegistryTelemetry registry = 13;
+    SystemTelemetry system = 14;
+  }
+  map<string, string> metadata = 20;
+}
+
+enum TelemetryType {
+  TELEMETRY_TYPE_UNSPECIFIED = 0;
+  TELEMETRY_TYPE_PROCESS_CREATE = 1;
+  TELEMETRY_TYPE_PROCESS_TERMINATE = 2;
+  TELEMETRY_TYPE_NETWORK_CONNECT = 3;
+  TELEMETRY_TYPE_NETWORK_LISTEN = 4;
+  TELEMETRY_TYPE_NETWORK_DNS = 5;
+  TELEMETRY_TYPE_FILE_CREATE = 6;
+  TELEMETRY_TYPE_FILE_MODIFY = 7;
+  TELEMETRY_TYPE_FILE_DELETE = 8;
+  TELEMETRY_TYPE_FILE_READ = 9;
+  TELEMETRY_TYPE_REGISTRY_CREATE = 10;
+  TELEMETRY_TYPE_REGISTRY_MODIFY = 11;
+  TELEMETRY_TYPE_REGISTRY_DELETE = 12;
+  TELEMETRY_TYPE_SYSTEM_INFO = 13;
+  TELEMETRY_TYPE_MODULE_LOAD = 14;
+  TELEMETRY_TYPE_THREAD_CREATE = 15;
+}
+
+message ProcessTelemetry {
+  uint32 pid = 1;
+  uint32 parent_pid = 2;
+  string process_name = 3;
+  string executable_path = 4;
+  string command_line = 5;
+  string username = 6;
+  uint32 session_id = 7;
+  google.protobuf.Timestamp start_time = 8;
+  string integrity_level = 9;
+  bool is_elevated = 10;
+  string file_hash_sha256 = 11;
+  string signature_status = 12;
+}
+
+message NetworkTelemetry {
+  uint32 pid = 1;
+  string process_name = 2;
+  string local_address = 3;
+  uint32 local_port = 4;
+  string remote_address = 5;
+  uint32 remote_port = 6;
+  string protocol = 7;
+  ConnectionState state = 8;
+  uint64 bytes_sent = 9;
+  uint64 bytes_received = 10;
+  string dns_query = 11;
+  repeated string dns_answers = 12;
+}
+
+enum ConnectionState {
+  CONNECTION_STATE_UNSPECIFIED = 0;
+  CONNECTION_STATE_ESTABLISHED = 1;
+  CONNECTION_STATE_LISTEN = 2;
+  CONNECTION_STATE_SYN_SENT = 3;
+  CONNECTION_STATE_SYN_RECEIVED = 4;
+  CONNECTION_STATE_FIN_WAIT = 5;
+  CONNECTION_STATE_CLOSE_WAIT = 6;
+  CONNECTION_STATE_CLOSED = 7;
+}
+
+message FileTelemetry {
+  uint32 pid = 1;
+  string process_name = 2;
+  string file_path = 3;
+  FileOperation operation = 4;
+  uint64 file_size = 5;
+  string file_hash_sha256 = 6;
+  google.protobuf.Timestamp modified_time = 7;
+  bool is_executable = 8;
+  string zone_identifier = 9;
+}
+
+enum FileOperation {
+  FILE_OPERATION_UNSPECIFIED = 0;
+  FILE_OPERATION_CREATE = 1;
+  FILE_OPERATION_WRITE = 2;
+  FILE_OPERATION_DELETE = 3;
+  FILE_OPERATION_RENAME = 4;
+  FILE_OPERATION_READ = 5;
+  FILE_OPERATION_EXECUTE = 6;
+}
+
+message RegistryTelemetry {
+  uint32 pid = 1;
+  string process_name = 2;
+  string key_path = 3;
+  string value_name = 4;
+  RegistryOperation operation = 5;
+  string value_type = 6;
+  bytes value_data = 7;
+}
+
+enum RegistryOperation {
+  REGISTRY_OPERATION_UNSPECIFIED = 0;
+  REGISTRY_OPERATION_CREATE_KEY = 1;
+  REGISTRY_OPERATION_DELETE_KEY = 2;
+  REGISTRY_OPERATION_SET_VALUE = 3;
+  REGISTRY_OPERATION_DELETE_VALUE = 4;
+  REGISTRY_OPERATION_QUERY_VALUE = 5;
+}
+
+message SystemTelemetry {
+  double cpu_usage = 1;
+  uint64 memory_total_mb = 2;
+  uint64 memory_used_mb = 3;
+  uint64 disk_total_mb = 4;
+  uint64 disk_free_mb = 5;
+  uint32 process_count = 6;
+  uint32 thread_count = 7;
+  uint32 handle_count = 8;
+  repeated NetworkInterface network_interfaces = 9;
+  repeated LoadedDriver loaded_drivers = 10;
+}
+
+message LoadedDriver {
+  string name = 1;
+  string path = 2;
+  string hash_sha256 = 3;
+  bool is_signed = 4;
+  string signer = 5;
+}
+
+message TelemetryResponse {
+  bool success = 1;
+  uint64 events_received = 2;
+  uint64 events_processed = 3;
+  repeated string errors = 4;
+  uint64 next_sequence = 5;
+}
+
+message TelemetryAck {
+  string event_id = 1;
+  bool acknowledged = 2;
+  string error = 3;
+}
+
+// Detection events
+message DetectionEventRequest {
+  string agent_id = 1;
+  DetectionEventProto event = 2;
+}
+
+message DetectionEventProto {
+  string event_id = 1;
+  string agent_id = 2;
+  DetectionSource source = 3;
+  SeverityLevel severity = 4;
+  string rule_id = 5;
+  string rule_name = 6;
+  string description = 7;
+  google.protobuf.Timestamp detected_at = 8;
+  repeated string mitre_techniques = 9;
+  repeated IOCProto iocs = 10;
+  map<string, string> context = 11;
+  repeated string related_event_ids = 12;
+  string raw_data = 13;
+}
+
+enum DetectionSource {
+  DETECTION_SOURCE_UNSPECIFIED = 0;
+  DETECTION_SOURCE_SIGNATURE = 1;
+  DETECTION_SOURCE_BEHAVIORAL = 2;
+  DETECTION_SOURCE_NETWORK = 3;
+  DETECTION_SOURCE_PROCESS = 4;
+  DETECTION_SOURCE_SANDBOX = 5;
+  DETECTION_SOURCE_CORRELATION = 6;
+  DETECTION_SOURCE_THREAT_INTEL = 7;
+  DETECTION_SOURCE_YARA = 8;
+}
+
+message IOCProto {
+  IOCType ioc_type = 1;
+  string value = 2;
+  string description = 3;
+  SeverityLevel severity = 4;
+  repeated string tags = 5;
+}
+
+enum IOCType {
+  IOC_TYPE_UNSPECIFIED = 0;
+  IOC_TYPE_IP_ADDRESS = 1;
+  IOC_TYPE_DOMAIN = 2;
+  IOC_TYPE_URL = 3;
+  IOC_TYPE_FILE_HASH_MD5 = 4;
+  IOC_TYPE_FILE_HASH_SHA1 = 5;
+  IOC_TYPE_FILE_HASH_SHA256 = 6;
+  IOC_TYPE_FILE_PATH = 7;
+  IOC_TYPE_REGISTRY_KEY = 8;
+  IOC_TYPE_PROCESS_NAME = 9;
+  IOC_TYPE_MUTEX = 10;
+  IOC_TYPE_EMAIL = 11;
+}
+
+message DetectionEventResponse {
+  bool success = 1;
+  string event_id = 2;
+  string message = 3;
+  repeated ResponseAction recommended_actions = 4;
+}
+
+message ResponseAction {
+  ResponseActionType action_type = 1;
+  string description = 2;
+  map<string, string> parameters = 3;
+  bool auto_execute = 4;
+}
+
+enum ResponseActionType {
+  RESPONSE_ACTION_TYPE_UNSPECIFIED = 0;
+  RESPONSE_ACTION_TYPE_ALERT = 1;
+  RESPONSE_ACTION_TYPE_ISOLATE_HOST = 2;
+  RESPONSE_ACTION_TYPE_KILL_PROCESS = 3;
+  RESPONSE_ACTION_TYPE_QUARANTINE_FILE = 4;
+  RESPONSE_ACTION_TYPE_BLOCK_IP = 5;
+  RESPONSE_ACTION_TYPE_BLOCK_DOMAIN = 6;
+  RESPONSE_ACTION_TYPE_COLLECT_SAMPLE = 7;
+  RESPONSE_ACTION_TYPE_MEMORY_DUMP = 8;
+  RESPONSE_ACTION_TYPE_FORENSIC_COLLECTION = 9;
+}
+
+message DetectionEventQuery {
+  string agent_id = 1;
+  SeverityLevel min_severity = 2;
+  google.protobuf.Timestamp start_time = 3;
+  google.protobuf.Timestamp end_time = 4;
+  repeated DetectionSource sources = 5;
+  uint32 limit = 6;
+}
+
+// Detection tasks
+message DetectionTaskRequest {
+  string agent_id = 1;
+  repeated DetectionCapability capabilities = 2;
+}
+
+message DetectionTask {
+  string task_id = 1;
+  DetectionTaskType task_type = 2;
+  map<string, string> parameters = 3;
+  uint32 priority = 4;
+  google.protobuf.Timestamp expires_at = 5;
+}
+
+enum DetectionTaskType {
+  DETECTION_TASK_TYPE_UNSPECIFIED = 0;
+  DETECTION_TASK_TYPE_SCAN_MEMORY = 1;
+  DETECTION_TASK_TYPE_SCAN_FILE = 2;
+  DETECTION_TASK_TYPE_SCAN_REGISTRY = 3;
+  DETECTION_TASK_TYPE_COLLECT_SAMPLE = 4;
+  DETECTION_TASK_TYPE_UPDATE_SIGNATURES = 5;
+  DETECTION_TASK_TYPE_THREAT_HUNT = 6;
+  DETECTION_TASK_TYPE_IOC_SWEEP = 7;
+  DETECTION_TASK_TYPE_BASELINE_UPDATE = 8;
+}
+
+message DetectionStatusUpdate {
+  string agent_id = 1;
+  string task_id = 2;
+  DetectionTaskStatus status = 3;
+  string message = 4;
+  map<string, string> results = 5;
+}
+
+enum DetectionTaskStatus {
+  DETECTION_TASK_STATUS_UNSPECIFIED = 0;
+  DETECTION_TASK_STATUS_PENDING = 1;
+  DETECTION_TASK_STATUS_RUNNING = 2;
+  DETECTION_TASK_STATUS_COMPLETED = 3;
+  DETECTION_TASK_STATUS_FAILED = 4;
+}
+
+message DetectionStatusResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// Signature management
+message SignatureUpdateRequest {
+  string agent_id = 1;
+  string current_version = 2;
+  repeated string installed_sets = 3;
+}
+
+message SignatureUpdateResponse {
+  bool update_available = 1;
+  string new_version = 2;
+  repeated SignatureSet signature_sets = 3;
+}
+
+message SignatureSet {
+  string set_id = 1;
+  string name = 2;
+  string version = 3;
+  repeated SignatureRule signatures = 4;
+  google.protobuf.Timestamp updated_at = 5;
+}
+
+message SignatureRule {
+  string rule_id = 1;
+  string name = 2;
+  string pattern = 3;
+  PatternType pattern_type = 4;
+  SeverityLevel severity = 5;
+  string mitre_technique = 6;
+  string description = 7;
+  bool enabled = 8;
+  repeated string tags = 9;
+}
+
+enum PatternType {
+  PATTERN_TYPE_UNSPECIFIED = 0;
+  PATTERN_TYPE_REGEX = 1;
+  PATTERN_TYPE_LITERAL = 2;
+  PATTERN_TYPE_YARA = 3;
+  PATTERN_TYPE_SIGMA = 4;
+}
+
+// Correlation rules
+message CorrelationRuleRequest {
+  string agent_id = 1;
+  string current_version = 2;
+}
+
+message CorrelationRuleResponse {
+  string version = 1;
+  repeated CorrelationRuleProto rules = 2;
+}
+
+message CorrelationRuleProto {
+  string rule_id = 1;
+  string name = 2;
+  repeated EventPatternProto patterns = 3;
+  uint32 window_seconds = 4;
+  SeverityLevel output_severity = 5;
+  string description = 6;
+  bool enabled = 7;
+}
+
+message EventPatternProto {
+  DetectionSource source = 1;
+  string rule_prefix = 2;
+  SeverityLevel min_severity = 3;
+}
+
+// Sample submission
+message SampleSubmission {
+  string agent_id = 1;
+  string filename = 2;
+  bytes file_content = 3;
+  string file_hash_sha256 = 4;
+  string source_path = 5;
+  SampleReason reason = 6;
+  map<string, string> context = 7;
+}
+
+enum SampleReason {
+  SAMPLE_REASON_UNSPECIFIED = 0;
+  SAMPLE_REASON_DETECTION = 1;
+  SAMPLE_REASON_SUSPICIOUS = 2;
+  SAMPLE_REASON_USER_REQUEST = 3;
+  SAMPLE_REASON_THREAT_HUNT = 4;
+}
+
+message SampleSubmissionResponse {
+  bool success = 1;
+  string sample_id = 2;
+  string message = 3;
+  bool analysis_queued = 4;
+}
+
+message AnalysisResultRequest {
+  string agent_id = 1;
+  string sample_id = 2;
+}
+
+message AnalysisResultResponse {
+  string sample_id = 1;
+  AnalysisStatus status = 2;
+  uint32 threat_score = 3;
+  string malware_family = 4;
+  repeated string signatures_matched = 5;
+  repeated IOCProto iocs = 6;
+  repeated string mitre_techniques = 7;
+  string detailed_report = 8;
+}
+
+enum AnalysisStatus {
+  ANALYSIS_STATUS_UNSPECIFIED = 0;
+  ANALYSIS_STATUS_PENDING = 1;
+  ANALYSIS_STATUS_RUNNING = 2;
+  ANALYSIS_STATUS_COMPLETE = 3;
+  ANALYSIS_STATUS_FAILED = 4;
+}
+
+// Health check
+message AgentHealthRequest {
+  string agent_id = 1;
+  AgentMode mode = 2;
+  SystemTelemetry system_status = 3;
+  repeated string active_detectors = 4;
+  uint64 events_generated = 5;
+  uint64 events_submitted = 6;
+}
+
+message AgentHealthResponse {
+  bool success = 1;
+  uint32 next_checkin_secs = 2;
+  DetectionConfig config_update = 3;
+  repeated string messages = 4;
+}

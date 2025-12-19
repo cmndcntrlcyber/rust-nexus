@@ -39,7 +39,7 @@ tonic-build = "0.10"
 # TLS and certificates
 rustls = "0.21"
 tokio-rustls = "0.24"
-webpki-roots = "0.25"
+webpki-roots = "0.24"
 rustls-pemfile = "1.0"
 x509-parser = "0.15"
 
