@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "nexus-agent",
     "nexus-common",
+    "nexus-detection",
     "nexus-infra",
     "nexus-webui",
     "nexus-recon",

@@ -1,0 +1,33 @@
+[package]
+name = "nexus-detection"
+version = "0.1.0"
+edition = "2021"
+description = "Threat detection capabilities for d3tect-nexus SOC platform"
+
+[dependencies]
+nexus-common = { path = "../nexus-common" }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Async runtime
+tokio = { workspace = true }
+
+# Utilities
+uuid = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+log = { workspace = true }
+
+# Pattern matching for signatures
+regex = "1.10"
+
+# HTTP client for LitterBox API
+reqwest = { workspace = true }
+
+# Base64 encoding for file uploads
+base64 = { workspace = true }
+
+[dev-dependencies]
+tokio-test = "0.4"
