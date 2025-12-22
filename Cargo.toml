@@ -6,8 +6,7 @@ members = [
     "nexus-infra",
     "nexus-webui",
     "nexus-recon",
-    "nexus-hybrid-exec",
-    "nexus-web-comms"
+    "nexus-hybrid-exec"
 ]
 
 [workspace.dependencies]
