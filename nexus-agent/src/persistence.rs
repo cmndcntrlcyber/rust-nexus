@@ -1,4 +1,4 @@
-use nexus_common::*;
+use gov_common::*;
 
 pub struct PersistenceManager;
 

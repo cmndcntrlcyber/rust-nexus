@@ -4,7 +4,7 @@
 //! including Cloudflare DNS management, Let's Encrypt certificate automation,
 //! gRPC communication layers, and enhanced BOF/COFF execution support.
 
-use nexus_common::*;
+use gov_common::*;
 
 pub mod config;
 pub mod cloudflare;

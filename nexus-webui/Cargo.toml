@@ -33,7 +33,7 @@ include_dir = { version = "0.7", optional = true }
 chrono = { workspace = true }
 
 # Local crate dependencies
-nexus-common = { path = "../nexus-common" }
+gov-common = { path = "../gov-common" }
 # Temporarily commented out due to compilation issues
 # nexus-infra = { path = "../nexus-infra" }
 

@@ -15,7 +15,7 @@ pub mod websocket;
 pub mod static_files;
 pub mod templates;
 
-use nexus_common::*;
+use gov_common::*;
 // Temporarily commented out due to nexus-infra compilation issues
 // use nexus_infra::{grpc_client::GrpcClient, domain_manager::DomainManager};
 

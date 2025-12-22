@@ -13,7 +13,7 @@ pub mod wmi_executor;
 pub mod api_executor;
 pub mod powershell_executor;
 
-use nexus_common::*;
+use gov_common::*;
 
 /// Hybrid execution configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]

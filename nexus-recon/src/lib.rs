@@ -14,7 +14,7 @@ pub mod network_recon;
 pub mod system_profiler;
 pub mod javascript_engine;
 
-use nexus_common::*;
+use gov_common::*;
 
 /// Reconnaissance configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]

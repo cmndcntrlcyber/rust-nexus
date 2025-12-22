@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-nexus-common = { path = "../nexus-common" }
+gov-common = { path = "../gov-common" }
 nexus-infra = { path = "../nexus-infra" }
 tokio = { workspace = true }
 serde = { workspace = true }
