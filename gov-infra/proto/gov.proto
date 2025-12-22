@@ -1,3 +1,13 @@
+// gov.proto - Governance, Risk, and Compliance Protocol
+//
+// This protocol definition provides gRPC services for:
+// - Security compliance automation (SCAP, CIS, NIST)
+// - Evidence collection with chain of custody
+// - Asset inventory and configuration management
+// - System monitoring and audit trail
+//
+// Version: 1.0.0
+
 syntax = "proto3";
 
 package gov.v1;
@@ -5,27 +15,41 @@ package gov.v1;
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/empty.proto";
 
-// Main C2 service definition
-service NexusC2 {
+// GovernanceService provides compliance monitoring and asset management
+service GovernanceService {
   // Agent registration and management
   rpc RegisterAgent(RegistrationRequest) returns (RegistrationResponse);
   rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
   rpc GetAgentInfo(AgentInfoRequest) returns (AgentInfoResponse);
-  
+
   // Task management
   rpc GetTasks(TaskRequest) returns (stream Task);
   rpc SubmitTaskResult(TaskResult) returns (TaskResultResponse);
-  
+
   // File operations
   rpc UploadFile(stream FileChunk) returns (FileUploadResponse);
   rpc DownloadFile(FileDownloadRequest) returns (stream FileChunk);
-  
-  // Advanced execution
-  rpc ExecuteShellcode(ShellcodeRequest) returns (ShellcodeResponse);
-  rpc ExecuteBOF(BOFRequest) returns (BOFResponse);
+
+  // Compliance operations
+  rpc SubmitComplianceCheck(ComplianceCheck) returns (CheckResult);
+  rpc GetControlAssessment(AssessmentRequest) returns (ControlAssessment);
+  rpc StreamCheckResults(stream CheckResult) returns (AssessmentSummary);
+
+  // Evidence collection
+  rpc CollectEvidence(EvidenceRequest) returns (Evidence);
+  rpc StreamEvidence(stream EvidenceChunk) returns (EvidenceReceipt);
+  rpc GetChainOfCustody(EvidenceQuery) returns (ChainOfCustody);
+
+  // Asset management
+  rpc ScanAssets(AssetScanRequest) returns (AssetInventory);
+  rpc GetConfigurationBaseline(BaselineRequest) returns (ConfigurationBaseline);
+  rpc CompareToBaseline(BaselineComparisonRequest) returns (BaselineComparisonResult);
 }
 
-// Agent registration messages
+// ============================================================================
+// Agent Registration Messages
+// ============================================================================
+
 message RegistrationRequest {
   string hostname = 1;
   string os_type = 2;
@@ -36,18 +60,21 @@ message RegistrationRequest {
   string process_name = 7;
   string architecture = 8;
   repeated string capabilities = 9;
-  string public_key = 10; // For additional crypto beyond TLS
+  string public_key = 10;
 }
 
 message RegistrationResponse {
   string agent_id = 1;
   bool success = 2;
   string message = 3;
-  repeated string assigned_domains = 4; // Fallback C2 domains
+  repeated string assigned_endpoints = 4;
   ConfigUpdate config = 5;
 }
 
-// Heartbeat messages
+// ============================================================================
+// Heartbeat Messages
+// ============================================================================
+
 message HeartbeatRequest {
   string agent_id = 1;
   SystemStatus status = 2;
@@ -56,12 +83,15 @@ message HeartbeatRequest {
 
 message HeartbeatResponse {
   bool success = 1;
-  uint32 heartbeat_interval = 2; // Seconds until next heartbeat
-  repeated string new_domains = 3; // Domain rotation
+  uint32 heartbeat_interval = 2;
+  repeated string new_endpoints = 3;
   ConfigUpdate config_update = 4;
 }
 
-// System status information
+// ============================================================================
+// System Status Information
+// ============================================================================
+
 message SystemStatus {
   double cpu_usage = 1;
   uint64 memory_usage_mb = 2;
@@ -86,10 +116,13 @@ message ProcessInfo {
   double cpu_usage_percent = 6;
 }
 
-// Task management
+// ============================================================================
+// Task Management
+// ============================================================================
+
 message TaskRequest {
   string agent_id = 1;
-  uint32 max_tasks = 2; // Maximum tasks to return
+  uint32 max_tasks = 2;
 }
 
 message Task {
@@ -104,8 +137,11 @@ message Task {
   uint32 max_retries = 9;
 }
 
+// TaskType defines the types of tasks the agent can execute
 enum TaskType {
   TASK_TYPE_UNSPECIFIED = 0;
+
+  // Basic operations
   TASK_TYPE_SHELL_COMMAND = 1;
   TASK_TYPE_POWERSHELL_COMMAND = 2;
   TASK_TYPE_FILE_UPLOAD = 3;
@@ -117,31 +153,31 @@ enum TaskType {
   TASK_TYPE_REGISTRY_QUERY = 9;
   TASK_TYPE_REGISTRY_SET = 10;
   TASK_TYPE_SERVICE_CONTROL = 11;
-  // Advanced execution methods
-  TASK_TYPE_FIBER_SHELLCODE = 20;
-  TASK_TYPE_FIBER_HOLLOWING = 21;
-  TASK_TYPE_PROCESS_INJECTION = 22;
-  TASK_TYPE_DLL_INJECTION = 23;
-  TASK_TYPE_APC_INJECTION = 24;
-  TASK_TYPE_EARLY_BIRD_INJECTION = 25;
-  TASK_TYPE_BOF_EXECUTION = 26;
-  TASK_TYPE_COFF_LOADING = 27;
-  // Persistence
-  TASK_TYPE_REGISTRY_PERSISTENCE = 30;
-  TASK_TYPE_SERVICE_PERSISTENCE = 31;
-  TASK_TYPE_TASK_SCHEDULER_PERSISTENCE = 32;
-  TASK_TYPE_STARTUP_PERSISTENCE = 33;
-  // Reconnaissance
-  TASK_TYPE_NETWORK_SCAN = 40;
-  TASK_TYPE_CREDENTIAL_HARVESTING = 41;
-  TASK_TYPE_BROWSER_DATA_EXTRACTION = 42;
-  TASK_TYPE_SCREEN_CAPTURE = 43;
-  TASK_TYPE_KEYLOGGER_START = 44;
-  TASK_TYPE_KEYLOGGER_STOP = 45;
-  // Cleanup
-  TASK_TYPE_SELF_DESTRUCT = 50;
-  TASK_TYPE_LOG_CLEANING = 51;
-  TASK_TYPE_ARTIFACT_REMOVAL = 52;
+
+  // Security Content Automation Protocol (SCAP) compliance
+  TASK_TYPE_SCAP_OVAL_CHECK = 100;
+  TASK_TYPE_CIS_BENCHMARK = 101;
+
+  // Audit and integrity tasks
+  TASK_TYPE_REGISTRY_AUDIT = 102;
+  TASK_TYPE_FILE_INTEGRITY = 103;
+
+  // Operational audits
+  TASK_TYPE_SERVICE_AUDIT = 104;
+  TASK_TYPE_USER_ACCESS_REVIEW = 105;
+  TASK_TYPE_POLICY_COMPLIANCE = 106;
+
+  // Evidence collection (forensically sound)
+  TASK_TYPE_COLLECT_EVIDENCE = 200;
+  TASK_TYPE_SCREENSHOT = 201;
+  TASK_TYPE_CONFIG_EXPORT = 202;
+  TASK_TYPE_LOG_COLLECTION = 203;
+
+  // Asset management
+  TASK_TYPE_ASSET_INVENTORY = 300;
+  TASK_TYPE_SOFTWARE_SCAN = 301;
+  TASK_TYPE_HARDWARE_INVENTORY = 302;
+  TASK_TYPE_CERTIFICATE_SCAN = 303;
 }
 
 message TaskStatus {
@@ -186,27 +222,33 @@ message TaskArtifact {
   map<string, string> metadata = 4;
 }
 
+// ArtifactType defines types of artifacts produced by tasks
 enum ArtifactType {
   ARTIFACT_TYPE_UNSPECIFIED = 0;
   ARTIFACT_TYPE_SCREENSHOT = 1;
   ARTIFACT_TYPE_LOG_FILE = 2;
-  ARTIFACT_TYPE_CREDENTIAL_DUMP = 3;
-  ARTIFACT_TYPE_PROCESS_DUMP = 4;
-  ARTIFACT_TYPE_MEMORY_DUMP = 5;
-  ARTIFACT_TYPE_REGISTRY_DUMP = 6;
-  ARTIFACT_TYPE_NETWORK_CAPTURE = 7;
-  ARTIFACT_TYPE_FILE_CONTENT = 8;
-  ARTIFACT_TYPE_CONFIG_DATA = 9;
-  ARTIFACT_TYPE_CUSTOM = 10;
+  ARTIFACT_TYPE_COMPLIANCE_REPORT = 3;
+  ARTIFACT_TYPE_CONFIGURATION_EXPORT = 4;
+  ARTIFACT_TYPE_REGISTRY_EXPORT = 5;
+  ARTIFACT_TYPE_NETWORK_CAPTURE = 6;
+  ARTIFACT_TYPE_FILE_CONTENT = 7;
+  ARTIFACT_TYPE_CONFIG_DATA = 8;
+  ARTIFACT_TYPE_EVIDENCE_PACKAGE = 9;
+  ARTIFACT_TYPE_AUDIT_LOG = 10;
+  ARTIFACT_TYPE_BASELINE_SNAPSHOT = 11;
+  ARTIFACT_TYPE_CUSTOM = 12;
 }
 
-// File operations
+// ============================================================================
+// File Operations
+// ============================================================================
+
 message FileChunk {
   string filename = 1;
   bytes data = 2;
   uint64 offset = 3;
   uint64 total_size = 4;
-  string checksum = 5; // SHA256 hash of complete file
+  string checksum = 5;
 }
 
 message FileUploadResponse {
@@ -222,64 +264,235 @@ message FileDownloadRequest {
   uint32 chunk_size = 4;
 }
 
-// Advanced execution
-message ShellcodeRequest {
+// ============================================================================
+// Compliance Check Messages
+// ============================================================================
+
+// ComplianceCheck represents a single compliance control check
+message ComplianceCheck {
+  string check_id = 1;
+  string standard = 2;           // e.g., "CIS", "NIST", "PCI-DSS"
+  string control_id = 3;         // e.g., "1.1.1", "AC-2"
+  string description = 4;
+  map<string, string> parameters = 5;
+  google.protobuf.Timestamp scheduled_time = 6;
+}
+
+// CheckResult represents the result of a compliance check
+message CheckResult {
+  string check_id = 1;
+  CheckStatus status = 2;
+  string finding = 3;
+  string evidence_reference = 4;
+  repeated string affected_resources = 5;
+  string remediation_guidance = 6;
+  google.protobuf.Timestamp checked_at = 7;
+  map<string, string> metadata = 8;
+}
+
+enum CheckStatus {
+  CHECK_STATUS_UNSPECIFIED = 0;
+  CHECK_STATUS_PASS = 1;
+  CHECK_STATUS_FAIL = 2;
+  CHECK_STATUS_NOT_APPLICABLE = 3;
+  CHECK_STATUS_ERROR = 4;
+  CHECK_STATUS_MANUAL_REVIEW = 5;
+}
+
+// ControlAssessment represents an aggregate assessment of controls
+message ControlAssessment {
+  string assessment_id = 1;
+  string framework = 2;           // e.g., "NIST CSF", "ISO 27001"
+  repeated CheckResult checks = 3;
+  AssessmentSummary summary = 4;
+  google.protobuf.Timestamp assessment_start = 5;
+  google.protobuf.Timestamp assessment_end = 6;
+  string assessor_id = 7;
+}
+
+message AssessmentSummary {
+  uint32 total_checks = 1;
+  uint32 passed = 2;
+  uint32 failed = 3;
+  uint32 not_applicable = 4;
+  uint32 errors = 5;
+  double compliance_percentage = 6;
+}
+
+message AssessmentRequest {
   string agent_id = 1;
-  bytes shellcode = 2;
-  ShellcodeExecutionMethod method = 3;
-  string target_process = 4; // For injection methods
-  uint32 target_pid = 5;     // For PID-based injection
-  map<string, string> options = 6;
+  string framework = 2;
+  repeated string control_ids = 3;
 }
 
-enum ShellcodeExecutionMethod {
-  SHELLCODE_EXECUTION_METHOD_UNSPECIFIED = 0;
-  SHELLCODE_EXECUTION_METHOD_DIRECT_FIBER = 1;
-  SHELLCODE_EXECUTION_METHOD_FIBER_HOLLOWING = 2;
-  SHELLCODE_EXECUTION_METHOD_EARLY_BIRD = 3;
-  SHELLCODE_EXECUTION_METHOD_PROCESS_INJECTION = 4;
-  SHELLCODE_EXECUTION_METHOD_APC_INJECTION = 5;
-  SHELLCODE_EXECUTION_METHOD_DLL_INJECTION = 6;
+// ============================================================================
+// Evidence Collection Messages
+// ============================================================================
+
+// Evidence represents collected forensic evidence
+message Evidence {
+  string evidence_id = 1;
+  EvidenceType type = 2;
+  string description = 3;
+  google.protobuf.Timestamp collected_at = 4;
+  string collector_id = 5;
+  string source_system = 6;
+  ChainOfCustody chain = 7;
+  map<string, string> metadata = 8;
 }
 
-message ShellcodeResponse {
-  bool success = 1;
-  string message = 2;
-  uint32 process_id = 3; // PID of target process if applicable
+enum EvidenceType {
+  EVIDENCE_TYPE_UNSPECIFIED = 0;
+  EVIDENCE_TYPE_CONFIGURATION = 1;
+  EVIDENCE_TYPE_LOG_FILE = 2;
+  EVIDENCE_TYPE_SCREENSHOT = 3;
+  EVIDENCE_TYPE_REGISTRY_EXPORT = 4;
+  EVIDENCE_TYPE_FILE_HASH = 5;
+  EVIDENCE_TYPE_NETWORK_CONFIG = 6;
+  EVIDENCE_TYPE_SYSTEM_STATE = 7;
+  EVIDENCE_TYPE_POLICY_EXPORT = 8;
+  EVIDENCE_TYPE_USER_LIST = 9;
+  EVIDENCE_TYPE_SERVICE_LIST = 10;
 }
 
-// BOF (Beacon Object File) execution
-message BOFRequest {
+// EvidenceChunk supports streaming large evidence files
+message EvidenceChunk {
+  string evidence_id = 1;
+  bytes data = 2;
+  uint64 offset = 3;
+  uint64 total_size = 4;
+  string chunk_hash = 5;         // SHA256 of this chunk
+  string final_hash = 6;         // SHA256 of complete evidence
+  uint32 chunk_sequence = 7;
+}
+
+// ChainOfCustody tracks evidence handling
+message ChainOfCustody {
+  repeated CustodyEvent events = 1;
+  string initial_custodian = 2;
+  google.protobuf.Timestamp initial_timestamp = 3;
+}
+
+message CustodyEvent {
+  string custodian_id = 1;
+  string action = 2;              // "collected", "transferred", "analyzed"
+  google.protobuf.Timestamp timestamp = 3;
+  string location = 4;
+  string notes = 5;
+  string digital_signature = 6;
+}
+
+message EvidenceRequest {
   string agent_id = 1;
-  bytes bof_data = 2;
-  string function_name = 3;
-  repeated BOFArgument arguments = 4;
-  map<string, string> options = 5;
+  EvidenceType type = 2;
+  string target_path = 3;
+  map<string, string> parameters = 4;
 }
 
-message BOFArgument {
-  BOFArgumentType type = 1;
-  bytes value = 2;
+message EvidenceReceipt {
+  string evidence_id = 1;
+  bool success = 2;
+  string storage_location = 3;
+  string final_hash = 4;
+  google.protobuf.Timestamp received_at = 5;
 }
 
-enum BOFArgumentType {
-  BOF_ARGUMENT_TYPE_UNSPECIFIED = 0;
-  BOF_ARGUMENT_TYPE_INT32 = 1;
-  BOF_ARGUMENT_TYPE_INT16 = 2;
-  BOF_ARGUMENT_TYPE_STRING = 3;
-  BOF_ARGUMENT_TYPE_WSTRING = 4;
-  BOF_ARGUMENT_TYPE_BINARY = 5;
+message EvidenceQuery {
+  string evidence_id = 1;
+  string agent_id = 2;
 }
 
-message BOFResponse {
-  bool success = 1;
-  string message = 2;
-  string output = 3;
+// ============================================================================
+// Asset Management Messages
+// ============================================================================
+
+// AssetInventory contains discovered assets
+message AssetInventory {
+  string inventory_id = 1;
+  google.protobuf.Timestamp scan_time = 2;
+  repeated AssetItem assets = 3;
+  string agent_id = 4;
 }
 
-// Configuration updates
+message AssetItem {
+  string asset_id = 1;
+  AssetType asset_type = 2;
+  string name = 3;
+  string version = 4;
+  string vendor = 5;
+  string install_date = 6;
+  string location = 7;           // File path or registry key
+  map<string, string> properties = 8;
+}
+
+enum AssetType {
+  ASSET_TYPE_UNSPECIFIED = 0;
+  ASSET_TYPE_SOFTWARE = 1;
+  ASSET_TYPE_HARDWARE = 2;
+  ASSET_TYPE_SERVICE = 3;
+  ASSET_TYPE_CERTIFICATE = 4;
+  ASSET_TYPE_USER_ACCOUNT = 5;
+  ASSET_TYPE_NETWORK_DEVICE = 6;
+  ASSET_TYPE_SECURITY_CONTROL = 7;
+}
+
+message AssetScanRequest {
+  string agent_id = 1;
+  repeated AssetType scan_types = 2;
+  bool include_details = 3;
+}
+
+// ============================================================================
+// Configuration Baseline Messages
+// ============================================================================
+
+// ConfigurationBaseline defines expected configuration state
+message ConfigurationBaseline {
+  string baseline_id = 1;
+  string baseline_name = 2;
+  string description = 3;
+  google.protobuf.Timestamp created_at = 4;
+  repeated ConfigurationItem items = 5;
+  string approved_by = 6;
+  string version = 7;
+}
+
+message ConfigurationItem {
+  string item_id = 1;
+  string category = 2;           // "registry", "file", "service", "policy"
+  string key_path = 3;           // Registry key, file path, etc.
+  string expected_value = 4;
+  string actual_value = 5;
+  bool compliant = 6;
+  string notes = 7;
+}
+
+message BaselineRequest {
+  string baseline_id = 1;
+  string agent_id = 2;
+}
+
+message BaselineComparisonRequest {
+  string agent_id = 1;
+  string baseline_id = 2;
+}
+
+message BaselineComparisonResult {
+  string comparison_id = 1;
+  ConfigurationBaseline baseline = 2;
+  repeated ConfigurationItem deviations = 3;
+  uint32 total_items = 4;
+  uint32 compliant_items = 5;
+  uint32 non_compliant_items = 6;
+  google.protobuf.Timestamp compared_at = 7;
+}
+
+// ============================================================================
+// Configuration Updates
+// ============================================================================
+
 message ConfigUpdate {
-  repeated string c2_domains = 1;
+  repeated string server_endpoints = 1;
   uint32 heartbeat_interval = 2;
   uint32 max_retry_attempts = 3;
   map<string, string> settings = 4;
@@ -293,7 +506,10 @@ message CertificateUpdate {
   google.protobuf.Timestamp expires_at = 4;
 }
 
-// Agent info request
+// ============================================================================
+// Agent Information
+// ============================================================================
+
 message AgentInfoRequest {
   string agent_id = 1;
 }

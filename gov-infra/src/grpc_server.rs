@@ -1,4 +1,4 @@
-//! gRPC server implementation with enhanced TLS and agent management
+//! gRPC server implementation for governance service with enhanced TLS and agent management
 
 use crate::{InfraError, InfraResult, proto::*, GrpcServerConfig, CertManager};
 use log::{info, warn, debug, error};
@@ -83,9 +83,9 @@ pub struct GrpcServer {
     server_handle: Arc<RwLock<Option<tokio::task::JoinHandle<()>>>>,
 }
 
-/// Implementation of the NexusC2 service
+/// Implementation of the GovernanceService
 #[derive(Clone)]
-pub struct NexusC2Service {
+pub struct GovernanceServiceImpl {
     agents: Arc<RwLock<HashMap<String, AgentSession>>>,
     task_manager: Arc<RwLock<TaskManager>>,
 }
@@ -140,18 +140,18 @@ impl GrpcServer {
         };
         
         // Create service implementation
-        let service = NexusC2Service {
+        let service = GovernanceServiceImpl {
             agents: self.agents.clone(),
             task_manager: self.task_manager.clone(),
         };
-        
+
         // Build and start server
         let server = Server::builder()
             .tls_config(tls_config)
             .map_err(|e| InfraError::TlsError(format!("TLS configuration failed: {}", e)))?
             .tcp_keepalive(Some(TokioDuration::from_secs(self.config.keepalive_interval)))
             .max_concurrent_streams(Some(self.config.max_connections))
-            .add_service(nexus_c2_server::NexusC2Server::new(service))
+            .add_service(governance_service_server::GovernanceServiceServer::new(service))
             .serve(addr);
         
         // Spawn server task
@@ -225,7 +225,7 @@ impl GrpcServer {
 }
 
 #[tonic::async_trait]
-impl nexus_c2_server::NexusC2 for NexusC2Service {
+impl governance_service_server::GovernanceService for GovernanceServiceImpl {
     /// Register a new agent
     async fn register_agent(
         &self,
@@ -254,7 +254,7 @@ impl nexus_c2_server::NexusC2 for NexusC2Service {
             agent_id: agent_id.clone(),
             success: true,
             message: "Agent registered successfully".to_string(),
-            assigned_domains: vec![], // TODO: Provide fallback domains
+            assigned_endpoints: vec![], // TODO: Provide fallback endpoints
             config: None, // TODO: Provide initial configuration
         };
         
@@ -298,7 +298,7 @@ impl nexus_c2_server::NexusC2 for NexusC2Service {
             let response = HeartbeatResponse {
                 success: true,
                 heartbeat_interval: 30, // 30 seconds
-                new_domains: vec![], // TODO: Provide domain rotation
+                new_endpoints: vec![], // TODO: Provide endpoint rotation
                 config_update: None,
             };
             
@@ -436,48 +436,210 @@ impl nexus_c2_server::NexusC2 for NexusC2Service {
         
         Ok(Response::new(Box::pin(output_stream)))
     }
-    
-    /// Execute shellcode on agent
-    async fn execute_shellcode(
+
+    // Compliance RPC methods (to be implemented)
+    async fn submit_compliance_check(
         &self,
-        request: Request<ShellcodeRequest>,
-    ) -> Result<Response<ShellcodeResponse>, Status> {
+        request: Request<ComplianceCheck>,
+    ) -> Result<Response<CheckResult>, Status> {
         let req = request.into_inner();
-        
-        info!("Shellcode execution requested for agent: {}", req.agent_id);
-        
-        // TODO: Queue shellcode execution task
-        let response = ShellcodeResponse {
-            success: true,
-            message: "Shellcode execution queued".to_string(),
-            process_id: 0, // Will be set by agent
+        info!("Compliance check submitted: {} for control {}", req.check_id, req.control_id);
+
+        // TODO: Execute compliance check
+        let response = CheckResult {
+            check_id: req.check_id,
+            status: CheckStatus::Pass.into(),
+            finding: "Compliance check pending implementation".to_string(),
+            evidence_reference: String::new(),
+            affected_resources: vec![],
+            remediation_guidance: String::new(),
+            checked_at: None,
+            metadata: std::collections::HashMap::new(),
         };
-        
+
         Ok(Response::new(response))
     }
-    
-    /// Execute BOF on agent
-    async fn execute_bof(
+
+    async fn get_control_assessment(
         &self,
-        request: Request<BofRequest>,
-    ) -> Result<Response<BofResponse>, Status> {
+        request: Request<AssessmentRequest>,
+    ) -> Result<Response<ControlAssessment>, Status> {
         let req = request.into_inner();
-        
-        info!("BOF execution requested for agent: {} (function: {})", 
-              req.agent_id, req.function_name);
-        
-        // TODO: Queue BOF execution task
-        let response = BofResponse {
-            success: true,
-            message: "BOF execution queued".to_string(),
-            output: String::new(),
+        info!("Control assessment requested for agent: {}, framework: {}", req.agent_id, req.framework);
+
+        let response = ControlAssessment {
+            assessment_id: uuid::Uuid::new_v4().to_string(),
+            framework: req.framework,
+            checks: vec![],
+            summary: Some(AssessmentSummary {
+                total_checks: 0,
+                passed: 0,
+                failed: 0,
+                not_applicable: 0,
+                errors: 0,
+                compliance_percentage: 0.0,
+            }),
+            assessment_start: None,
+            assessment_end: None,
+            assessor_id: String::new(),
         };
-        
+
         Ok(Response::new(response))
     }
-    
+
+    async fn stream_check_results(
+        &self,
+        request: Request<Streaming<CheckResult>>,
+    ) -> Result<Response<AssessmentSummary>, Status> {
+        let mut stream = request.into_inner();
+        let mut passed = 0u32;
+        let mut failed = 0u32;
+        let mut total = 0u32;
+
+        while let Some(result) = stream.message().await? {
+            total += 1;
+            if result.status == CheckStatus::Pass as i32 {
+                passed += 1;
+            } else if result.status == CheckStatus::Fail as i32 {
+                failed += 1;
+            }
+        }
+
+        let response = AssessmentSummary {
+            total_checks: total,
+            passed,
+            failed,
+            not_applicable: 0,
+            errors: 0,
+            compliance_percentage: if total > 0 { (passed as f64 / total as f64) * 100.0 } else { 0.0 },
+        };
+
+        Ok(Response::new(response))
+    }
+
+    async fn collect_evidence(
+        &self,
+        request: Request<EvidenceRequest>,
+    ) -> Result<Response<Evidence>, Status> {
+        let req = request.into_inner();
+        info!("Evidence collection requested for agent: {}", req.agent_id);
+
+        let response = Evidence {
+            evidence_id: uuid::Uuid::new_v4().to_string(),
+            r#type: req.r#type,
+            description: format!("Evidence collected from {}", req.target_path),
+            collected_at: None,
+            collector_id: req.agent_id,
+            source_system: String::new(),
+            chain: None,
+            metadata: std::collections::HashMap::new(),
+        };
+
+        Ok(Response::new(response))
+    }
+
+    async fn stream_evidence(
+        &self,
+        request: Request<Streaming<EvidenceChunk>>,
+    ) -> Result<Response<EvidenceReceipt>, Status> {
+        let mut stream = request.into_inner();
+        let mut evidence_id = String::new();
+        let mut total_size = 0u64;
+
+        while let Some(chunk) = stream.message().await? {
+            if evidence_id.is_empty() {
+                evidence_id = chunk.evidence_id.clone();
+            }
+            total_size += chunk.data.len() as u64;
+        }
+
+        let response = EvidenceReceipt {
+            evidence_id,
+            success: true,
+            storage_location: "/evidence/store".to_string(),
+            final_hash: String::new(),
+            received_at: None,
+        };
+
+        Ok(Response::new(response))
+    }
+
+    async fn get_chain_of_custody(
+        &self,
+        request: Request<EvidenceQuery>,
+    ) -> Result<Response<ChainOfCustody>, Status> {
+        let req = request.into_inner();
+        info!("Chain of custody requested for evidence: {}", req.evidence_id);
+
+        let response = ChainOfCustody {
+            events: vec![],
+            initial_custodian: String::new(),
+            initial_timestamp: None,
+        };
+
+        Ok(Response::new(response))
+    }
+
+    async fn scan_assets(
+        &self,
+        request: Request<AssetScanRequest>,
+    ) -> Result<Response<AssetInventory>, Status> {
+        let req = request.into_inner();
+        info!("Asset scan requested for agent: {}", req.agent_id);
+
+        let response = AssetInventory {
+            inventory_id: uuid::Uuid::new_v4().to_string(),
+            scan_time: None,
+            assets: vec![],
+            agent_id: req.agent_id,
+        };
+
+        Ok(Response::new(response))
+    }
+
+    async fn get_configuration_baseline(
+        &self,
+        request: Request<BaselineRequest>,
+    ) -> Result<Response<ConfigurationBaseline>, Status> {
+        let req = request.into_inner();
+        info!("Configuration baseline requested: {}", req.baseline_id);
+
+        let response = ConfigurationBaseline {
+            baseline_id: req.baseline_id,
+            baseline_name: String::new(),
+            description: String::new(),
+            created_at: None,
+            items: vec![],
+            approved_by: String::new(),
+            version: "1.0".to_string(),
+        };
+
+        Ok(Response::new(response))
+    }
+
+    async fn compare_to_baseline(
+        &self,
+        request: Request<BaselineComparisonRequest>,
+    ) -> Result<Response<BaselineComparisonResult>, Status> {
+        let req = request.into_inner();
+        info!("Baseline comparison requested for agent: {}", req.agent_id);
+
+        let response = BaselineComparisonResult {
+            comparison_id: uuid::Uuid::new_v4().to_string(),
+            baseline: None,
+            deviations: vec![],
+            total_items: 0,
+            compliant_items: 0,
+            non_compliant_items: 0,
+            compared_at: None,
+        };
+
+        Ok(Response::new(response))
+    }
+
     type GetTasksStream = std::pin::Pin<Box<dyn tokio_stream::Stream<Item = Result<Task, Status>> + Send>>;
     type DownloadFileStream = std::pin::Pin<Box<dyn tokio_stream::Stream<Item = Result<FileChunk, Status>> + Send>>;
+    type StreamCheckResultsStream = std::pin::Pin<Box<dyn tokio_stream::Stream<Item = Result<CheckResult, Status>> + Send>>;
 }
 
 #[cfg(test)]
@@ -499,7 +661,7 @@ mod tests {
                 process_id: 1234,
                 process_name: "test.exe".to_string(),
                 architecture: "x64".to_string(),
-                capabilities: vec!["fiber".to_string()],
+                capabilities: vec!["compliance_checks".to_string()],
                 public_key: "test-key".to_string(),
             },
             connected_at: chrono::Utc::now(),
