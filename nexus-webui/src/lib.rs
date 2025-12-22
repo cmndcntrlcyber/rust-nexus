@@ -17,7 +17,7 @@ pub mod templates;
 
 use gov_common::*;
 // Temporarily commented out due to nexus-infra compilation issues
-// use nexus_infra::{grpc_client::GrpcClient, domain_manager::DomainManager};
+// use gov_infra::{grpc_client::GrpcClient, domain_manager::DomainManager};
 
 // Placeholder types for integration testing
 pub struct GrpcClient;

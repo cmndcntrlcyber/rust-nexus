@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 gov-common = { path = "../gov-common" }
-nexus-infra = { path = "../nexus-infra" }
+gov-infra = { path = "../gov-infra" }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
