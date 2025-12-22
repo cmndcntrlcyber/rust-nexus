@@ -1,12 +1,12 @@
 [workspace]
 resolver = "2"
 members = [
-    "nexus-agent",
+    "gov-agent",
     "gov-common",
     "gov-infra",
-    "nexus-webui",
-    "nexus-recon",
-    "nexus-hybrid-exec"
+    "gov-dashboard",
+    "gov-discovery",
+    "gov-collectors"
 ]
 
 [workspace.dependencies]
