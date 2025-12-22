@@ -17,6 +17,8 @@ env_logger = { workspace = true }
 thiserror = { workspace = true }
 rand = { workspace = true }
 num_cpus = "1.16"
+chrono = { version = "0.4", features = ["serde"] }
+regex = "1.10"
 
 # Windows-specific dependencies
 [target.'cfg(target_os = "windows")'.dependencies]

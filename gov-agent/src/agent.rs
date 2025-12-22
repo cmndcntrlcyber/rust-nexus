@@ -1,10 +1,10 @@
 use gov_common::*;
+use gov_common::messages::TaskResult;
 use crate::communication::NetworkClient;
 use crate::execution::TaskExecutor;
-use crate::system::SystemInfo;
-use std::sync::Arc;
+use crate::asset::AssetInventory;
 use std::time::Duration;
-use tokio::time::{sleep, timeout};
+use tokio::time::timeout;
 
 pub struct NexusAgent {
     id: Option<String>,
@@ -12,7 +12,7 @@ pub struct NexusAgent {
     crypto: Crypto,
     network_client: NetworkClient,
     task_executor: TaskExecutor,
-    system_info: SystemInfo,
+    asset_inventory: AssetInventory,
     capabilities: Vec<String>,
     last_heartbeat: u64,
     registered: bool,
@@ -23,25 +23,26 @@ impl NexusAgent {
         let crypto = Crypto::new(encryption_key);
         let network_client = NetworkClient::new(server_addr.clone());
         let task_executor = TaskExecutor::new();
-        let system_info = SystemInfo::collect().await?;
-        
-        // Determine agent capabilities based on OS and compilation features
+        let asset_inventory = AssetInventory::collect().await?;
+
+        // Determine agent capabilities based on OS and available features
         let mut capabilities = vec![
-            "shell_execution".to_string(),
-            "file_operations".to_string(),
-            "network_operations".to_string(),
+            "compliance_scanning".to_string(),
+            "asset_inventory".to_string(),
+            "security_validation".to_string(),
+            "persistence_audit".to_string(),
         ];
 
         #[cfg(target_os = "windows")]
         {
-            capabilities.push("registry_operations".to_string());
-            capabilities.push("service_control".to_string());
+            capabilities.push("registry_audit".to_string());
+            capabilities.push("service_audit".to_string());
         }
 
         #[cfg(target_os = "linux")]
         {
-            capabilities.push("privilege_escalation".to_string());
-            capabilities.push("process_monitoring".to_string());
+            capabilities.push("systemd_audit".to_string());
+            capabilities.push("cron_audit".to_string());
         }
 
         Ok(Self {
@@ -50,7 +51,7 @@ impl NexusAgent {
             crypto,
             network_client,
             task_executor,
-            system_info,
+            asset_inventory,
             capabilities,
             last_heartbeat: 0,
             registered: false,
@@ -79,14 +80,14 @@ impl NexusAgent {
 
     async fn register(&mut self) -> Result<()> {
         let registration_data = RegistrationData {
-            hostname: self.system_info.hostname.clone(),
-            os_type: self.system_info.os_name.clone(),
-            os_version: self.system_info.os_version.clone(),
-            ip_address: self.system_info.primary_ip.clone(),
-            username: self.system_info.username.clone(),
-            process_id: self.system_info.process_id,
-            process_name: self.system_info.process_name.clone(),
-            architecture: self.system_info.architecture.clone(),
+            hostname: self.asset_inventory.hostname.clone(),
+            os_type: self.asset_inventory.os_name.clone(),
+            os_version: self.asset_inventory.os_version.clone(),
+            ip_address: self.asset_inventory.primary_ip.clone(),
+            username: self.asset_inventory.username.clone(),
+            process_id: self.asset_inventory.process_id,
+            process_name: self.asset_inventory.process_name.clone(),
+            architecture: self.asset_inventory.architecture.clone(),
             capabilities: self.capabilities.clone(),
         };
 
@@ -97,7 +98,8 @@ impl NexusAgent {
         let response = timeout(
             Duration::from_secs(30),
             self.network_client.send_message(&encrypted_message)
-        ).await??;
+        ).await
+            .map_err(|_| NexusError::NetworkError("Registration timeout".to_string()))??;
 
         let decrypted_response = self.crypto.decrypt(&response)?;
         let response_message: Message = serde_json::from_str(&decrypted_response)?;
@@ -125,7 +127,8 @@ impl NexusAgent {
         let response = timeout(
             Duration::from_secs(15),
             self.network_client.send_message(&encrypted_message)
-        ).await??;
+        ).await
+            .map_err(|_| NexusError::NetworkError("Heartbeat timeout".to_string()))??;
 
         let decrypted_response = self.crypto.decrypt(&response)?;
         let response_message: Message = serde_json::from_str(&decrypted_response)?;
@@ -192,7 +195,8 @@ impl NexusAgent {
         let _response = timeout(
             Duration::from_secs(15),
             self.network_client.send_message(&encrypted_message)
-        ).await??;
+        ).await
+            .map_err(|_| NexusError::NetworkError("Task result send timeout".to_string()))??;
 
         Ok(())
     }
