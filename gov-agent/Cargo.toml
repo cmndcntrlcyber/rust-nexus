@@ -5,7 +5,6 @@ edition = "2021"
 
 [dependencies]
 gov-common = { path = "../gov-common" }
-gov-infra = { path = "../gov-infra" }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -16,6 +15,7 @@ base64 = { workspace = true }
 log = { workspace = true }
 env_logger = { workspace = true }
 thiserror = { workspace = true }
+rand = { workspace = true }
 num_cpus = "1.16"
 
 # Windows-specific dependencies
@@ -36,17 +36,6 @@ default = []
 windows-specific = []
 linux-specific = ["libc"]
 
-# Execution capabilities
-bof-loading = []
+# Compliance capabilities
 wmi-execution = []
-elf-loading = []
 systemd-integration = []
-
-# Communication features
-domain-fronting = []
-http-fallback = []
-
-# Evasion features
-anti-debug = []
-anti-vm = []
-process-injection = []

@@ -1,35 +1,31 @@
-//! Nexus Infrastructure Management
-//! 
-//! This crate provides infrastructure management capabilities for the Nexus C2 framework,
+//! Gov Infrastructure Management
+//!
+//! This crate provides infrastructure management capabilities for the Gov compliance framework,
 //! including Cloudflare DNS management, Let's Encrypt certificate automation,
-//! gRPC communication layers, and enhanced BOF/COFF execution support.
-
-use gov_common::*;
+//! and gRPC communication layers.
 
 pub mod config;
 pub mod cloudflare;
 pub mod letsencrypt;
 pub mod grpc_client;
 pub mod grpc_server;
-pub mod bof_loader;
 pub mod domain_manager;
 pub mod cert_manager;
 
 // Re-export generated gRPC code
 pub mod proto {
-    tonic::include_proto!("nexus.v1");
-    
-    pub const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("nexus_descriptor");
+    tonic::include_proto!("gov.v1");
+
+    pub const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("gov_descriptor");
 }
 
 // Common types and utilities
-pub use config::{NexusConfig, CloudflareConfig, LetsEncryptConfig, OriginCertConfig, 
+pub use config::{NexusConfig, CloudflareConfig, LetsEncryptConfig, OriginCertConfig,
                  GrpcServerConfig, DomainConfig, ChallengeType, SubdomainPattern};
 pub use cloudflare::CloudflareManager;
 pub use letsencrypt::CertificateManager;
 pub use grpc_client::GrpcClient;
 pub use grpc_server::GrpcServer;
-pub use bof_loader::BOFLoader;
 pub use domain_manager::DomainManager;
 pub use cert_manager::CertManager;
 
@@ -50,10 +46,7 @@ pub enum InfraError {
     
     #[error("gRPC error: {0}")]
     GrpcError(String),
-    
-    #[error("BOF loading error: {0}")]
-    BofError(String),
-    
+
     #[error("Configuration error: {0}")]
     ConfigError(String),
     

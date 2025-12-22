@@ -11,9 +11,6 @@ mod system;
 mod persistence;
 mod evasion;
 
-#[cfg(target_os = "windows")]
-mod fiber_execution;
-
 use agent::NexusAgent;
 use communication::NetworkClient;
 use evasion::EnvironmentChecker;

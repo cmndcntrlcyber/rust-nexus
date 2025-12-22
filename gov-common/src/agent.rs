@@ -135,18 +135,6 @@ impl Agent {
         self.os_type.to_lowercase().contains("linux")
     }
 
-    pub fn supports_fiber_execution(&self) -> bool {
-        self.is_windows() && self.has_capability("fiber_execution")
-    }
-
-    pub fn supports_process_injection(&self) -> bool {
-        self.has_capability("process_injection")
-    }
-
-    pub fn supports_shellcode_execution(&self) -> bool {
-        self.has_capability("shellcode_execution")
-    }
-
     pub fn get_display_info(&self) -> String {
         format!(
             "{} ({}) - {} @ {} - {} tasks pending",
@@ -166,68 +154,37 @@ pub struct AgentCapabilities {
     pub shell_execution: bool,
     pub file_operations: bool,
     pub network_operations: bool,
-    pub process_injection: bool,
-    pub shellcode_execution: bool,
-    pub fiber_execution: bool,
-    pub privilege_escalation: bool,
-    pub persistence: bool,
-    pub anti_analysis: bool,
+    pub registry_operations: bool,
+    pub service_control: bool,
+    pub compliance_checks: bool,
     pub custom_capabilities: Vec<String>,
 }
 
 impl AgentCapabilities {
-    pub fn new_windows_basic() -> Self {
+    pub fn new_windows() -> Self {
         Self {
             os_type: "Windows".to_string(),
             architecture: "x64".to_string(),
             shell_execution: true,
             file_operations: true,
             network_operations: true,
-            process_injection: false,
-            shellcode_execution: false,
-            fiber_execution: false,
-            privilege_escalation: false,
-            persistence: false,
-            anti_analysis: false,
+            registry_operations: true,
+            service_control: true,
+            compliance_checks: true,
             custom_capabilities: Vec::new(),
         }
     }
 
-    pub fn new_windows_advanced() -> Self {
-        Self {
-            os_type: "Windows".to_string(),
-            architecture: "x64".to_string(),
-            shell_execution: true,
-            file_operations: true,
-            network_operations: true,
-            process_injection: true,
-            shellcode_execution: true,
-            fiber_execution: true,
-            privilege_escalation: true,
-            persistence: true,
-            anti_analysis: true,
-            custom_capabilities: vec![
-                "fiber_hollowing".to_string(),
-                "early_bird_injection".to_string(),
-                "apc_injection".to_string(),
-                "dll_injection".to_string(),
-            ],
-        }
-    }
-
-    pub fn new_linux_basic() -> Self {
+    pub fn new_linux() -> Self {
         Self {
             os_type: "Linux".to_string(),
             architecture: "x64".to_string(),
             shell_execution: true,
             file_operations: true,
             network_operations: true,
-            process_injection: false,
-            shellcode_execution: false,
-            fiber_execution: false,
-            privilege_escalation: false,
-            persistence: false,
-            anti_analysis: false,
+            registry_operations: false,
+            service_control: true,
+            compliance_checks: true,
             custom_capabilities: Vec::new(),
         }
     }
@@ -238,12 +195,9 @@ impl AgentCapabilities {
         if self.shell_execution { capabilities.push("shell_execution".to_string()); }
         if self.file_operations { capabilities.push("file_operations".to_string()); }
         if self.network_operations { capabilities.push("network_operations".to_string()); }
-        if self.process_injection { capabilities.push("process_injection".to_string()); }
-        if self.shellcode_execution { capabilities.push("shellcode_execution".to_string()); }
-        if self.fiber_execution { capabilities.push("fiber_execution".to_string()); }
-        if self.privilege_escalation { capabilities.push("privilege_escalation".to_string()); }
-        if self.persistence { capabilities.push("persistence".to_string()); }
-        if self.anti_analysis { capabilities.push("anti_analysis".to_string()); }
+        if self.registry_operations { capabilities.push("registry_operations".to_string()); }
+        if self.service_control { capabilities.push("service_control".to_string()); }
+        if self.compliance_checks { capabilities.push("compliance_checks".to_string()); }
 
         capabilities.extend(self.custom_capabilities.clone());
         capabilities
@@ -331,14 +285,14 @@ mod tests {
             1234,
             "test.exe".to_string(),
             "x64".to_string(),
-            vec!["fiber_execution".to_string()],
+            vec!["compliance_checks".to_string()],
         );
 
-        assert!(agent.supports_fiber_execution());
-        assert!(!agent.supports_process_injection());
+        assert!(agent.has_capability("compliance_checks"));
+        assert!(!agent.has_capability("registry_operations"));
 
-        agent.add_capability("process_injection".to_string());
-        assert!(agent.supports_process_injection());
+        agent.add_capability("registry_operations".to_string());
+        assert!(agent.has_capability("registry_operations"));
     }
 
     #[test]

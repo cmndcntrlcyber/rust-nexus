@@ -36,12 +36,6 @@ impl NexusAgent {
         {
             capabilities.push("registry_operations".to_string());
             capabilities.push("service_control".to_string());
-            capabilities.push("process_injection".to_string());
-            capabilities.push("shellcode_execution".to_string());
-            capabilities.push("fiber_execution".to_string());
-            capabilities.push("fiber_hollowing".to_string());
-            capabilities.push("early_bird_injection".to_string());
-            capabilities.push("apc_injection".to_string());
         }
 
         #[cfg(target_os = "linux")]
@@ -254,8 +248,8 @@ mod tests {
 
         #[cfg(target_os = "windows")]
         {
-            assert!(capabilities.contains(&"fiber_execution".to_string()));
-            assert!(capabilities.contains(&"process_injection".to_string()));
+            assert!(capabilities.contains(&"registry_operations".to_string()));
+            assert!(capabilities.contains(&"service_control".to_string()));
         }
     }
 }

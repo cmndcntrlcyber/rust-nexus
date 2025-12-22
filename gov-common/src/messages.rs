@@ -9,10 +9,10 @@ pub enum MessageType {
     TaskResult,
     FileUpload,
     FileDownload,
-    ShellcodeExecution, // New: For fiber-based shellcode execution
-    ProcessInjection,   // New: For advanced injection techniques
     SystemInfo,
     AgentUpdate,
+    ComplianceCheck,
+    EvidenceCollection,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -51,12 +51,12 @@ impl Message {
         Self::new(MessageType::TaskResult, content, Some(agent_id))
     }
 
-    pub fn shellcode_execution(content: String, agent_id: String) -> Self {
-        Self::new(MessageType::ShellcodeExecution, content, Some(agent_id))
+    pub fn compliance_check(content: String, agent_id: String) -> Self {
+        Self::new(MessageType::ComplianceCheck, content, Some(agent_id))
     }
 
-    pub fn process_injection(content: String, agent_id: String) -> Self {
-        Self::new(MessageType::ProcessInjection, content, Some(agent_id))
+    pub fn evidence_collection(content: String, agent_id: String) -> Self {
+        Self::new(MessageType::EvidenceCollection, content, Some(agent_id))
     }
 
     pub fn ack(agent_id: Option<String>) -> Self {
@@ -101,21 +101,6 @@ impl TaskData {
 
     pub fn shell_command(command: String) -> Self {
         Self::new("shell".to_string(), command)
-    }
-
-    pub fn fiber_shellcode(shellcode_b64: String) -> Self {
-        let mut task = Self::new("fiber_shellcode".to_string(), "execute".to_string());
-        task.parameters.insert("shellcode".to_string(), shellcode_b64);
-        task.parameters.insert("method".to_string(), "direct_fiber".to_string());
-        task
-    }
-
-    pub fn fiber_hollowing(shellcode_b64: String, target_process: String) -> Self {
-        let mut task = Self::new("fiber_hollowing".to_string(), "execute".to_string());
-        task.parameters.insert("shellcode".to_string(), shellcode_b64);
-        task.parameters.insert("target_process".to_string(), target_process);
-        task.parameters.insert("method".to_string(), "process_hollowing".to_string());
-        task
     }
 
     pub fn file_download(file_path: String) -> Self {
@@ -262,10 +247,9 @@ mod tests {
     }
 
     #[test]
-    fn test_fiber_shellcode_task() {
-        let task = TaskData::fiber_shellcode("base64_shellcode".to_string());
-        assert_eq!(task.task_type, "fiber_shellcode");
-        assert_eq!(task.parameters.get("shellcode"), Some(&"base64_shellcode".to_string()));
-        assert_eq!(task.parameters.get("method"), Some(&"direct_fiber".to_string()));
+    fn test_file_download_task() {
+        let task = TaskData::file_download("/etc/passwd".to_string());
+        assert_eq!(task.task_type, "file_download");
+        assert_eq!(task.parameters.get("path"), Some(&"/etc/passwd".to_string()));
     }
 }

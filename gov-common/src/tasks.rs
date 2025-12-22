@@ -19,6 +19,7 @@ pub struct Task {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum TaskType {
+    // Basic operations
     ShellCommand,
     PowerShellCommand,
     FileUpload,
@@ -27,39 +28,19 @@ pub enum TaskType {
     ProcessList,
     SystemInfo,
     NetworkInfo,
+    // Windows registry/service operations (for compliance auditing)
     RegistryQuery,
     RegistrySet,
     ServiceControl,
-    // Advanced execution methods
-    FiberShellcode,
-    FiberHollowing,
-    ProcessInjection,
-    DllInjection,
-    ApcInjection,
-    EarlyBirdInjection,
-    // Persistence
-    RegistryPersistence,
-    ServicePersistence,
-    TaskSchedulerPersistence,
-    StartupPersistence,
-    // Evasion
-    ProcessMigration,
-    TokenStealing,
-    ProcessHollowing,
-    ReflectiveDllLoading,
-    // Reconnaissance
-    NetworkScan,
-    CredentialHarvesting,
-    BrowserDataExtraction,
-    ScreenCapture,
-    KeyloggerStart,
-    KeyloggerStop,
-    KeyloggerStatus,
-    KeyloggerFlush,
-    // Cleanup
-    SelfDestruct,
-    LogCleaning,
-    ArtifactRemoval,
+    // Compliance checks
+    ComplianceCheck,
+    PolicyAudit,
+    ConfigurationAudit,
+    // Asset inventory
+    AssetInventory,
+    SoftwareInventory,
+    // Evidence collection
+    EvidenceCollection,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -95,15 +76,12 @@ pub struct TaskArtifact {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum ArtifactType {
-    Screenshot,
     LogFile,
-    CredentialDump,
-    ProcessDump,
-    MemoryDump,
     RegistryDump,
-    NetworkCapture,
     FileContent,
     ConfigData,
+    ComplianceReport,
+    Evidence,
     Custom(String),
 }
 
@@ -259,24 +237,20 @@ impl TaskArtifact {
         self
     }
 
-    pub fn screenshot(name: String, data: Vec<u8>) -> Self {
-        Self::new(ArtifactType::Screenshot, name, data)
-    }
-
     pub fn log_file(name: String, data: Vec<u8>) -> Self {
         Self::new(ArtifactType::LogFile, name, data)
     }
 
-    pub fn credential_dump(name: String, data: Vec<u8>) -> Self {
-        Self::new(ArtifactType::CredentialDump, name, data)
-    }
-
-    pub fn process_dump(name: String, data: Vec<u8>) -> Self {
-        Self::new(ArtifactType::ProcessDump, name, data)
-    }
-
     pub fn file_content(name: String, data: Vec<u8>) -> Self {
         Self::new(ArtifactType::FileContent, name, data)
+    }
+
+    pub fn compliance_report(name: String, data: Vec<u8>) -> Self {
+        Self::new(ArtifactType::ComplianceReport, name, data)
+    }
+
+    pub fn evidence(name: String, data: Vec<u8>) -> Self {
+        Self::new(ArtifactType::Evidence, name, data)
     }
 }
 
@@ -294,31 +268,6 @@ impl TaskBuilder {
         Task::new(TaskType::PowerShellCommand)
             .with_parameter("command".to_string(), command)
             .with_timeout(300)
-    }
-
-    pub fn fiber_shellcode(shellcode_b64: String) -> Task {
-        Task::new(TaskType::FiberShellcode)
-            .with_parameter("shellcode".to_string(), shellcode_b64)
-            .with_parameter("method".to_string(), "direct_fiber".to_string())
-            .with_timeout(60)
-            .with_priority(200)
-    }
-
-    pub fn fiber_hollowing(shellcode_b64: String, target_process: String) -> Task {
-        Task::new(TaskType::FiberHollowing)
-            .with_parameter("shellcode".to_string(), shellcode_b64)
-            .with_parameter("target_process".to_string(), target_process)
-            .with_parameter("method".to_string(), "process_hollowing".to_string())
-            .with_timeout(120)
-            .with_priority(250)
-    }
-
-    pub fn process_injection(shellcode_b64: String, target_pid: u32) -> Task {
-        Task::new(TaskType::ProcessInjection)
-            .with_parameter("shellcode".to_string(), shellcode_b64)
-            .with_parameter("target_pid".to_string(), target_pid.to_string())
-            .with_timeout(60)
-            .with_priority(200)
     }
 
     pub fn file_download(file_path: String) -> Task {
@@ -359,11 +308,11 @@ impl TaskBuilder {
         let mut task = Task::new(TaskType::RegistryQuery)
             .with_parameter("key_path".to_string(), key_path)
             .with_timeout(30);
-        
+
         if let Some(value) = value_name {
             task = task.with_parameter("value_name".to_string(), value);
         }
-        
+
         task
     }
 
@@ -376,72 +325,34 @@ impl TaskBuilder {
             .with_timeout(30)
     }
 
-    pub fn screen_capture() -> Task {
-        Task::new(TaskType::ScreenCapture)
-            .with_timeout(30)
-    }
-
-    pub fn network_scan(target_range: String, ports: String) -> Task {
-        Task::new(TaskType::NetworkScan)
-            .with_parameter("target_range".to_string(), target_range)
-            .with_parameter("ports".to_string(), ports)
+    pub fn compliance_check(framework: String, control_id: String) -> Task {
+        Task::new(TaskType::ComplianceCheck)
+            .with_parameter("framework".to_string(), framework)
+            .with_parameter("control_id".to_string(), control_id)
             .with_timeout(300)
     }
 
-    pub fn credential_harvesting() -> Task {
-        Task::new(TaskType::CredentialHarvesting)
-            .with_timeout(120)
-            .with_priority(150)
+    pub fn policy_audit(policy_id: String) -> Task {
+        Task::new(TaskType::PolicyAudit)
+            .with_parameter("policy_id".to_string(), policy_id)
+            .with_timeout(300)
     }
 
-    pub fn browser_data_extraction() -> Task {
-        Task::new(TaskType::BrowserDataExtraction)
-            .with_timeout(180)
+    pub fn asset_inventory() -> Task {
+        Task::new(TaskType::AssetInventory)
+            .with_timeout(600)
     }
 
-    pub fn registry_persistence(key_path: String, value_name: String, executable_path: String) -> Task {
-        Task::new(TaskType::RegistryPersistence)
-            .with_parameter("key_path".to_string(), key_path)
-            .with_parameter("value_name".to_string(), value_name)
-            .with_parameter("executable_path".to_string(), executable_path)
-            .with_timeout(30)
-            .with_priority(180)
+    pub fn software_inventory() -> Task {
+        Task::new(TaskType::SoftwareInventory)
+            .with_timeout(600)
     }
 
-    pub fn keylogger_start() -> Task {
-        Task::new(TaskType::KeyloggerStart)
-            .with_timeout(30)
-            .with_priority(200)
-    }
-
-    pub fn keylogger_stop() -> Task {
-        Task::new(TaskType::KeyloggerStop)
-            .with_timeout(30)
-            .with_priority(200)
-    }
-
-    pub fn keylogger_status() -> Task {
-        Task::new(TaskType::KeyloggerStatus)
-            .with_timeout(10)
-            .with_priority(100)
-    }
-
-    pub fn keylogger_flush() -> Task {
-        Task::new(TaskType::KeyloggerFlush)
-            .with_timeout(30)
-            .with_priority(150)
-    }
-
-    pub fn self_destruct(delay_seconds: Option<u64>) -> Task {
-        let mut task = Task::new(TaskType::SelfDestruct)
-            .with_timeout(60)
-            .with_priority(255);
-
-        if let Some(delay) = delay_seconds {
-            task = task.with_parameter("delay_seconds".to_string(), delay.to_string());
-        }
-
-        task
+    pub fn evidence_collection(evidence_type: String, target: String) -> Task {
+        Task::new(TaskType::EvidenceCollection)
+            .with_parameter("evidence_type".to_string(), evidence_type)
+            .with_parameter("target".to_string(), target)
+            .with_timeout(300)
     }
 }
 
@@ -488,11 +399,10 @@ mod tests {
     }
 
     #[test]
-    fn test_fiber_shellcode_task() {
-        let task = TaskBuilder::fiber_shellcode("base64_shellcode".to_string());
-        assert_eq!(task.task_type, TaskType::FiberShellcode);
-        assert_eq!(task.get_parameter("shellcode"), Some(&"base64_shellcode".to_string()));
-        assert_eq!(task.get_parameter("method"), Some(&"direct_fiber".to_string()));
-        assert_eq!(task.priority, 200);
+    fn test_compliance_check_task() {
+        let task = TaskBuilder::compliance_check("NIST_CSF".to_string(), "PR.AC-1".to_string());
+        assert_eq!(task.task_type, TaskType::ComplianceCheck);
+        assert_eq!(task.get_parameter("framework"), Some(&"NIST_CSF".to_string()));
+        assert_eq!(task.get_parameter("control_id"), Some(&"PR.AC-1".to_string()));
     }
 }
