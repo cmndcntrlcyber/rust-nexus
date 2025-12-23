@@ -1,0 +1,28 @@
+[package]
+name = "gov-tenancy"
+version = "0.1.0"
+edition = "2021"
+authors = ["Gov-Nexus Team"]
+description = "Multi-tenant SaaS support for compliance platform"
+license = "MIT OR Apache-2.0"
+keywords = ["compliance", "multi-tenant", "saas", "governance"]
+categories = ["authentication", "web-programming"]
+
+[dependencies]
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Identifiers and time
+uuid = { workspace = true }
+chrono = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+
+# Async runtime
+tokio = { workspace = true }
+async-trait = "0.1"
+
+[dev-dependencies]
+tempfile = "3.8"

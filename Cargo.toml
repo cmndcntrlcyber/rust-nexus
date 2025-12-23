@@ -2,8 +2,14 @@
 resolver = "2"
 members = [
     "gov-agent",
+    "gov-api",
     "gov-common",
     "gov-compliance-engine",
+    "gov-evidence",
+    "gov-integrations",
+    "gov-policy",
+    "gov-reporting",
+    "gov-tenancy",
     "gov-infra",
     "gov-dashboard",
     "gov-discovery",

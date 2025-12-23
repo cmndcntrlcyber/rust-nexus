@@ -1,0 +1,39 @@
+[package]
+name = "gov-evidence"
+version = "0.1.0"
+edition = "2021"
+authors = ["Gov-Nexus Team"]
+description = "Evidence collection and chain of custody for compliance auditing"
+license = "MIT OR Apache-2.0"
+keywords = ["compliance", "evidence", "audit", "governance", "custody"]
+categories = ["authentication", "cryptography"]
+
+[dependencies]
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Identifiers and time
+uuid = { workspace = true }
+chrono = { workspace = true }
+
+# Cryptography
+sha2 = "0.10"
+ed25519-dalek = { version = "2.1", features = ["serde"] }
+rand = { workspace = true }
+base64 = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+
+# Async runtime (for future storage backends)
+tokio = { workspace = true, optional = true }
+async-trait = { version = "0.1", optional = true }
+
+[dev-dependencies]
+tempfile = "3.8"
+
+[features]
+default = []
+async = ["tokio", "async-trait"]
+signing = []

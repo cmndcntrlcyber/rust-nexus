@@ -1,0 +1,38 @@
+[package]
+name = "gov-api"
+version = "0.1.0"
+edition = "2021"
+authors = ["Gov-Nexus Team"]
+description = "REST API for compliance platform integrations"
+license = "MIT OR Apache-2.0"
+keywords = ["compliance", "api", "rest", "governance"]
+categories = ["web-programming"]
+
+[dependencies]
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Identifiers and time
+uuid = { workspace = true }
+chrono = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+
+# Logging
+log = { workspace = true }
+
+# Async runtime
+tokio = { workspace = true }
+
+# HTTP framework
+axum = "0.7"
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "trace", "compression-gzip"] }
+
+# JWT for authentication
+jsonwebtoken = "9.2"
+
+[dev-dependencies]
+tempfile = "3.8"

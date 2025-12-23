@@ -1,0 +1,31 @@
+[package]
+name = "gov-reporting"
+version = "0.1.0"
+edition = "2021"
+authors = ["Gov-Nexus Team"]
+description = "Audit-ready report generation for compliance frameworks"
+license = "MIT OR Apache-2.0"
+keywords = ["compliance", "reporting", "audit", "governance", "pdf"]
+categories = ["text-processing"]
+
+[dependencies]
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Identifiers and time
+uuid = { workspace = true }
+chrono = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+
+# Logging
+log = { workspace = true }
+
+# Template rendering (optional for HTML generation)
+# printpdf and docx-rs would be added for full implementation
+# For now, we'll focus on JSON/HTML report structure
+
+[dev-dependencies]
+tempfile = "3.8"
