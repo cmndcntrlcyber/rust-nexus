@@ -32,6 +32,8 @@ pub enum NexusError {
     TaskExecutionError(String),
     #[error("Configuration error: {0}")]
     ConfigurationError(String),
+    #[error("IO error: {0}")]
+    IoError(#[from] std::io::Error),
 }
 
 pub type Result<T> = std::result::Result<T, NexusError>;

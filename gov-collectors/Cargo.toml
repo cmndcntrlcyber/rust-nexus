@@ -11,18 +11,16 @@ tokio = { workspace = true }
 uuid = { workspace = true }
 log = { workspace = true }
 thiserror = { workspace = true }
+chrono = { workspace = true }
+hostname = { workspace = true }
+reqwest = { workspace = true, optional = true }
+
+# Local crate dependencies
+gov-common = { path = "../gov-common" }
 
 # SSH client for remote execution
 russh = { version = "0.40", optional = true }
 russh-keys = { version = "0.40", optional = true }
-
-# WMI and Windows management (Windows only)
-[target.'cfg(windows)'.dependencies]
-wmi = "0.13"
-windows-sys = { workspace = true }
-
-# HTTP client for API-based execution
-reqwest = { workspace = true, optional = true }
 
 # Process management
 tokio-process = "0.2"
@@ -37,16 +35,10 @@ pwsh = { version = "0.1.0", optional = true }
 ring = "0.17"
 rsa = { version = "0.9", optional = true }
 
-# Date and time handling
-chrono = { workspace = true }
-
-# System information
-hostname = { workspace = true }
-
-# Local crate dependencies
-gov-common = { path = "../gov-common" }
-# Temporarily commented out due to compilation issues
-# nexus-infra = { path = "../nexus-infra" }
+# WMI and Windows management (Windows only)
+[target.'cfg(windows)'.dependencies]
+wmi = "0.13"
+windows-sys = { workspace = true }
 
 [features]
 default = ["ssh", "api", "powershell"]
