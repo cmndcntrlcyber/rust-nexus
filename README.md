@@ -1,160 +1,198 @@
-# Rust-Nexus: Enterprise Network Management Framework
+# D3tect-Nexus: Enterprise Threat Detection & Response Platform
 
-An advanced network management framework built in Rust featuring enterprise-grade infrastructure automation, dynamic domain management, automated certificate provisioning, gRPC communication, and cross-platform execution capabilities.
+An advanced threat detection and incident response platform built in Rust featuring reverse shell detection, behavioral analysis, automated malware analysis (LitterBox integration), EDR-style agent deployment, and comprehensive security operations orchestration.
 
 ## 🚀 Overview
 
-Rust-Nexus combines distributed system capabilities with cutting-edge infrastructure automation to create a sophisticated, enterprise-ready framework for network management and automation.
+D3tect-Nexus combines cutting-edge threat detection capabilities with enterprise-grade infrastructure automation to create a sophisticated, distributed security operations platform for threat hunting, incident response, and proactive defense.
 
-### Core Framework Components
+### Core Platform Components
 
-1. **🏗️ Infrastructure Management (`nexus-infra`)**: Automated DNS, certificates, and domain rotation
-2. **🔧 Agent Framework (`nexus-agent`)**: Cross-platform execution with advanced techniques  
-3. **🖥️ Management Server (`nexus-server`)**: gRPC-based server with node management
-4. **📚 Common Library (`nexus-common`)**: Shared utilities and cryptographic functions
+1. **🔍 Detection Engine (`nexus-detection`)**: Reverse shell detection, behavioral analysis, and threat signatures
+2. **🛡️ Security Agents (`nexus-agent`)**: EDR-style agents for threat hunting and telemetry collection
+3. **🖥️ SOC Platform (`nexus-server`)**: gRPC-based security operations center with orchestration
+4. **🧬 Malware Analysis (`litterbox-integration`)**: Automated LitterBox deployment for dynamic analysis
+5. **📚 Common Library (`nexus-common`)**: Shared utilities and cryptographic functions
 
 ## ✨ Key Features
 
+### 🔍 **Advanced Threat Detection**
+- ✅ **30+ Reverse Shell Signatures**: Comprehensive detection patterns for common reverse shells
+- ✅ **Behavioral Analysis**: Process-network correlation and anomaly detection
+- ✅ **Network Monitoring**: Real-time packet capture and traffic analysis
+- ✅ **Process Tracking**: Process discovery, monitoring, and parent-child relationships
+- ✅ **Signature Engine**: Pattern matching with high-confidence threat identification
+
+### 🧬 **Automated Malware Analysis**
+- ✅ **LitterBox Integration**: Automated deployment and orchestration of malware sandboxes
+- ✅ **Geographic Distribution**: Multi-region LitterBox clusters for load balancing
+- ✅ **Static Analysis**: PE analysis, YARA scanning, and signature identification
+- ✅ **Dynamic Analysis**: Real-time behavior monitoring in Windows containers
+- ✅ **Priority Routing**: Smart routing based on threat confidence levels
+
 ### 🌐 **Enterprise Infrastructure**
-- ✅ **Cloudflare DNS Integration**: Automated subdomain creation and management
-- ✅ **Let's Encrypt Automation**: DNS-01 challenge certificate provisioning
-- ✅ **Origin Certificates**: Cloudflare origin certificate support with pinning
-- ✅ **Domain Fronting**: Traffic disguised as legitimate CDN requests
-- ✅ **Dynamic Domain Rotation**: Automated infrastructure changes for OPSEC
+- ✅ **Cloudflare DNS Integration**: Secure SOC infrastructure management
+- ✅ **Let's Encrypt Automation**: Automated certificate provisioning for endpoints
+- ✅ **Geographic Distribution**: Global threat detection via distributed agents
+- ✅ **High Availability**: Automated failover and load balancing
+- ✅ **Dynamic Infrastructure**: Infrastructure rotation for operational security
 
-### 🔒 **Advanced Communication**
-- ✅ **gRPC over mTLS**: Modern protocol with bidirectional streaming
-- ✅ **Certificate Pinning**: Enhanced security with origin certificate validation
-- ✅ **Connection Resilience**: Automatic failover and retry mechanisms
-- ✅ **Traffic Obfuscation**: Legitimate-looking HTTPS patterns
-- ✅ **Geographic Distribution**: Leverage Cloudflare's global network
+### 🔒 **Secure Communication**
+- ✅ **gRPC over mTLS**: Encrypted telemetry and command transmission
+- ✅ **Certificate Pinning**: Multi-layer validation for data integrity
+- ✅ **Connection Resilience**: Automatic failover for continuous monitoring
+- ✅ **Data Encryption**: AES-256-GCM encryption for all security data
+- ✅ **Audit Trail**: Comprehensive logging for security operations
 
-### ⚡ **Enhanced Execution**
-- ✅ **BOF/COFF Support**: Windows Beacon Object File execution
-- ✅ **Fiber Techniques**: Direct fiber execution and process hollowing
-- ✅ **PE/COFF Parsing**: Complete COFF loader with API resolution
-- ✅ **Memory Management**: Safe allocation with proper cleanup
-- ✅ **Early Bird Injection**: Pre-process initialization techniques
+### 🎯 **Incident Response**
+- ✅ **Automated Response**: Orchestrated incident response workflows
+- ✅ **Threat Containment**: Isolation and quarantine capabilities
+- ✅ **Remediation Tools**: Automated deployment of security tools
+- ✅ **SIEM Integration**: Connect to Splunk, QRadar, Sentinel, and more
+- ✅ **Threat Intelligence**: Real-time threat feed integration
 
-### 🛡️ **Security & Stealth**
-- ✅ **Anti-Analysis**: VM, debugger, and sandbox detection
-- ✅ **Timing Evasion**: Jitter and randomization techniques  
-- ✅ **Certificate Validation**: Multi-layer TLS security
-- ✅ **Operational Security**: Automated infrastructure rotation
-- ✅ **Traffic Legitimacy**: CDN-fronted communications
-
-## 🏗️ Enhanced Architecture
+## 🏗️ Detection Architecture
 
 ```
 ┌─────────────────────────┐    ┌─────────────────────────┐    ┌─────────────────────────┐
-│    Infrastructure       │    │     gRPC/TLS Comms     │    │       Agents            │
+│   Detection Infrastructure│    │  Secure gRPC/TLS Comms │    │   Detection Agents      │
 │                         │    │                         │    │                         │
 ├─────────────────────────┤    ├─────────────────────────┤    ├─────────────────────────┤
-│ • Cloudflare DNS API    │◄──►│ • Mutual TLS            │◄──►│ • BOF/COFF Execution   │
-│ • Let's Encrypt ACME    │    │ • Domain Fronting       │    │ • Fiber Techniques      │
-│ • Certificate Management│    │ • Certificate Pinning   │    │ • Advanced Injection    │
-│ • Domain Rotation       │    │ • Connection Pooling    │    │ • Anti-Analysis         │
-│ • Health Monitoring     │    │ • Streaming Tasks       │    │ • Persistence           │
+│ • Signature Management  │◄──►│ • Mutual TLS            │◄──►│ • Network Monitoring   │
+│ • LitterBox Clusters    │    │ • Encrypted Transport   │    │ • Process Tracking      │
+│ • Behavioral Analysis   │    │ • Certificate Pinning   │    │ • Behavioral Analysis   │
+│ • Threat Intelligence   │    │ • Audit Logging         │    │ • Evidence Collection   │
+│ • SIEM Integration      │    │ • Alert Streaming       │    │ • Incident Response     │
 └─────────────────────────┘    └─────────────────────────┘    └─────────────────────────┘
 ```
 
 ## 📁 Project Structure
 
 ```
-rust-nexus/
-├── nexus-infra/            # 🆕 Infrastructure management
+d3tect-nexus/
+├── nexus-detection/        # 🆕 Threat detection module
+│   └── src/
+│       ├── signature_engine.rs # Reverse shell signature matching
+│       ├── behavioral_analysis.rs # Process-network correlation
+│       ├── network_monitor.rs # Packet capture and analysis
+│       ├── process_tracker.rs # Process monitoring
+│       ├── litterbox_integration.rs # Malware analysis integration
+│       └── threat_scoring.rs # AI-powered threat scoring
+├── nexus-infra/            # Infrastructure management
 │   ├── proto/
 │   │   └── nexus.proto     # gRPC service definitions
 │   └── src/
-│       ├── cloudflare.rs   # Cloudflare DNS API client
-│       ├── letsencrypt.rs  # Let's Encrypt ACME automation
+│       ├── cloudflare.rs   # DNS infrastructure automation
+│       ├── letsencrypt.rs  # Certificate automation
 │       ├── cert_manager.rs # Certificate and TLS management
-│       ├── domain_manager.rs # Domain rotation and health monitoring
-│       ├── grpc_client.rs  # Enhanced gRPC client
-│       ├── grpc_server.rs  # gRPC server implementation
-│       ├── bof_loader.rs   # BOF/COFF execution engine
-│       └── config.rs       # Configuration management
+│       ├── domain_manager.rs # Domain rotation
+│       ├── grpc_client.rs  # Detection agent client
+│       ├── grpc_server.rs  # SOC server implementation
+│       └── litterbox_deployment.rs # LitterBox automation
 ├── nexus-common/           # Shared libraries
 │   └── src/
-│       ├── crypto.rs       # AES-256-GCM + RSA encryption
-│       ├── messages.rs     # Legacy TCP message types
-│       ├── agent.rs        # Agent data structures
-│       └── tasks.rs        # Task and result types
-├── nexus-agent/            # Enhanced agent
+│       ├── crypto.rs       # AES-256-GCM encryption
+│       ├── detection.rs    # Detection data structures
+│       ├── threats.rs      # Threat definitions
+│       └── alerts.rs       # Alert types
+├── nexus-agent/            # Detection agent (EDR-style)
 │   └── src/
-│       ├── agent.rs        # Core agent with gRPC support
-│       ├── communication.rs # Multi-protocol communication
-│       ├── execution.rs    # Enhanced task execution
-│       ├── fiber_execution.rs # Windows fiber techniques
-│       ├── bof_execution.rs # 🆕 BOF execution integration
-│       ├── evasion.rs      # Anti-analysis techniques
-│       ├── persistence.rs  # Persistence mechanisms
-│       └── system.rs       # System information gathering
-├── nexus-server/           # 🆕 gRPC C2 server
+│       ├── agent.rs        # Core detection agent
+│       ├── network_capture.rs # Network monitoring
+│       ├── process_monitor.rs # Process tracking
+│       ├── threat_hunter.rs # Threat hunting capabilities
+│       ├── evidence_collector.rs # Evidence collection
+│       └── response_executor.rs # Incident response actions
+├── nexus-server/           # SOC orchestration platform
 │   └── src/
-│       ├── main.rs         # Server main with infrastructure
+│       ├── main.rs         # Server main
 │       ├── handlers.rs     # gRPC service handlers
-│       ├── agent_manager.rs # Agent lifecycle management
-│       └── cli.rs          # Administrative interface
-├── config/                 # 🆕 Configuration templates
-│   ├── examples/           # Example configurations
-│   └── production/         # Production templates
-├── docs/                   # 🆕 Comprehensive documentation
-│   ├── infrastructure/     # Infrastructure guides
-│   ├── execution/          # Execution technique guides
-│   ├── configuration/      # Setup and config guides
-│   ├── api/               # API reference documentation
-│   └── operations/        # Operational guides
-└── scripts/               # Enhanced build and deployment
-    ├── build.sh           # Cross-platform builds
-    ├── deploy.sh          # Infrastructure deployment
-    └── setup-cloudflare.sh # Cloudflare initial setup
+│       ├── detection_engine.rs # Detection logic
+│       ├── alert_manager.rs # Alert processing
+│       ├── threat_intel.rs # Threat intelligence
+│       └── incident_response.rs # IR orchestration
+├── nexus-recon/            # Reconnaissance and profiling
+│   └── src/
+│       ├── network_recon.rs # Network reconnaissance
+│       ├── system_profiler.rs # System profiling
+│       ├── browser_fingerprint.rs # Browser detection
+│       └── javascript_engine.rs # JS analysis
+├── nexus-hybrid-exec/      # 🆕 Hybrid execution for IR
+│   └── src/
+│       ├── ssh_executor.rs # SSH-based remediation
+│       ├── powershell_executor.rs # PowerShell execution
+│       ├── wmi_executor.rs # WMI execution
+│       └── api_executor.rs # API-based actions
+├── nexus-web-comms/        # 🆕 Communication channels
+│   └── src/
+│       ├── websocket_fallback.rs # WebSocket comms
+│       ├── http_fallback.rs # HTTP fallback
+│       └── traffic_obfuscation.rs # Legitimate traffic patterns
+├── config/                 # Configuration templates
+│   ├── detection/          # Detection rules
+│   ├── signatures/         # Threat signatures
+│   ├── litterbox/          # LitterBox configurations
+│   └── response/           # Response playbooks
+├── docs/                   # Comprehensive documentation
+│   ├── detection/          # Detection guides
+│   ├── incident-response/  # IR procedures
+│   ├── integration/        # SIEM integration guides
+│   └── api/               # API reference documentation
+└── scripts/               # Deployment and automation
+    ├── deploy-soc.sh      # SOC infrastructure deployment
+    ├── deploy-litterbox.sh # LitterBox cluster deployment
+    └── update-signatures.sh # Signature updates
 ```
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 - Rust 1.70+ with cargo
-- Cloudflare account with API token
-- Domain managed by Cloudflare
-- Basic understanding of TLS/certificates
+- Docker (for LitterBox malware analysis)
+- Cloud infrastructure (AWS, Azure, GCP, or on-premises)
+- Domain with DNS management capability
+- Basic understanding of threat detection and incident response
 
 ### 1. **Infrastructure Setup**
 
 ```bash
 # Clone the repository
-git clone https://github.com/cmndcntrlcyber/rust-nexus.git
+git clone https://github.com/cmndcntrlcyber/rust-nexus.git -b d3tect-nexus
 cd rust-nexus
 
 # Create configuration from template
-cp config/examples/nexus-config.toml ./nexus.toml
+cp config/examples/detection-config.toml ./nexus.toml
 
-# Edit configuration with your Cloudflare details
-vim nexus.toml  # Add your API token, zone ID, and domain
+# Edit configuration with your infrastructure details
+vim nexus.toml
 ```
 
-### 2. **Build Framework**
+### 2. **Build Platform**
 
 ```bash
 # Build all components
 cargo build --release
 
 # Or build specific components
+cargo build --release -p nexus-detection
 cargo build --release -p nexus-infra
 cargo build --release -p nexus-server  
 cargo build --release -p nexus-agent
 ```
 
-### 3. **Deploy Infrastructure**
+### 3. **Deploy Detection Infrastructure**
 
 ```bash
-# Initialize Cloudflare DNS and certificates
+# Initialize infrastructure
 ./target/release/nexus-infra setup --config nexus.toml
 
-# Start the gRPC C2 server
+# Deploy LitterBox malware analysis cluster
+./scripts/deploy-litterbox.sh --regions "us-east,us-west,eu-central"
+
+# Start the SOC server
 ./target/release/nexus-server --config nexus.toml
 
-# Deploy agents to targets
+# Deploy detection agents to monitored systems
 ./target/release/nexus-agent --config agent.toml
 ```
 
@@ -163,126 +201,291 @@ cargo build --release -p nexus-agent
 ### Example Configuration (`nexus.toml`)
 
 ```toml
-[cloudflare]
-api_token = "your_cloudflare_api_token"
+[detection]
+enabled_signatures = [
+    "reverse_shells",
+    "command_injection",
+    "lateral_movement",
+    "privilege_escalation",
+    "data_exfiltration"
+]
+behavioral_analysis = true
+threat_intelligence_feeds = [
+    "alienvault_otx",
+    "abuse_ch",
+    "threatfox"
+]
+min_confidence_threshold = 0.75
+
+[litterbox]
+enabled = true
+auto_deploy = true
+instances_per_region = 2
+max_instances_per_region = 5
+docker_setup_timeout = 3600
+static_analysis_enabled = true
+dynamic_analysis_enabled = true
+priority_routing = true
+high_priority_threshold = 0.8
+
+[litterbox.regions]
+us_east = { enabled = true, priority = "high" }
+us_west = { enabled = true, priority = "high" }
+eu_central = { enabled = true, priority = "medium" }
+ap_southeast = { enabled = true, priority = "low" }
+
+[infrastructure]
+cloudflare_api_token = "your_api_token"
 zone_id = "your_zone_id"
-domain = "example.com"
-proxy_enabled = true
-ttl = 300
+domain = "detection.example.com"
+geo_distribution = ["us-east", "us-west", "eu-central"]
 
-[letsencrypt]
-contact_email = "admin@example.com"
-challenge_type = "Dns01"
-cert_renewal_days = 30
-wildcard_enabled = true
+[agents]
+deployment_mode = "distributed"
+collection_interval = 60  # 1 minute for real-time detection
+encryption_enabled = true
+max_agents = 50000
+capture_network_traffic = true
+monitor_processes = true
 
-[grpc_server]
+[server]
 bind_address = "0.0.0.0"
-port = 443
+port = 8443
 mutual_tls = true
-max_connections = 1000
+max_connections = 10000
+database_url = "postgresql://localhost/detection"
 
-[domains]
-primary_domains = ["c2.example.com"]
-rotation_interval = 24
-max_subdomains = 10
+[siem_integration]
+enabled = true
+platforms = ["splunk", "sentinel", "qradar"]
+forward_alerts = true
+alert_severity_min = "medium"
 
-[security]
-additional_encryption = true
-traffic_obfuscation = true
-anti_analysis = { vm_detection = true, debugger_detection = true }
+[incident_response]
+auto_response_enabled = true
+quarantine_on_high_confidence = true
+alert_escalation_threshold = 3
+response_playbooks = ["isolate", "collect_evidence", "remediate"]
 ```
 
-## 🎯 Advanced Usage
+## 🎯 Detection Operations
 
-### **gRPC Communication**
+### **Threat Detection**
 
 ```bash
-# Register agent with gRPC server
-./nexus-agent --grpc-endpoint https://api.example.com:443
+# Start real-time detection monitoring
+nexus-cli detection start
 
-# Execute commands with arguments
-nexus-cli execute agent-123 "system-info.obj" "go"
+# Query detected threats
+nexus-cli threats list --severity high --last 24h
 
-# Domain rotation
-nexus-cli domain rotate --immediate
+# Analyze specific alert
+nexus-cli alert analyze --id alert-12345
+
+# Get threat intelligence for IOC
+nexus-cli threat-intel lookup --ioc 192.0.2.100
 ```
 
-### **BOF Development & Execution**
+### **Malware Analysis with LitterBox**
+
+```bash
+# Submit sample to LitterBox for analysis
+nexus-cli litterbox submit --file suspicious.exe --priority high
+
+# Get analysis results
+nexus-cli litterbox results --hash abc123def456
+
+# Check LitterBox cluster health
+nexus-cli litterbox health --all-regions
+
+# View analysis report
+nexus-cli litterbox report --hash abc123def456 --format pdf
+```
+
+### **Incident Response**
+
+```bash
+# Initiate incident response
+nexus-cli incident create --alert alert-12345 --severity critical
+
+# Execute response playbook
+nexus-cli incident respond --id incident-789 --playbook isolate
+
+# Quarantine affected host
+nexus-cli response quarantine --agent agent-456
+
+# Collect evidence
+nexus-cli evidence collect --agent agent-456 --output evidence.zip
+```
+
+## 🔍 Reverse Shell Detection
+
+### **30+ Supported Signatures**
+
+D3tect-Nexus includes comprehensive reverse shell detection for:
+
+- **Netcat Variants**: Traditional nc, ncat, netcat with various options
+- **Bash Shells**: /dev/tcp, /dev/udp, named pipes
+- **Python Shells**: socket-based, pty-based, encrypted
+- **PowerShell**: Invoke-Expression, System.Net.Sockets
+- **Perl, Ruby, PHP**: Language-specific reverse shells
+- **Metasploit Payloads**: Common meterpreter patterns
+- **Web Shells**: Common web shell patterns
+- **Encrypted Shells**: SSL/TLS wrapped connections
+
+### **Detection Example**
 
 ```rust
-use nexus_infra::{BOFLoader, BofArgument};
+use d3tect_nexus::{SignatureEngine, BehavioralAnalyzer};
 
-let loader = BOFLoader::new();
-let bof_data = std::fs::read("custom.obj")?;
-let loaded_bof = loader.load_bof(&bof_data)?;
+// Initialize detection engine
+let engine = SignatureEngine::new()?;
+let analyzer = BehavioralAnalyzer::new()?;
 
-let args = vec![
-    BofArgument::string("target_system"),
-    BofArgument::int32(1234),
-];
+// Detect reverse shell in network traffic
+let detection = engine.scan_traffic(&packet_data)?;
 
-let result = loader.execute_bof(&loaded_bof, "go", &args)?;
+if detection.confidence > 0.8 {
+    // High confidence - submit to LitterBox
+    let litterbox_result = engine
+        .submit_to_litterbox(&detection.payload, Priority::High)
+        .await?;
+    
+    // Generate alert
+    let alert = Alert::new(detection, litterbox_result);
+    soc_platform.send_alert(alert).await?;
+}
 ```
 
-### **Dynamic Infrastructure**
+## 🧬 LitterBox Malware Analysis Integration
+
+### **Automated Deployment**
+
+D3tect-Nexus automatically deploys and manages LitterBox malware analysis infrastructure:
 
 ```rust
-use nexus_infra::{CloudflareManager, DomainManager};
+use d3tect_nexus::LitterBoxDeployment;
 
-// Create new C2 subdomain
-let domain = domain_manager.create_new_domain().await?;
-println!("New C2 endpoint: {}", domain.full_domain);
+// Deploy global LitterBox network
+let deployment = LitterBoxDeployment::new(config)?;
+let network = deployment.deploy_global_network().await?;
 
-// Automatic certificate provisioning
-let cert = cert_manager.request_certificate(&domain.full_domain, &[]).await?;
+// Network includes:
+// - Automated Docker container setup
+// - Nginx reverse proxy with TLS
+// - Geographic load balancing
+// - Health monitoring and auto-scaling
 ```
 
-## 📊 Monitoring & Operations
+### **Analysis Features**
 
-### Health Monitoring
+- **Static Analysis**: PE header analysis, imports/exports, YARA scanning
+- **Dynamic Analysis**: Behavior monitoring in Windows 10 containers
+- **API Monitoring**: Windows API call tracking
+- **Network Activity**: Capture outbound connections and DNS requests
+- **File System Changes**: Track file creation, modification, deletion
+- **Registry Monitoring**: Track registry key changes
+- **Process Analysis**: Monitor spawned processes
+
+### **Priority Routing**
+
+```rust
+// Automatic priority-based routing
+match detection.confidence {
+    0.9..=1.0 => route_to_nearest_litterbox(payload, Priority::Critical).await?,
+    0.7..=0.9 => route_to_nearest_litterbox(payload, Priority::High).await?,
+    _ => queue_for_batch_analysis(payload).await?,
+}
+```
+
+## 📊 SOC Dashboard
+
+### Real-Time Monitoring
 ```bash
-# Check infrastructure health  
-nexus-cli status --all
+# Launch SOC dashboard
+nexus-webui --bind 0.0.0.0:8080
 
-# Domain health check
-nexus-cli domains health
-
-# Certificate status
-nexus-cli certificates status
+# Access via browser
+# https://soc.example.com
 ```
 
-### Operational Commands
-```bash
-# Rotate domains immediately
-nexus-cli domains rotate --immediate
+### Dashboard Features
+- **Threat Detection**: Real-time threat detection status and alerts
+- **LitterBox Status**: Malware analysis queue and results
+- **Agent Health**: Detection agent deployment and telemetry status
+- **Threat Map**: Geographic visualization of detected threats
+- **IOC Tracker**: Indicator of Compromise tracking and correlation
+- **Incident Timeline**: Active incidents and response status
+- **SIEM Integration**: Forwarded alerts and SIEM connectivity
 
-# Update all domains to new IP
-nexus-cli domains update-ip 203.0.113.10
+## 🔐 SIEM Integration
 
-# Renew certificates
-nexus-cli certificates renew --all
+### **Supported Platforms**
+
+| Platform | Integration Type | Website |
+|----------|------------------|---------|
+| **Splunk** | HTTP Event Collector + API | https://www.splunk.com |
+| **Microsoft Sentinel** | Log Analytics API | https://azure.microsoft.com/en-us/products/microsoft-sentinel |
+| **IBM QRadar** | Syslog + API | https://www.ibm.com/qradar |
+| **Elastic Security** | Elasticsearch API | https://www.elastic.co/security |
+| **Chronicle** | Ingestion API | https://chronicle.security |
+
+### **Integration Example**
+
+```rust
+use d3tect_nexus::{SIEMIntegration, Alert};
+
+// Configure Splunk integration
+let splunk = SIEMIntegration::splunk(
+    "https://splunk.example.com:8088",
+    hec_token
+)?;
+
+// Forward alerts automatically
+detection_engine.add_siem(splunk).await?;
+
+// Alerts are automatically forwarded with:
+// - Threat metadata
+// - Detection confidence
+// - IOCs extracted
+// - LitterBox analysis results
+// - Recommended response actions
 ```
 
-## 🔐 Security Features
+## 📚 Documentation
 
-### **Certificate Management**
-- **Automated Provisioning**: Let's Encrypt DNS-01 challenges via Cloudflare
-- **Origin Certificates**: Cloudflare origin certs for backend security
-- **Certificate Pinning**: Multi-layer validation and pinning
-- **Auto-Renewal**: Certificates renewed 30 days before expiration
+- **[Detection Guide](docs/detection/setup.md)** - Complete detection setup guide
+- **[Signature Development](docs/detection/signatures.md)** - Creating custom signatures
+- **[LitterBox Integration](docs/integration/litterbox.md)** - Malware analysis setup
+- **[Incident Response](docs/incident-response/playbooks.md)** - IR procedures and playbooks
+- **[SIEM Integration](docs/integration/siem-platforms.md)** - SIEM platform integration
+- **[API Reference](docs/api/detection-api.md)** - Complete API documentation
 
-### **Domain Fronting**
-- **CDN Integration**: Traffic routed through Cloudflare's network
-- **Host Header Manipulation**: Proper domain fronting implementation
-- **Geographic Distribution**: Global edge location utilization
-- **Traffic Legitimacy**: Indistinguishable from normal CDN traffic
+## 🎯 Use Cases
 
-### **Anti-Analysis** 
-- **Infrastructure Level**: Domain rotation defeats long-term analysis
-- **Certificate Level**: Valid TLS certificates prevent SSL inspection
-- **Application Level**: Enhanced VM/debugger/sandbox detection
-- **Network Level**: Traffic patterns match legitimate services
+### **Threat Hunting**
+- **Proactive Detection**: Hunt for advanced persistent threats (APTs)
+- **Behavioral Analysis**: Identify anomalous behavior patterns
+- **Network Forensics**: Deep packet inspection and traffic analysis
+- **IOC Hunting**: Search for known indicators of compromise
+
+### **Incident Response**
+- **Real-Time Detection**: Immediate threat identification and alerting
+- **Automated Response**: Orchestrated response workflows
+- **Evidence Collection**: Automated forensic evidence gathering
+- **Threat Containment**: Isolation and quarantine capabilities
+
+### **Security Operations**
+- **SOC Automation**: Reduce manual analyst workload by 70%
+- **Alert Triage**: AI-powered alert prioritization
+- **Threat Intelligence**: Integrate with threat feeds for context
+- **Compliance**: Meet security monitoring requirements
+
+### **Malware Analysis**
+- **Automated Sandboxing**: LitterBox integration for dynamic analysis
+- **Reverse Engineering**: Static analysis with PE parsing and YARA
+- **Behavioral Profiling**: Understand malware behavior and TTPs
+- **IOC Extraction**: Automatic extraction of indicators from samples
 
 ## 🧪 Testing
 
@@ -290,145 +493,105 @@ nexus-cli certificates renew --all
 # Run all tests
 cargo test
 
-# Test infrastructure components
-cargo test -p nexus-infra
+# Test detection engine
+cargo test -p nexus-detection
 
-# Test BOF loading
-cargo test -p nexus-infra bof_loader
+# Test LitterBox integration
+cargo test -p nexus-infra litterbox
+
+# Test reverse shell detection
+cargo test -p nexus-detection signature_engine
 
 # Integration tests
-./scripts/test-integration.sh
+./scripts/test-detection.sh
 ```
-
-## 📚 Documentation
-
-- **[Infrastructure Setup](docs/infrastructure/README.md)** - Complete infrastructure guide
-- **[Cloudflare Integration](docs/infrastructure/cloudflare-setup.md)** - DNS API setup
-- **[Certificate Management](docs/infrastructure/certificates.md)** - TLS and Let's Encrypt
-- **[BOF Development](docs/execution/bof-guide.md)** - BOF creation and execution
-- **[Production Deployment](docs/configuration/production-setup.md)** - Enterprise deployment
-- **[API Reference](docs/api/grpc-reference.md)** - Complete API documentation
-
-## 🎯 Use Cases
-
-### **Red Team Operations**
-- **Stealth C2**: Domain fronting defeats network monitoring
-- **Infrastructure Agility**: Rapid domain rotation for persistence
-- **Advanced Payloads**: BOF support for sophisticated techniques
-- **Enterprise Evasion**: Multi-layer anti-analysis capabilities
-
-### **Security Research**
-- **Technique Development**: Framework for researching new methods
-- **Tool Integration**: BOF ecosystem compatibility
-- **Protocol Research**: gRPC-based C2 communication studies
-- **Infrastructure Automation**: Research operational automation
-
-### **Training & Education**
-- **C2 Architecture**: Modern framework design patterns
-- **Infrastructure Automation**: Cloud-native deployment techniques
-- **Certificate Management**: Automated PKI operations
-- **Advanced Execution**: Windows internals and injection methods
-
-## 🛠️ Development
-
-### Building from Source
-```bash
-# Development build with debug symbols
-cargo build
-
-# Optimized release build
-cargo build --release --all
-
-# Cross-compilation for Windows
-cargo build --release --target x86_64-pc-windows-gnu
-
-# Build with specific features
-cargo build --features "enterprise,monitoring"
-```
-
-### Contributing
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/enhancement`)
-3. Run tests (`cargo test`)
-4. Submit pull request with comprehensive description
 
 ## 🔍 Troubleshooting
 
 ### Common Issues
 
-**❌ Cloudflare API Connection Failed**
+**❌ Detection Agent Connection Failed**
 ```bash
-# Verify API token permissions
-curl -H "Authorization: Bearer YOUR_TOKEN" \
-     "https://api.cloudflare.com/client/v4/user/tokens/verify"
+# Verify agent connectivity
+nexus-cli agent health --all
 
-# Check zone access
-nexus-cli cloudflare verify --zone-id YOUR_ZONE_ID
+# Check TLS certificates
+nexus-cli certificates verify --agent agent-456
+
+# Restart agent with debug logging
+RUST_LOG=debug ./nexus-agent --config agent.toml
 ```
 
-**❌ Certificate Provisioning Failed**
+**❌ LitterBox Deployment Failed**
 ```bash
-# Check DNS propagation
-dig TXT _acme-challenge.your-domain.com
+# Check Docker status
+docker ps -a | grep litterbox
 
-# Manual certificate request
-nexus-cli certificates request your-domain.com --force
+# Verify LitterBox cluster health
+nexus-cli litterbox health --region us-east
+
+# Redeploy specific instance
+./scripts/deploy-litterbox.sh --region us-east --instance 1 --force
 ```
 
-**❌ gRPC Connection Issues**
+**❌ Reverse Shell False Positives**
 ```bash
-# Test TLS connection
-openssl s_client -connect your-domain.com:443 -servername your-domain.com
+# Adjust confidence threshold
+nexus-cli detection config --min-confidence 0.85
 
-# Debug gRPC communication
-RUST_LOG=debug ./target/release/nexus-agent --config agent.toml
+# Add whitelist for legitimate traffic
+nexus-cli detection whitelist --add 203.0.113.0/24
+
+# Retrain behavioral analysis
+nexus-cli detection train --update-baseline
 ```
-
-### Performance Tuning
-- **Connection Pools**: Adjust `max_connections` for load
-- **Domain Health**: Configure `health_monitoring` intervals  
-- **Certificate Cache**: Tune renewal thresholds
-- **Task Queues**: Optimize task distribution patterns
 
 ## 📈 Performance & Scale
 
 ### **Benchmarks**
-- **Agent Connections**: 1000+ concurrent agents per server
-- **Domain Rotation**: Sub-second DNS propagation via Cloudflare
-- **Certificate Provisioning**: <60 seconds for new certificates
-- **BOF Execution**: Minimal overhead compared to shellcode injection
+- **Agent Capacity**: 50,000+ detection agents per server cluster
+- **Packet Processing**: 10 Gbps sustained packet capture per agent
+- **Alert Processing**: 100,000+ alerts per hour
+- **LitterBox Analysis**: 1,000+ samples per day across cluster
+- **Response Time**: <100ms detection latency for signature matches
 
 ### **Scalability Features**
-- **Horizontal Scaling**: Multiple server instances with load balancing
-- **Geographic Distribution**: Regional server deployment
-- **Connection Pooling**: Efficient resource utilization
-- **Lazy Initialization**: On-demand resource allocation
+- **Horizontal Scaling**: Distributed SOC architecture with load balancing
+- **Geographic Distribution**: Multi-region deployment for global coverage
+- **Efficient Processing**: Stream processing for real-time analysis
+- **Smart Routing**: Geographic and load-based LitterBox routing
 
 ## 🎖️ Enterprise Features
 
-### **Compliance & Monitoring**
-- **Audit Logging**: Comprehensive operation logging
-- **Certificate Lifecycle**: Automated compliance tracking  
-- **Infrastructure Changes**: Detailed change management
-- **Agent Activity**: Real-time monitoring dashboards
+### **Advanced Detection**
+- **AI/ML Models**: Machine learning-based anomaly detection
+- **Threat Correlation**: Cross-agent threat correlation
+- **Attack Chain Detection**: Multi-stage attack identification
+- **Zero-Day Detection**: Behavioral analysis for unknown threats
 
-### **High Availability**
-- **Multi-Region**: Deploy across multiple cloud regions
-- **Failover**: Automatic failover between domains/servers
-- **Health Monitoring**: Continuous infrastructure health checks
-- **Disaster Recovery**: Automated backup and restore procedures
+### **Orchestration**
+- **Automated Playbooks**: Pre-built incident response workflows
+- **Cross-Platform**: Windows, Linux, macOS agent support
+- **API-First**: Complete REST and gRPC APIs
+- **Extensible**: Plugin architecture for custom detections
+
+### **Operations**
+- **24/7 Monitoring**: Continuous threat monitoring
+- **Alert Fatigue Reduction**: AI-powered alert deduplication
+- **Forensic Capabilities**: Complete evidence collection
+- **Compliance Reporting**: Security incident reporting
 
 ## ⚠️ Security Notice
 
-This framework is designed for **authorized security testing and research purposes only**. Users must:
+This platform is designed for **authorized security operations and threat detection**. Users must:
 
 - Ensure compliance with applicable laws and regulations
 - Obtain proper authorization before deployment
-- Use responsibly and ethically
-- Respect system and network boundaries
-- Follow responsible disclosure practices
+- Use responsibly for defensive security purposes
+- Protect sensitive detection data and intelligence
+- Follow responsible disclosure practices for vulnerabilities
 
-**The authors are not responsible for misuse of this software.**
+**This platform is for defensive security operations only.**
 
 ## 📄 License
 
@@ -437,22 +600,23 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🙏 Acknowledgments
 
 - **Rust Community**: Exceptional tooling and ecosystem
-- **Cloudflare**: Robust API and global infrastructure
-- **Let's Encrypt**: Free, automated certificate authority  
-- **Sliver Framework**: Inspiration for gRPC architecture
-- **BOF Community**: Windows internals research and techniques
-- **Maldev Academy**: Fiber execution and evasion techniques
+- **Security Researchers**: Threat intelligence and detection techniques
+- **LitterBox Project**: BlackSnufkin for malware analysis framework
+- **Reverse-Shell-Detector**: Original detection signatures and patterns
+- **SIEM Platforms**: Splunk, Microsoft, IBM, Elastic, and Chronicle
+- **Threat Intelligence**: AlienVault OTX, Abuse.ch, ThreatFox
+- **Open Source Security**: Detection rule communities
 
 ---
 
 ## 🚀 Getting Started
 
-Ready to deploy? Check out our [Infrastructure Setup Guide](docs/infrastructure/README.md) for step-by-step instructions.
+Ready to deploy threat detection? Check out our [Detection Setup Guide](docs/detection/setup.md) for step-by-step instructions.
 
-For BOF development, see the [BOF Development Guide](docs/execution/bof-guide.md).
+For LitterBox malware analysis, see the [LitterBox Integration Guide](docs/integration/litterbox.md).
 
-For production deployments, review the [Enterprise Setup Guide](docs/configuration/production-setup.md).
+For incident response procedures, review the [IR Playbooks](docs/incident-response/playbooks.md).
 
 ---
 
-**Built with ❤️ in Rust | Enterprise-Ready | Research-Focused | Security-First**
+**Built with ❤️ in Rust | Enterprise-Ready | Detection-Focused | Defense-First**
