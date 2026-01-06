@@ -141,11 +141,8 @@ impl DomainManager {
             }
         }
         
-        Err(InfraError::NetworkError(
-            reqwest::Error::from(std::io::Error::new(
-                std::io::ErrorKind::TimedOut,
-                "Failed to detect public IP from all services"
-            ))
+        Err(InfraError::ConfigError(
+            "Failed to detect public IP from all services".to_string()
         ))
     }
     
@@ -387,11 +384,13 @@ impl DomainManager {
     /// Check health of a single domain
     async fn check_single_domain_health(&self, domain: &str) -> InfraResult<DomainHealth> {
         let start_time = std::time::Instant::now();
-        
-        // Perform DNS lookup
+
+        // Perform DNS lookup using blocking task
+        let resolver = self.resolver.clone();
+        let domain_owned = domain.to_string();
         let lookup_result = timeout(
             TokioDuration::from_secs(self.config.dns_timeout),
-            self.resolver.lookup_ip(domain)
+            tokio::task::spawn_blocking(move || resolver.lookup_ip(domain_owned.as_str()))
         ).await;
         
         let response_time_ms = start_time.elapsed().as_millis() as u64;
@@ -413,14 +412,19 @@ impl DomainManager {
         health.response_time_ms = Some(response_time_ms);
         
         match lookup_result {
-            Ok(Ok(_lookup)) => {
+            Ok(Ok(Ok(_lookup))) => {
                 health.status = DomainStatus::Active;
                 health.success_count += 1;
+            }
+            Ok(Ok(Err(e))) => {
+                health.status = DomainStatus::Failed;
+                health.error_count += 1;
+                return Err(InfraError::DnsError(format!("DNS lookup failed: {}", e)));
             }
             Ok(Err(e)) => {
                 health.status = DomainStatus::Failed;
                 health.error_count += 1;
-                return Err(InfraError::DnsError(format!("DNS lookup failed: {}", e)));
+                return Err(InfraError::DnsError(format!("DNS lookup task failed: {}", e)));
             }
             Err(_) => {
                 health.status = DomainStatus::Failed;

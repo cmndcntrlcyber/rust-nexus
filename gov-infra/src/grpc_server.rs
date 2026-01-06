@@ -131,9 +131,11 @@ impl GrpcServer {
                 warn!("Mutual TLS requested but no CA certificates available");
                 ServerTlsConfig::new().identity(identity)
             } else {
+                // Create Certificate from the raw bytes
+                let ca_cert = tonic::transport::Certificate::from_pem(&ca_certs[0].0);
                 ServerTlsConfig::new()
                     .identity(identity)
-                    .client_ca_root(&ca_certs[0].0)
+                    .client_ca_root(ca_cert)
             }
         } else {
             ServerTlsConfig::new().identity(identity)
@@ -429,11 +431,19 @@ impl governance_service_server::GovernanceService for GovernanceServiceImpl {
         info!("File download requested: {} for agent: {}", req.file_path, req.agent_id);
         
         // TODO: Load file data and create chunks
-        // For now, return empty stream
+        // For now, return empty stream that yields proper type
         let output_stream = async_stream::stream! {
             // Empty stream - implement file loading logic
+            // Yield nothing for now (the stream is empty)
+            if false {
+                yield Ok(FileChunk {
+                    data: Vec::new(),
+                    offset: 0,
+                    is_last: true,
+                });
+            }
         };
-        
+
         Ok(Response::new(Box::pin(output_stream)))
     }
 
@@ -639,7 +649,6 @@ impl governance_service_server::GovernanceService for GovernanceServiceImpl {
 
     type GetTasksStream = std::pin::Pin<Box<dyn tokio_stream::Stream<Item = Result<Task, Status>> + Send>>;
     type DownloadFileStream = std::pin::Pin<Box<dyn tokio_stream::Stream<Item = Result<FileChunk, Status>> + Send>>;
-    type StreamCheckResultsStream = std::pin::Pin<Box<dyn tokio_stream::Stream<Item = Result<CheckResult, Status>> + Send>>;
 }
 
 #[cfg(test)]

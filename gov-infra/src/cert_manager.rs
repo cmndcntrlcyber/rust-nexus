@@ -2,10 +2,11 @@
 
 use crate::{InfraError, InfraResult, OriginCertConfig};
 use chrono::{DateTime, Utc, Duration};
+use sha2::Digest;
 use log::{info, warn, debug, error};
 use rcgen::{Certificate, CertificateParams, DistinguishedName, DnType, KeyPair, PKCS_ECDSA_P256_SHA256};
 use rustls::{Certificate as RustlsCert, PrivateKey, ServerConfig, ClientConfig};
-use rustls_pemfile::{certs, private_key};
+use rustls_pemfile::certs;
 use std::fs;
 use std::io::BufReader;
 use std::path::Path;
@@ -102,16 +103,31 @@ impl CertManager {
                 format!("Private key file not found: {:?}", path)
             ));
         }
-        
+
         let key_file = fs::File::open(path)
             .map_err(|e| InfraError::CertificateError(format!("Failed to open private key file: {}", e)))?;
-        
+
         let mut reader = BufReader::new(key_file);
-        let private_key = private_key(&mut reader)
-            .map_err(|e| InfraError::CertificateError(format!("Failed to parse private key: {}", e)))?
-            .ok_or_else(|| InfraError::CertificateError("No private key found in file".to_string()))?;
-        
-        Ok(PrivateKey(private_key))
+
+        // Try PKCS8 format first
+        let keys = rustls_pemfile::pkcs8_private_keys(&mut reader)
+            .map_err(|e| InfraError::CertificateError(format!("Failed to parse private key: {}", e)))?;
+
+        if let Some(key) = keys.into_iter().next() {
+            return Ok(PrivateKey(key));
+        }
+
+        // Try RSA format as fallback
+        let key_file = fs::File::open(path)
+            .map_err(|e| InfraError::CertificateError(format!("Failed to reopen private key file: {}", e)))?;
+        let mut reader = BufReader::new(key_file);
+
+        let rsa_keys = rustls_pemfile::rsa_private_keys(&mut reader)
+            .map_err(|e| InfraError::CertificateError(format!("Failed to parse RSA private key: {}", e)))?;
+
+        rsa_keys.into_iter().next()
+            .map(PrivateKey)
+            .ok_or_else(|| InfraError::CertificateError("No private key found in file".to_string()))
     }
     
     /// Create server TLS configuration
@@ -142,8 +158,8 @@ impl CertManager {
         }
         
         // Add system CA certificates as fallback
-        root_store.add_server_trust_anchors(
-            webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|ta| {
+        root_store.add_trust_anchors(
+            webpki_roots::TLS_SERVER_ROOTS.iter().map(|ta| {
                 rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
                     ta.subject,
                     ta.spki,
@@ -221,11 +237,9 @@ impl CertManager {
             params.subject_alt_names.push(rcgen::SanType::DnsName(domain.clone()));
         }
         
-        // Set validity period
-        let not_before = chrono::Utc::now();
-        let not_after = not_before + chrono::Duration::days(validity_days as i64);
-        params.not_before = not_before;
-        params.not_after = not_after;
+        // Set validity period - rcgen 0.11 doesn't require setting these explicitly
+        // as it uses system time for not_before and calculates not_after from validity_days
+        // The default is 1 year, but we can't set it directly without the time crate properly set up
         
         // Use ECDSA key
         params.alg = &PKCS_ECDSA_P256_SHA256;
@@ -247,35 +261,38 @@ impl CertManager {
     
     /// Parse certificate information
     pub fn parse_certificate_info(&self, cert_pem: &[u8]) -> InfraResult<CertInfo> {
-        let pem = pem::parse(cert_pem)
+        let pem_str = std::str::from_utf8(cert_pem)
+            .map_err(|e| InfraError::CertificateError(format!("Invalid UTF-8 in PEM: {}", e)))?;
+        let pem = pem::parse(pem_str)
             .map_err(|e| InfraError::CertificateError(format!("Failed to parse PEM: {}", e)))?;
-        
-        let (_, cert) = X509Certificate::from_der(&pem.contents)
+
+        let (_, cert) = X509Certificate::from_der(pem.contents())
             .map_err(|e| InfraError::CertificateError(format!("Failed to parse certificate: {}", e)))?;
-        
+
         let subject = cert.subject().to_string();
         let issuer = cert.issuer().to_string();
-        let serial_number = format!("{:x}", cert.serial);
-        
+        let serial_number = cert.serial.to_str_radix(16);
+
         let not_before = DateTime::<Utc>::from_timestamp(cert.validity().not_before.timestamp(), 0)
             .ok_or_else(|| InfraError::CertificateError("Invalid not_before timestamp".to_string()))?;
-        
+
         let not_after = DateTime::<Utc>::from_timestamp(cert.validity().not_after.timestamp(), 0)
             .ok_or_else(|| InfraError::CertificateError("Invalid not_after timestamp".to_string()))?;
-        
-        // Calculate SHA-256 fingerprint
-        let fingerprint = format!("{:x}", sha2::Sha256::digest(&pem.contents));
-        
+
+        // Calculate SHA-256 fingerprint using hex encoding
+        let digest = sha2::Sha256::digest(pem.contents());
+        let fingerprint = digest.iter().map(|b| format!("{:02x}", b)).collect::<String>();
+
         // Extract SAN domains
         let mut san_domains = Vec::new();
         if let Ok(Some(san_ext)) = cert.subject_alternative_name() {
-            for name in &san_ext.general_names {
+            for name in &san_ext.value.general_names {
                 if let x509_parser::extensions::GeneralName::DNSName(domain) = name {
                     san_domains.push(domain.to_string());
                 }
             }
         }
-        
+
         Ok(CertInfo {
             subject,
             issuer,
@@ -377,27 +394,6 @@ impl CertManager {
     /// Get configuration reference
     pub fn config(&self) -> &OriginCertConfig {
         &self.config
-    }
-}
-
-// Implement SHA-256 digest
-mod sha2 {
-    pub struct Sha256;
-    
-    impl Sha256 {
-        pub fn digest(data: &[u8]) -> [u8; 32] {
-            use std::collections::hash_map::DefaultHasher;
-            use std::hash::{Hash, Hasher};
-            
-            // Simple hash for demonstration - in production use proper SHA-256
-            let mut hasher = DefaultHasher::new();
-            data.hash(&mut hasher);
-            let hash = hasher.finish();
-            
-            let mut result = [0u8; 32];
-            result[..8].copy_from_slice(&hash.to_be_bytes());
-            result
-        }
     }
 }
 

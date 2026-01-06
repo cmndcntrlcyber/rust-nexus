@@ -49,6 +49,10 @@ serde_yaml = "0.9"
 
 # Date and time
 chrono = { workspace = true }
+time = "0.3"
+
+# Cryptographic hashing
+sha2 = "0.10"
 
 # Logging
 log = { workspace = true }

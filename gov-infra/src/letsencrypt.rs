@@ -1,14 +1,11 @@
 //! Let's Encrypt ACME client with Cloudflare DNS-01 challenge support
 
 use crate::{InfraError, InfraResult, LetsEncryptConfig, CloudflareManager};
-use acme_lib::{
-    Account, AccountCredentials, Certificate, ChallengeType as AcmeChallengeType,
-    Directory, DirectoryUrl, Error as AcmeError, OrderStatus,
-};
+use acme_lib::{Account, Directory, DirectoryUrl, persist::FilePersist, create_p384_key};
 use chrono::{DateTime, Utc, Duration};
 use log::{info, warn, error, debug};
 use rcgen::{CertificateParams, DistinguishedName, DnType, SanType};
-use rustls_pemfile;
+use sha2::Digest;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
@@ -48,7 +45,7 @@ pub enum RenewalStatus {
 pub struct CertificateManager {
     config: LetsEncryptConfig,
     cloudflare: CloudflareManager,
-    account: Option<Account<AccountCredentials>>,
+    persist: Option<FilePersist>,
     active_challenges: HashMap<String, ChallengeInfo>,
 }
 
@@ -58,203 +55,117 @@ impl CertificateManager {
         Self {
             config,
             cloudflare,
-            account: None,
+            persist: None,
             active_challenges: HashMap::new(),
         }
     }
-    
+
     /// Initialize ACME account or load existing one
     pub async fn initialize(&mut self) -> InfraResult<()> {
         info!("Initializing Let's Encrypt ACME account");
-        
+
         // Ensure certificate storage directory exists
         fs::create_dir_all(&self.config.cert_storage_dir)
             .map_err(|e| InfraError::LetsEncryptError(format!("Failed to create cert directory: {}", e)))?;
-        
-        let account_path = self.config.cert_storage_dir.join("account.json");
-        
-        // Try to load existing account
-        if account_path.exists() {
-            info!("Loading existing ACME account");
-            match self.load_existing_account(&account_path).await {
-                Ok(account) => {
-                    self.account = Some(account);
-                    info!("Successfully loaded existing ACME account");
-                    return Ok(());
-                }
-                Err(e) => {
-                    warn!("Failed to load existing account: {}, creating new one", e);
-                }
-            }
-        }
-        
-        // Create new account
-        info!("Creating new ACME account");
-        let account = self.create_new_account().await?;
-        
-        // Save account credentials
-        self.save_account_credentials(&account, &account_path).await?;
-        self.account = Some(account);
-        
-        info!("Successfully initialized ACME account");
+
+        // Create file-based persistence for ACME account
+        let persist = FilePersist::new(&self.config.cert_storage_dir);
+        self.persist = Some(persist);
+
+        info!("Successfully initialized ACME persistence");
         Ok(())
     }
-    
-    async fn load_existing_account(&self, path: &Path) -> InfraResult<Account<AccountCredentials>> {
-        let credentials_json = fs::read_to_string(path)
-            .map_err(|e| InfraError::LetsEncryptError(format!("Failed to read account file: {}", e)))?;
-        
-        let credentials: AccountCredentials = serde_json::from_str(&credentials_json)
-            .map_err(|e| InfraError::LetsEncryptError(format!("Failed to parse account credentials: {}", e)))?;
-        
+
+    /// Get the directory based on configuration
+    fn get_directory(&self) -> InfraResult<Directory<FilePersist>> {
+        let persist = self.persist.as_ref()
+            .ok_or_else(|| InfraError::LetsEncryptError("ACME not initialized".to_string()))?
+            .clone();
+
         let directory_url = if self.config.acme_directory_url.contains("staging") {
             DirectoryUrl::LetsEncryptStaging
         } else {
             DirectoryUrl::LetsEncrypt
         };
-        
-        let directory = Directory::from_url(directory_url)
-            .map_err(|e| InfraError::LetsEncryptError(format!("Failed to create directory: {}", e)))?;
-        
-        let account = Account::from_credentials(credentials)
-            .map_err(|e| InfraError::LetsEncryptError(format!("Failed to load account: {}", e)))?;
-        
-        Ok(account)
+
+        Directory::from_url(persist, directory_url)
+            .map_err(|e| InfraError::LetsEncryptError(format!("Failed to create directory: {}", e)))
     }
-    
-    async fn create_new_account(&self) -> InfraResult<Account<AccountCredentials>> {
-        let directory_url = if self.config.acme_directory_url.contains("staging") {
-            DirectoryUrl::LetsEncryptStaging
-        } else {
-            DirectoryUrl::LetsEncrypt
-        };
-        
-        let directory = Directory::from_url(directory_url)
-            .map_err(|e| InfraError::LetsEncryptError(format!("Failed to create directory: {}", e)))?;
-        
-        let account = Account::create(
-            &directory,
-            &self.config.contact_email,
-            true, // agree to terms of service
-        ).map_err(|e| InfraError::LetsEncryptError(format!("Failed to create account: {}", e)))?;
-        
-        Ok(account)
-    }
-    
-    async fn save_account_credentials(&self, account: &Account<AccountCredentials>, path: &Path) -> InfraResult<()> {
-        let credentials = account.credentials();
-        let credentials_json = serde_json::to_string_pretty(credentials)
-            .map_err(|e| InfraError::LetsEncryptError(format!("Failed to serialize credentials: {}", e)))?;
-        
-        fs::write(path, credentials_json)
-            .map_err(|e| InfraError::LetsEncryptError(format!("Failed to save credentials: {}", e)))?;
-        
-        Ok(())
+
+    /// Get or create ACME account
+    fn get_account(&self) -> InfraResult<Account<FilePersist>> {
+        let directory = self.get_directory()?;
+
+        directory.account(&self.config.contact_email)
+            .map_err(|e| InfraError::LetsEncryptError(format!("Failed to get/create account: {}", e)))
     }
     
     /// Request a certificate for the given domain(s)
     pub async fn request_certificate(&mut self, primary_domain: &str, san_domains: &[String]) -> InfraResult<CertificateInfo> {
-        let account = self.account.as_ref()
-            .ok_or_else(|| InfraError::LetsEncryptError("ACME account not initialized".to_string()))?;
-        
+        let account = self.get_account()?;
+
         info!("Requesting certificate for domain: {} with SANs: {:?}", primary_domain, san_domains);
-        
+
         // Prepare domain list
         let mut all_domains = vec![primary_domain.to_string()];
         all_domains.extend(san_domains.iter().cloned());
-        
+
         // Create certificate order
-        let mut order = account.new_order(primary_domain, &all_domains)
+        let mut order = account.new_order(primary_domain, &all_domains.iter().map(|s| s.as_str()).collect::<Vec<_>>())
             .map_err(|e| InfraError::LetsEncryptError(format!("Failed to create order: {}", e)))?;
-        
+
         // Process authorizations for each domain
         let authorizations = order.authorizations()
             .map_err(|e| InfraError::LetsEncryptError(format!("Failed to get authorizations: {}", e)))?;
-        
-        for auth in &authorizations {
-            let domain = auth.domain_name();
+
+        for auth in authorizations {
+            let domain = auth.domain_name().to_string();
             info!("Processing authorization for domain: {}", domain);
-            
+
             // Get DNS challenge
-            let dns_challenge = auth.dns_challenge()
-                .ok_or_else(|| InfraError::LetsEncryptError("DNS challenge not available".to_string()))?;
-            
+            let dns_challenge = auth.dns_challenge();
+
             // Create DNS record for challenge
             let challenge_name = format!("_acme-challenge.{}", domain);
             let challenge_value = dns_challenge.dns_proof();
-            
+
             info!("Creating DNS challenge record: {} = {}", challenge_name, challenge_value);
-            
+
             let dns_record = self.cloudflare.create_acme_challenge(&challenge_name, &challenge_value).await?;
-            
+
             // Store challenge info for cleanup
             let challenge_info = ChallengeInfo {
-                domain: domain.to_string(),
+                domain: domain.clone(),
                 challenge_name: challenge_name.clone(),
                 challenge_value: challenge_value.clone(),
                 record_id: dns_record.id.clone(),
             };
-            self.active_challenges.insert(domain.to_string(), challenge_info);
-            
+            self.active_challenges.insert(domain.clone(), challenge_info);
+
             // Wait for DNS propagation
             info!("Waiting for DNS propagation...");
             self.wait_for_dns_propagation(&challenge_name, &challenge_value).await?;
-            
+
             // Validate challenge
             info!("Validating DNS challenge for {}", domain);
             dns_challenge.validate(5000) // 5 second timeout
                 .map_err(|e| InfraError::LetsEncryptError(format!("Challenge validation failed: {}", e)))?;
         }
-        
-        // Wait for order to be ready
+
+        // Wait for order to be ready and finalize
         info!("Waiting for certificate order to be ready...");
-        let mut order_status = order.refresh()
-            .map_err(|e| InfraError::LetsEncryptError(format!("Failed to refresh order: {}", e)))?;
-        
-        let mut attempts = 0;
-        while order_status.status != OrderStatus::Ready && attempts < 30 {
-            sleep(TokioDuration::from_secs(2)).await;
-            order_status = order.refresh()
-                .map_err(|e| InfraError::LetsEncryptError(format!("Failed to refresh order: {}", e)))?;
-            attempts += 1;
-        }
-        
-        if order_status.status != OrderStatus::Ready {
-            return Err(InfraError::LetsEncryptError(
-                format!("Order not ready after {} attempts", attempts)
-            ));
-        }
-        
-        // Generate private key and certificate signing request
-        info!("Generating private key and CSR");
-        let mut params = CertificateParams::new(all_domains.clone());
-        params.distinguished_name = DistinguishedName::new();
-        params.distinguished_name.push(DnType::CommonName, primary_domain);
-        
-        // Add subject alternative names
-        for domain in &all_domains[1..] { // Skip the first domain as it's already the CN
-            params.subject_alt_names.push(SanType::DnsName(domain.clone()));
-        }
-        
-        let cert = rcgen::Certificate::from_params(params)
-            .map_err(|e| InfraError::LetsEncryptError(format!("Failed to generate certificate: {}", e)))?;
-        
-        let csr = cert.serialize_request_der()
-            .map_err(|e| InfraError::LetsEncryptError(format!("Failed to serialize CSR: {}", e)))?;
-        
-        // Submit CSR and wait for certificate
-        info!("Submitting CSR and waiting for certificate");
-        order.provide_csr(csr)
-            .map_err(|e| InfraError::LetsEncryptError(format!("Failed to provide CSR: {}", e)))?;
-        
-        // Wait for certificate to be issued
-        let mut cert_order = order.wait_done(std::time::Duration::from_secs(5), 3)
-            .map_err(|e| InfraError::LetsEncryptError(format!("Certificate issuance timeout: {}", e)))?;
-        
+
+        // Generate private key for CSR
+        let pkey = create_p384_key();
+
+        // Finalize the order with CSR
+        let ord_cert = order.finalize_pkey(pkey, 5000)
+            .map_err(|e| InfraError::LetsEncryptError(format!("Failed to finalize order: {}", e)))?;
+
         // Download certificate
-        let certificate_chain = cert_order.download_cert()
+        let certificate_chain = ord_cert.download_and_save_cert()
             .map_err(|e| InfraError::LetsEncryptError(format!("Failed to download certificate: {}", e)))?;
-        
+
         // Clean up DNS challenges
         for challenge_info in self.active_challenges.values() {
             if let Err(e) = self.cloudflare.delete_acme_challenge(&challenge_info.challenge_name).await {
@@ -262,15 +173,18 @@ impl CertificateManager {
             }
         }
         self.active_challenges.clear();
-        
+
+        // Get the private key PEM
+        let private_key_pem = ord_cert.private_key();
+
         // Save certificate and key to files
         let cert_info = self.save_certificate(
             primary_domain,
-            &certificate_chain,
-            &cert.serialize_private_key_pem(),
+            &certificate_chain.certificate(),
+            private_key_pem,
             san_domains,
         ).await?;
-        
+
         info!("Successfully obtained certificate for {}", primary_domain);
         Ok(cert_info)
     }
@@ -363,17 +277,17 @@ impl CertificateManager {
     
     fn parse_certificate_expiry(&self, cert_pem: &str) -> InfraResult<DateTime<Utc>> {
         use x509_parser::prelude::*;
-        
-        let pem = pem::parse(cert_pem.as_bytes())
+
+        let pem = pem::parse(cert_pem)
             .map_err(|e| InfraError::CertificateError(format!("Failed to parse PEM: {}", e)))?;
-        
-        let cert = X509Certificate::from_der(&pem.contents)
+
+        let cert = X509Certificate::from_der(pem.contents())
             .map_err(|e| InfraError::CertificateError(format!("Failed to parse certificate: {}", e)))?
             .1;
-        
+
         let not_after = cert.validity().not_after;
         let timestamp = not_after.timestamp();
-        
+
         Ok(DateTime::<Utc>::from_timestamp(timestamp, 0)
             .ok_or_else(|| InfraError::CertificateError("Invalid timestamp in certificate".to_string()))?)
     }
