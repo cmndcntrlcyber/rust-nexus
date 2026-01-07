@@ -1,288 +1,416 @@
-# Rust-Nexus: Enterprise Network Management Framework
+# Gov-Nexus: Enterprise Governance & Compliance Automation Platform
 
-An advanced network management framework built in Rust featuring enterprise-grade infrastructure automation, dynamic domain management, automated certificate provisioning, gRPC communication, and cross-platform execution capabilities.
+An advanced governance, risk, and compliance (GRC) automation platform built in Rust featuring enterprise-grade infrastructure automation, continuous control monitoring, automated evidence collection, multi-framework compliance support, and distributed compliance agent deployment.
 
 ## 🚀 Overview
 
-Rust-Nexus combines distributed system capabilities with cutting-edge infrastructure automation to create a sophisticated, enterprise-ready framework for network management and automation.
+Gov-Nexus combines distributed compliance monitoring with cutting-edge infrastructure automation to create a sophisticated, enterprise-ready platform for governance and regulatory compliance across 35+ international frameworks.
 
-### Core Framework Components
+### Core Platform Components
 
-1. **🏗️ Infrastructure Management (`nexus-infra`)**: Automated DNS, certificates, and domain rotation
-2. **🔧 Agent Framework (`nexus-agent`)**: Cross-platform execution with advanced techniques  
-3. **🖥️ Management Server (`nexus-server`)**: gRPC-based server with node management
-4. **📚 Common Library (`nexus-common`)**: Shared utilities and cryptographic functions
+1. **🏗️ Compliance Infrastructure (`gov-infra`)**: Automated DNS, certificates, and secure infrastructure
+2. **📋 Compliance Engine (`gov-compliance-engine`)**: Multi-framework compliance orchestration and control management
+3. **🔍 Compliance Agents (`gov-agent`)**: Cross-platform compliance monitoring and evidence collection
+4. **📊 Evidence Management (`gov-evidence`)**: Automated evidence collection, storage, and retrieval
+5. **📈 Reporting Engine (`gov-reporting`)**: Automated compliance report generation
+6. **🔌 GRC Integrations (`gov-integrations`)**: Integration with leading GRC platforms
+7. **🖥️ Compliance Dashboard (`gov-dashboard`)**: Real-time compliance monitoring and visualization
+8. **📚 Common Library (`gov-common`)**: Shared utilities and cryptographic functions for secure data handling
 
 ## ✨ Key Features
 
+### 📋 **Multi-Framework Compliance Support**
+- ✅ **35+ Frameworks Supported**: ISO 27001, NIST CSF 2.0, SOC 2, GDPR, HIPAA, PCI DSS, FedRAMP, CMMC, HITRUST, and more
+- ✅ **Cross-Framework Mapping**: Automated control mapping across multiple compliance standards
+- ✅ **Continuous Control Monitoring (CCM)**: Real-time compliance status tracking
+- ✅ **Automated Evidence Collection**: 300+ integration points for evidence gathering
+- ✅ **AI-Powered Risk Detection**: Machine learning-based compliance risk identification
+
 ### 🌐 **Enterprise Infrastructure**
-- ✅ **Cloudflare DNS Integration**: Automated subdomain creation and management
-- ✅ **Let's Encrypt Automation**: DNS-01 challenge certificate provisioning
-- ✅ **Origin Certificates**: Cloudflare origin certificate support with pinning
-- ✅ **Domain Fronting**: Traffic disguised as legitimate CDN requests
-- ✅ **Dynamic Domain Rotation**: Automated infrastructure changes for OPSEC
+- ✅ **Cloudflare DNS Integration**: Secure compliance infrastructure management
+- ✅ **Let's Encrypt Automation**: Automated certificate provisioning for compliance endpoints
+- ✅ **Origin Certificates**: Enhanced security with certificate pinning
+- ✅ **Geographic Distribution**: Global compliance monitoring via Cloudflare network
+- ✅ **Dynamic Infrastructure**: Automated infrastructure rotation for security
 
-### 🔒 **Advanced Communication**
-- ✅ **gRPC over mTLS**: Modern protocol with bidirectional streaming
-- ✅ **Certificate Pinning**: Enhanced security with origin certificate validation
-- ✅ **Connection Resilience**: Automatic failover and retry mechanisms
-- ✅ **Traffic Obfuscation**: Legitimate-looking HTTPS patterns
-- ✅ **Geographic Distribution**: Leverage Cloudflare's global network
+### 🔒 **Secure Communication**
+- ✅ **gRPC over mTLS**: Encrypted compliance data transmission
+- ✅ **Certificate Pinning**: Multi-layer validation for data integrity
+- ✅ **Connection Resilience**: Automatic failover for continuous monitoring
+- ✅ **Data Encryption**: AES-256-GCM encryption for compliance evidence
+- ✅ **Audit Trail**: Comprehensive logging for compliance audits
 
-### ⚡ **Enhanced Execution**
-- ✅ **BOF/COFF Support**: Windows Beacon Object File execution
-- ✅ **Fiber Techniques**: Direct fiber execution and process hollowing
-- ✅ **PE/COFF Parsing**: Complete COFF loader with API resolution
-- ✅ **Memory Management**: Safe allocation with proper cleanup
-- ✅ **Early Bird Injection**: Pre-process initialization techniques
+### 📊 **Compliance Operations**
+- ✅ **Real-Time Dashboards**: Compliance posture visualization
+- ✅ **Automated Reporting**: Generate compliance reports for 20+ frameworks
+- ✅ **Audit Readiness**: Continuous audit preparation with evidence management
+- ✅ **Control Testing**: Automated control testing and validation
+- ✅ **Vendor Risk Management**: Third-party compliance monitoring
+- ✅ **Policy Evaluation**: Automated policy compliance checking
 
-### 🛡️ **Security & Stealth**
-- ✅ **Anti-Analysis**: VM, debugger, and sandbox detection
-- ✅ **Timing Evasion**: Jitter and randomization techniques  
-- ✅ **Certificate Validation**: Multi-layer TLS security
-- ✅ **Operational Security**: Automated infrastructure rotation
-- ✅ **Traffic Legitimacy**: CDN-fronted communications
-
-## 🏗️ Enhanced Architecture
+## 🏗️ Compliance Architecture
 
 ```
 ┌─────────────────────────┐    ┌─────────────────────────┐    ┌─────────────────────────┐
-│    Infrastructure       │    │     gRPC/TLS Comms     │    │       Agents            │
+│  Compliance Infrastructure│    │  Secure gRPC/TLS Comms │    │   Compliance Agents     │
 │                         │    │                         │    │                         │
 ├─────────────────────────┤    ├─────────────────────────┤    ├─────────────────────────┤
-│ • Cloudflare DNS API    │◄──►│ • Mutual TLS            │◄──►│ • BOF/COFF Execution   │
-│ • Let's Encrypt ACME    │    │ • Domain Fronting       │    │ • Fiber Techniques      │
-│ • Certificate Management│    │ • Certificate Pinning   │    │ • Advanced Injection    │
-│ • Domain Rotation       │    │ • Connection Pooling    │    │ • Anti-Analysis         │
-│ • Health Monitoring     │    │ • Streaming Tasks       │    │ • Persistence           │
+│ • Framework Management  │◄──►│ • Mutual TLS            │◄──►│ • Evidence Collection  │
+│ • Certificate Authority │    │ • Encrypted Transport   │    │ • Control Monitoring    │
+│ • Compliance Monitoring │    │ • Certificate Pinning   │    │ • Configuration Checks  │
+│ • Evidence Repository   │    │ • Audit Logging         │    │ • Security Validation   │
+│ • Report Generation     │    │ • Compliance Events     │    │ • Policy Enforcement    │
 └─────────────────────────┘    └─────────────────────────┘    └─────────────────────────┘
 ```
+
+## 📋 Supported Compliance Frameworks
+
+### **Top 20 International Frameworks**
+
+| Framework | Description | Official Source |
+|-----------|-------------|-----------------|
+| **ISO/IEC 27001** | Information Security Management Systems (ISMS) | https://www.iso.org/standard/27001 |
+| **NIST CSF 2.0** | Cybersecurity Framework with six core functions | https://www.nist.gov/cyberframework |
+| **SOC 2** | Trust Services Criteria for service organizations | https://www.aicpa.org/soc2 |
+| **GDPR** | EU General Data Protection Regulation | https://gdpr.eu |
+| **PCI DSS** | Payment Card Industry Data Security Standard | https://www.pcisecuritystandards.org |
+| **HIPAA** | Health Insurance Portability and Accountability Act | https://www.hhs.gov/hipaa |
+| **COBIT** | Control Objectives for Information Technologies | https://www.isaca.org/resources/cobit |
+| **COSO** | Internal Controls Framework | https://www.coso.org |
+| **FedRAMP** | Federal Risk and Authorization Management Program | https://www.fedramp.gov |
+| **CMMC** | Cybersecurity Maturity Model Certification | https://dodcio.defense.gov/cmmc |
+| **HITRUST CSF** | Health Information Trust Alliance Framework | https://hitrustalliance.net |
+| **NIST SP 800-53** | Security and Privacy Controls | https://csrc.nist.gov/publications/detail/sp/800-53/rev-5/final |
+| **NIST SP 800-171** | Protecting Controlled Unclassified Information | https://csrc.nist.gov/publications/detail/sp/800-171/rev-2/final |
+| **ISO/IEC 42001** | AI Management System Standard | https://www.iso.org/standard/81230.html |
+| **ISO 22301** | Business Continuity Management | https://www.iso.org/standard/75106.html |
+| **CIS Controls** | Critical Security Controls | https://www.cisecurity.org/controls |
+| **FISMA** | Federal Information Security Modernization Act | https://www.cisa.gov/fisma |
+| **DORA** | Digital Operational Resilience Act (EU) | https://www.eiopa.europa.eu/dora |
+| **EU AI Act** | European Union AI Regulation | https://artificialintelligenceact.eu |
+| **TOGAF** | The Open Group Architecture Framework | https://www.opengroup.org/togaf |
 
 ## 📁 Project Structure
 
 ```
-rust-nexus/
-├── nexus-infra/            # 🆕 Infrastructure management
+gov-nexus/
+├── gov-infra/              # Compliance infrastructure management
 │   ├── proto/
-│   │   └── nexus.proto     # gRPC service definitions
+│   │   └── gov.proto       # gRPC service definitions
 │   └── src/
-│       ├── cloudflare.rs   # Cloudflare DNS API client
-│       ├── letsencrypt.rs  # Let's Encrypt ACME automation
+│       ├── cloudflare.rs   # DNS infrastructure automation
+│       ├── letsencrypt.rs  # Certificate automation
 │       ├── cert_manager.rs # Certificate and TLS management
-│       ├── domain_manager.rs # Domain rotation and health monitoring
-│       ├── grpc_client.rs  # Enhanced gRPC client
-│       ├── grpc_server.rs  # gRPC server implementation
-│       ├── bof_loader.rs   # BOF/COFF execution engine
+│       ├── domain_manager.rs # Domain management
+│       ├── grpc_client.rs  # Compliance agent client
+│       ├── grpc_server.rs  # Compliance server implementation
 │       └── config.rs       # Configuration management
-├── nexus-common/           # Shared libraries
+├── gov-compliance-engine/  # Multi-framework compliance engine
 │   └── src/
-│       ├── crypto.rs       # AES-256-GCM + RSA encryption
-│       ├── messages.rs     # Legacy TCP message types
+│       ├── framework.rs    # Framework definitions
+│       ├── control.rs      # Control management
+│       ├── evidence.rs     # Evidence mapping
+│       ├── mapping.rs      # Cross-framework mapping
+│       ├── scoring.rs      # Compliance scoring
+│       └── frameworks/     # Framework implementations
+│           ├── iso27001.rs
+│           ├── soc2.rs
+│           ├── nist_csf.rs
+│           ├── gdpr.rs
+│           ├── hipaa.rs
+│           ├── pci_dss.rs
+│           ├── fedramp.rs
+│           ├── cmmc.rs
+│           └── ... (20+ frameworks)
+├── gov-common/             # Shared libraries
+│   └── src/
+│       ├── crypto.rs       # AES-256-GCM encryption
 │       ├── agent.rs        # Agent data structures
-│       └── tasks.rs        # Task and result types
-├── nexus-agent/            # Enhanced agent
+│       ├── messages.rs     # Message types
+│       └── tasks.rs        # Task definitions
+├── gov-agent/              # Compliance monitoring agent
 │   └── src/
-│       ├── agent.rs        # Core agent with gRPC support
-│       ├── communication.rs # Multi-protocol communication
-│       ├── execution.rs    # Enhanced task execution
-│       ├── fiber_execution.rs # Windows fiber techniques
-│       ├── bof_execution.rs # 🆕 BOF execution integration
-│       ├── evasion.rs      # Anti-analysis techniques
-│       ├── persistence.rs  # Persistence mechanisms
-│       └── system.rs       # System information gathering
-├── nexus-server/           # 🆕 gRPC C2 server
+│       ├── agent.rs        # Core compliance agent
+│       ├── communication.rs # Server communication
+│       ├── compliance_executor.rs # Compliance checks
+│       ├── security_validation.rs # Security validation
+│       ├── persistence_audit.rs # Persistence auditing
+│       └── asset.rs        # Asset management
+├── gov-evidence/           # Evidence management
 │   └── src/
-│       ├── main.rs         # Server main with infrastructure
-│       ├── handlers.rs     # gRPC service handlers
-│       ├── agent_manager.rs # Agent lifecycle management
-│       └── cli.rs          # Administrative interface
-├── config/                 # 🆕 Configuration templates
-│   ├── examples/           # Example configurations
-│   └── production/         # Production templates
-├── docs/                   # 🆕 Comprehensive documentation
-│   ├── infrastructure/     # Infrastructure guides
-│   ├── execution/          # Execution technique guides
-│   ├── configuration/      # Setup and config guides
-│   ├── api/               # API reference documentation
-│   └── operations/        # Operational guides
-└── scripts/               # Enhanced build and deployment
-    ├── build.sh           # Cross-platform builds
-    ├── deploy.sh          # Infrastructure deployment
-    └── setup-cloudflare.sh # Cloudflare initial setup
+│       ├── collector.rs    # Evidence collection
+│       ├── storage.rs      # Evidence storage
+│       ├── types.rs        # Evidence types
+│       └── error.rs        # Error handling
+├── gov-reporting/          # Compliance reporting
+│   └── src/
+│       ├── generator.rs    # Report generation
+│       ├── types.rs        # Report types
+│       └── error.rs        # Error handling
+├── gov-dashboard/          # Compliance dashboard
+│   └── src/
+│       ├── handlers.rs     # Web handlers
+│       ├── compliance_routes.rs # Compliance endpoints
+│       ├── compliance_websocket.rs # Real-time updates
+│       ├── templates.rs    # UI templates
+│       └── models.rs       # Data models
+├── gov-integrations/       # GRC platform integrations
+│   └── src/
+│       ├── connector.rs    # Integration connectors
+│       ├── types.rs        # Integration types
+│       └── error.rs        # Error handling
+├── gov-policy/             # Policy management
+│   └── src/
+│       ├── evaluator.rs    # Policy evaluation
+│       ├── types.rs        # Policy types
+│       └── error.rs        # Error handling
+├── gov-tenancy/            # Multi-tenancy support
+│   └── src/
+│       ├── resolver.rs     # Tenant resolution
+│       ├── types.rs        # Tenancy types
+│       └── error.rs        # Error handling
+├── gov-collectors/         # Evidence collectors
+│   └── src/
+│       ├── ssh_executor.rs # SSH-based collection
+│       ├── powershell_executor.rs # PowerShell collection
+│       ├── wmi_executor.rs # WMI collection
+│       └── api_executor.rs # API-based collection
+├── gov-discovery/          # Asset discovery
+│   └── src/
+│       ├── network_recon.rs # Network discovery
+│       ├── system_profiler.rs # System profiling
+│       ├── browser_fingerprint.rs # Browser detection
+│       └── javascript_engine.rs # JS-based discovery
+├── gov-api/                # REST API
+│   └── src/
+│       ├── routes.rs       # API routes
+│       ├── types.rs        # API types
+│       └── error.rs        # Error handling
+├── config/                 # Configuration templates
+│   ├── frameworks/         # Framework configurations
+│   ├── controls/           # Control definitions
+│   └── policies/           # Policy templates
+├── docs/                   # Comprehensive documentation
+│   ├── frameworks/         # Framework-specific guides
+│   ├── compliance/         # Compliance setup guides
+│   ├── integration/        # GRC platform integration
+│   └── api/               # API reference documentation
+└── scripts/               # Deployment and automation
+    ├── deploy-compliance.sh # Compliance infrastructure deployment
+    └── setup-frameworks.sh # Framework configuration
 ```
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 - Rust 1.70+ with cargo
-- Cloudflare account with API token
-- Domain managed by Cloudflare
-- Basic understanding of TLS/certificates
+- Cloud infrastructure (AWS, Azure, GCP, or on-premises)
+- Domain with DNS management capability
+- Basic understanding of compliance frameworks
 
 ### 1. **Infrastructure Setup**
 
 ```bash
 # Clone the repository
-git clone https://github.com/cmndcntrlcyber/rust-nexus.git
+git clone https://github.com/cmndcntrlcyber/rust-nexus.git -b gov-nexus
 cd rust-nexus
 
 # Create configuration from template
-cp config/examples/nexus-config.toml ./nexus.toml
+cp config/examples/compliance-config.toml ./gov.toml
 
-# Edit configuration with your Cloudflare details
-vim nexus.toml  # Add your API token, zone ID, and domain
+# Edit configuration with your infrastructure details
+vim gov.toml
 ```
 
-### 2. **Build Framework**
+### 2. **Build Platform**
 
 ```bash
 # Build all components
 cargo build --release
 
 # Or build specific components
-cargo build --release -p nexus-infra
-cargo build --release -p nexus-server  
-cargo build --release -p nexus-agent
+cargo build --release -p gov-infra
+cargo build --release -p gov-compliance-engine
+cargo build --release -p gov-agent
+cargo build --release -p gov-dashboard
 ```
 
-### 3. **Deploy Infrastructure**
+### 3. **Deploy Compliance Infrastructure**
 
 ```bash
-# Initialize Cloudflare DNS and certificates
-./target/release/nexus-infra setup --config nexus.toml
+# Initialize infrastructure
+./target/release/gov-infra setup --config gov.toml
 
-# Start the gRPC C2 server
-./target/release/nexus-server --config nexus.toml
+# Start the compliance server
+./target/release/gov-server --config gov.toml
 
-# Deploy agents to targets
-./target/release/nexus-agent --config agent.toml
+# Deploy compliance agents to monitored systems
+./target/release/gov-agent --config agent.toml
 ```
 
 ## 🔧 Configuration
 
-### Example Configuration (`nexus.toml`)
+### Example Configuration (`gov.toml`)
 
 ```toml
-[cloudflare]
-api_token = "your_cloudflare_api_token"
+[compliance]
+enabled_frameworks = [
+    "iso27001",
+    "soc2",
+    "nist_csf",
+    "gdpr",
+    "hipaa",
+    "pci_dss"
+]
+continuous_monitoring = true
+evidence_retention_days = 2555  # 7 years
+audit_trail_enabled = true
+
+[infrastructure]
+cloudflare_api_token = "your_api_token"
 zone_id = "your_zone_id"
-domain = "example.com"
-proxy_enabled = true
-ttl = 300
+domain = "compliance.example.com"
+geo_distribution = ["us-east", "us-west", "eu-central"]
 
-[letsencrypt]
-contact_email = "admin@example.com"
-challenge_type = "Dns01"
-cert_renewal_days = 30
-wildcard_enabled = true
+[agents]
+deployment_mode = "distributed"
+collection_interval = 3600  # 1 hour
+encryption_enabled = true
+max_agents = 10000
 
-[grpc_server]
+[server]
 bind_address = "0.0.0.0"
-port = 443
+port = 8443
 mutual_tls = true
-max_connections = 1000
+max_connections = 5000
+database_url = "postgresql://localhost/compliance"
 
-[domains]
-primary_domains = ["c2.example.com"]
-rotation_interval = 24
-max_subdomains = 10
-
-[security]
-additional_encryption = true
-traffic_obfuscation = true
-anti_analysis = { vm_detection = true, debugger_detection = true }
+[reporting]
+auto_generate = true
+report_formats = ["pdf", "json", "html"]
+recipients = ["compliance@example.com", "audit@example.com"]
+schedule = "0 0 * * 0"  # Weekly on Sunday
 ```
 
-## 🎯 Advanced Usage
+## 🎯 Compliance Operations
 
-### **gRPC Communication**
+### **Evidence Collection**
 
 ```bash
-# Register agent with gRPC server
-./nexus-agent --grpc-endpoint https://api.example.com:443
+# Collect evidence for specific framework
+gov-cli evidence collect --framework iso27001
 
-# Execute commands with arguments
-nexus-cli execute agent-123 "system-info.obj" "go"
+# Generate evidence package for audit
+gov-cli evidence package --framework soc2 --output audit-evidence.zip
 
-# Domain rotation
-nexus-cli domain rotate --immediate
+# Query evidence by control
+gov-cli evidence query --control "AC-2" --framework nist_800_53
 ```
 
-### **BOF Development & Execution**
+### **Compliance Reporting**
+
+```bash
+# Generate compliance status report
+gov-cli report generate --framework all --format pdf
+
+# Check compliance posture
+gov-cli compliance status
+
+# Export compliance data for external GRC platform
+gov-cli export --platform vanta --framework soc2
+```
+
+### **Control Monitoring**
+
+```bash
+# Monitor specific control
+gov-cli control monitor --id "CC6.1" --framework soc2
+
+# Test control effectiveness
+gov-cli control test --id "IA-2" --framework nist_800_53
+
+# List failed controls
+gov-cli control list --status failed
+```
+
+## 🔐 Integration with GRC Platforms
+
+### **Supported Platforms**
+
+| Platform | Integration Type | Website |
+|----------|------------------|---------|
+| **Vanta** | API + Webhook | https://www.vanta.com |
+| **Drata** | API + Evidence Collection | https://drata.com |
+| **OneTrust** | API + Data Sync | https://www.onetrust.com |
+| **ServiceNow GRC** | REST API | https://www.servicenow.com |
+| **Secureframe** | API + Automation | https://secureframe.com |
+
+### **Integration Example**
 
 ```rust
-use nexus_infra::{BOFLoader, BofArgument};
+use gov_nexus::{ComplianceEngine, GRCPlatform};
 
-let loader = BOFLoader::new();
-let bof_data = std::fs::read("custom.obj")?;
-let loaded_bof = loader.load_bof(&bof_data)?;
+// Initialize compliance engine
+let engine = ComplianceEngine::new(config)?;
 
-let args = vec![
-    BofArgument::string("target_system"),
-    BofArgument::int32(1234),
-];
+// Configure Vanta integration
+let vanta = GRCPlatform::vanta(api_key)?;
+engine.add_integration(vanta).await?;
 
-let result = loader.execute_bof(&loaded_bof, "go", &args)?;
+// Sync evidence to Vanta
+engine.sync_evidence("soc2", &vanta).await?;
+
+// Generate compliance report
+let report = engine.generate_report(vec!["soc2", "iso27001"]).await?;
 ```
 
-### **Dynamic Infrastructure**
+## 📊 Compliance Dashboard
 
-```rust
-use nexus_infra::{CloudflareManager, DomainManager};
-
-// Create new C2 subdomain
-let domain = domain_manager.create_new_domain().await?;
-println!("New C2 endpoint: {}", domain.full_domain);
-
-// Automatic certificate provisioning
-let cert = cert_manager.request_certificate(&domain.full_domain, &[]).await?;
-```
-
-## 📊 Monitoring & Operations
-
-### Health Monitoring
+### Real-Time Monitoring
 ```bash
-# Check infrastructure health  
-nexus-cli status --all
+# Launch compliance dashboard
+gov-dashboard --bind 0.0.0.0:8080
 
-# Domain health check
-nexus-cli domains health
-
-# Certificate status
-nexus-cli certificates status
+# Access via browser
+# https://compliance.example.com
 ```
 
-### Operational Commands
-```bash
-# Rotate domains immediately
-nexus-cli domains rotate --immediate
+### Dashboard Features
+- **Framework Status**: Real-time compliance posture for all frameworks
+- **Control Effectiveness**: Visual representation of control testing results
+- **Evidence Coverage**: Evidence collection status by control
+- **Risk Heatmap**: AI-powered risk identification and prioritization
+- **Audit Timeline**: Upcoming audits and audit preparation status
+- **Agent Health**: Compliance agent deployment and health monitoring
 
-# Update all domains to new IP
-nexus-cli domains update-ip 203.0.113.10
+## 📚 Documentation
 
-# Renew certificates
-nexus-cli certificates renew --all
-```
+- **[Framework Guides](docs/frameworks/)** - Detailed guides for each compliance framework
+- **[Compliance Setup](docs/compliance/setup.md)** - Complete compliance infrastructure setup
+- **[GRC Integration](docs/integration/grc-platforms.md)** - Integration with GRC platforms
+- **[Evidence Management](docs/compliance/evidence-management.md)** - Evidence collection and storage
+- **[Audit Preparation](docs/compliance/audit-preparation.md)** - Audit readiness procedures
+- **[API Reference](docs/api/compliance-api.md)** - Complete API documentation
 
-## 🔐 Security Features
+## 🎯 Use Cases
 
-### **Certificate Management**
-- **Automated Provisioning**: Let's Encrypt DNS-01 challenges via Cloudflare
-- **Origin Certificates**: Cloudflare origin certs for backend security
-- **Certificate Pinning**: Multi-layer validation and pinning
-- **Auto-Renewal**: Certificates renewed 30 days before expiration
+### **Enterprise Compliance**
+- **Multi-Framework Compliance**: Maintain compliance across 35+ frameworks simultaneously
+- **Continuous Monitoring**: Real-time compliance posture tracking
+- **Evidence Automation**: Automated evidence collection reducing manual effort by 80%
+- **Audit Readiness**: Continuous audit preparation with evidence repositories
 
-### **Domain Fronting**
-- **CDN Integration**: Traffic routed through Cloudflare's network
-- **Host Header Manipulation**: Proper domain fronting implementation
-- **Geographic Distribution**: Global edge location utilization
-- **Traffic Legitimacy**: Indistinguishable from normal CDN traffic
+### **Regulated Industries**
+- **Healthcare (HIPAA)**: Automated HIPAA compliance monitoring and reporting
+- **Finance (PCI DSS)**: Continuous PCI DSS compliance for payment processing
+- **Government (FedRAMP)**: Federal cloud service compliance automation
+- **Defense (CMMC)**: DoD contractor cybersecurity maturity tracking
 
-### **Anti-Analysis** 
-- **Infrastructure Level**: Domain rotation defeats long-term analysis
-- **Certificate Level**: Valid TLS certificates prevent SSL inspection
-- **Application Level**: Enhanced VM/debugger/sandbox detection
-- **Network Level**: Traffic patterns match legitimate services
+### **Security Operations**
+- **Risk Management**: AI-powered risk identification and prioritization
+- **Vendor Risk**: Third-party compliance monitoring and assessment
+- **Policy Enforcement**: Automated policy compliance validation
+- **Security Controls**: Continuous control testing and effectiveness measurement
 
 ## 🧪 Testing
 
@@ -290,145 +418,92 @@ nexus-cli certificates renew --all
 # Run all tests
 cargo test
 
-# Test infrastructure components
-cargo test -p nexus-infra
+# Test compliance engine
+cargo test -p gov-compliance-engine
 
-# Test BOF loading
-cargo test -p nexus-infra bof_loader
+# Test evidence collection
+cargo test -p gov-evidence
 
 # Integration tests
-./scripts/test-integration.sh
+./scripts/test-compliance.sh
 ```
-
-## 📚 Documentation
-
-- **[Infrastructure Setup](docs/infrastructure/README.md)** - Complete infrastructure guide
-- **[Cloudflare Integration](docs/infrastructure/cloudflare-setup.md)** - DNS API setup
-- **[Certificate Management](docs/infrastructure/certificates.md)** - TLS and Let's Encrypt
-- **[BOF Development](docs/execution/bof-guide.md)** - BOF creation and execution
-- **[Production Deployment](docs/configuration/production-setup.md)** - Enterprise deployment
-- **[API Reference](docs/api/grpc-reference.md)** - Complete API documentation
-
-## 🎯 Use Cases
-
-### **Red Team Operations**
-- **Stealth C2**: Domain fronting defeats network monitoring
-- **Infrastructure Agility**: Rapid domain rotation for persistence
-- **Advanced Payloads**: BOF support for sophisticated techniques
-- **Enterprise Evasion**: Multi-layer anti-analysis capabilities
-
-### **Security Research**
-- **Technique Development**: Framework for researching new methods
-- **Tool Integration**: BOF ecosystem compatibility
-- **Protocol Research**: gRPC-based C2 communication studies
-- **Infrastructure Automation**: Research operational automation
-
-### **Training & Education**
-- **C2 Architecture**: Modern framework design patterns
-- **Infrastructure Automation**: Cloud-native deployment techniques
-- **Certificate Management**: Automated PKI operations
-- **Advanced Execution**: Windows internals and injection methods
-
-## 🛠️ Development
-
-### Building from Source
-```bash
-# Development build with debug symbols
-cargo build
-
-# Optimized release build
-cargo build --release --all
-
-# Cross-compilation for Windows
-cargo build --release --target x86_64-pc-windows-gnu
-
-# Build with specific features
-cargo build --features "enterprise,monitoring"
-```
-
-### Contributing
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/enhancement`)
-3. Run tests (`cargo test`)
-4. Submit pull request with comprehensive description
 
 ## 🔍 Troubleshooting
 
 ### Common Issues
 
-**❌ Cloudflare API Connection Failed**
+**❌ Framework Configuration Failed**
 ```bash
-# Verify API token permissions
-curl -H "Authorization: Bearer YOUR_TOKEN" \
-     "https://api.cloudflare.com/client/v4/user/tokens/verify"
+# Verify framework configuration
+gov-cli framework verify --name iso27001
 
-# Check zone access
-nexus-cli cloudflare verify --zone-id YOUR_ZONE_ID
+# Reload framework definitions
+gov-cli framework reload --all
 ```
 
-**❌ Certificate Provisioning Failed**
+**❌ Evidence Collection Failed**
 ```bash
-# Check DNS propagation
-dig TXT _acme-challenge.your-domain.com
+# Check agent connectivity
+gov-cli agent health --all
 
-# Manual certificate request
-nexus-cli certificates request your-domain.com --force
+# Restart evidence collection
+gov-cli evidence collect --force --framework all
 ```
 
-**❌ gRPC Connection Issues**
+**❌ Report Generation Failed**
 ```bash
-# Test TLS connection
-openssl s_client -connect your-domain.com:443 -servername your-domain.com
+# Verify evidence completeness
+gov-cli evidence verify --framework soc2
 
-# Debug gRPC communication
-RUST_LOG=debug ./target/release/nexus-agent --config agent.toml
+# Generate with debug logging
+RUST_LOG=debug gov-cli report generate --framework soc2
 ```
-
-### Performance Tuning
-- **Connection Pools**: Adjust `max_connections` for load
-- **Domain Health**: Configure `health_monitoring` intervals  
-- **Certificate Cache**: Tune renewal thresholds
-- **Task Queues**: Optimize task distribution patterns
 
 ## 📈 Performance & Scale
 
 ### **Benchmarks**
-- **Agent Connections**: 1000+ concurrent agents per server
-- **Domain Rotation**: Sub-second DNS propagation via Cloudflare
-- **Certificate Provisioning**: <60 seconds for new certificates
-- **BOF Execution**: Minimal overhead compared to shellcode injection
+- **Agent Capacity**: 10,000+ compliance agents per server
+- **Evidence Processing**: 100,000+ evidence items per hour
+- **Framework Coverage**: 35+ frameworks with cross-mapping
+- **Report Generation**: <60 seconds for comprehensive compliance reports
 
 ### **Scalability Features**
 - **Horizontal Scaling**: Multiple server instances with load balancing
-- **Geographic Distribution**: Regional server deployment
-- **Connection Pooling**: Efficient resource utilization
-- **Lazy Initialization**: On-demand resource allocation
+- **Geographic Distribution**: Regional compliance monitoring
+- **Evidence Compression**: Efficient storage with deduplication
+- **Incremental Collection**: Only collect changed evidence
 
 ## 🎖️ Enterprise Features
 
-### **Compliance & Monitoring**
-- **Audit Logging**: Comprehensive operation logging
-- **Certificate Lifecycle**: Automated compliance tracking  
-- **Infrastructure Changes**: Detailed change management
-- **Agent Activity**: Real-time monitoring dashboards
+### **Compliance Automation**
+- **Control Testing**: Automated control effectiveness testing
+- **Evidence Mapping**: Cross-framework evidence mapping
+- **Policy Validation**: Automated policy compliance checking
+- **Risk Scoring**: AI-powered compliance risk assessment
 
-### **High Availability**
-- **Multi-Region**: Deploy across multiple cloud regions
-- **Failover**: Automatic failover between domains/servers
-- **Health Monitoring**: Continuous infrastructure health checks
-- **Disaster Recovery**: Automated backup and restore procedures
+### **Audit Support**
+- **Evidence Packages**: One-click evidence package generation
+- **Audit Trails**: Comprehensive audit logging
+- **Historical Reports**: Point-in-time compliance reporting
+- **Auditor Portals**: Secure auditor access with limited views
 
-## ⚠️ Security Notice
+### **Integration Ecosystem**
+- **SIEM Integration**: Send compliance events to SIEM platforms
+- **Ticketing Systems**: Create remediation tickets automatically
+- **Communication**: Slack/Teams notifications for compliance issues
+- **CI/CD Pipeline**: Integrate compliance checks into DevOps workflows
 
-This framework is designed for **authorized security testing and research purposes only**. Users must:
+## ⚠️ Security & Privacy Notice
 
-- Ensure compliance with applicable laws and regulations
-- Obtain proper authorization before deployment
-- Use responsibly and ethically
-- Respect system and network boundaries
-- Follow responsible disclosure practices
+This platform handles sensitive compliance and audit data. Users must:
 
-**The authors are not responsible for misuse of this software.**
+- Ensure proper access controls and authentication
+- Encrypt all compliance data at rest and in transit
+- Follow data retention and privacy regulations
+- Conduct regular security assessments
+- Maintain audit logs for all compliance activities
+
+**Data privacy and security are paramount in compliance operations.**
 
 ## 📄 License
 
@@ -437,22 +512,21 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🙏 Acknowledgments
 
 - **Rust Community**: Exceptional tooling and ecosystem
-- **Cloudflare**: Robust API and global infrastructure
-- **Let's Encrypt**: Free, automated certificate authority  
-- **Sliver Framework**: Inspiration for gRPC architecture
-- **BOF Community**: Windows internals research and techniques
-- **Maldev Academy**: Fiber execution and evasion techniques
+- **Compliance Frameworks**: ISACA, NIST, ISO, AICPA, and regulatory bodies
+- **GRC Platforms**: Vanta, Drata, OneTrust, ServiceNow, and Secureframe
+- **Security Standards**: CIS, SANS, and OWASP communities
+- **Open Source**: Compliance automation and security tool communities
 
 ---
 
 ## 🚀 Getting Started
 
-Ready to deploy? Check out our [Infrastructure Setup Guide](docs/infrastructure/README.md) for step-by-step instructions.
+Ready to automate compliance? Check out our [Compliance Setup Guide](docs/compliance/setup.md) for step-by-step instructions.
 
-For BOF development, see the [BOF Development Guide](docs/execution/bof-guide.md).
+For framework-specific guidance, see the [Framework Guides](docs/frameworks/).
 
-For production deployments, review the [Enterprise Setup Guide](docs/configuration/production-setup.md).
+For GRC platform integration, review the [Integration Guide](docs/integration/grc-platforms.md).
 
 ---
 
-**Built with ❤️ in Rust | Enterprise-Ready | Research-Focused | Security-First**
+**Built with ❤️ in Rust | Enterprise-Ready | Compliance-Focused | Security-First**
