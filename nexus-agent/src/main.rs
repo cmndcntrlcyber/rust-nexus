@@ -7,6 +7,7 @@ use tokio::time::sleep;
 mod agent;
 mod communication;
 mod execution;
+mod registry;
 mod system;
 mod persistence;
 mod evasion;

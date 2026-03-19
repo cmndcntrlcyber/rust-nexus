@@ -7,7 +7,9 @@ members = [
     "nexus-webui",
     "nexus-recon",
     "nexus-hybrid-exec",
-    "nexus-web-comms"
+    "nexus-web-comms",
+    "nexus-t1059-command-scripting",
+    "nexus-t1547-boot-logon-autostart"
 ]
 
 [workspace.dependencies]
@@ -27,6 +29,7 @@ windows-sys = { version = "0.52", features = [
     "Win32_Security"
 ] }
 thiserror = "1.0"
+async-trait = "0.1"
 hostname = "0.3"
 local-ip-address = "0.5"
 

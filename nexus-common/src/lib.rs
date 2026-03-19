@@ -8,11 +8,13 @@ pub mod crypto;
 pub mod messages;
 pub mod agent;
 pub mod tasks;
+pub mod technique;
 
 pub use crypto::*;
 pub use messages::*;
 pub use agent::*;
 pub use tasks::*;
+pub use technique::*;
 
 #[derive(Error, Debug)]
 pub enum NexusError {
@@ -32,6 +34,8 @@ pub enum NexusError {
     TaskExecutionError(String),
     #[error("Configuration error: {0}")]
     ConfigurationError(String),
+    #[error("Unknown technique: {0}")]
+    UnknownTechnique(String),
 }
 
 pub type Result<T> = std::result::Result<T, NexusError>;

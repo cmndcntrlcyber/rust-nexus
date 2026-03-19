@@ -6,6 +6,11 @@ edition = "2021"
 [dependencies]
 nexus-common = { path = "../nexus-common" }
 nexus-infra = { path = "../nexus-infra" }
+async-trait = { workspace = true }
+
+# ATT&CK technique crates (optional, feature-gated)
+nexus-t1059-command-scripting = { path = "../nexus-t1059-command-scripting", optional = true }
+nexus-t1547-boot-logon-autostart = { path = "../nexus-t1547-boot-logon-autostart", optional = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -50,3 +55,12 @@ http-fallback = []
 anti-debug = []
 anti-vm = []
 process-injection = []
+
+# ATT&CK technique crates
+t1059 = ["dep:nexus-t1059-command-scripting"]
+t1547 = ["dep:nexus-t1547-boot-logon-autostart"]
+
+# Named engagement profiles
+persistence-kit  = ["t1547"]
+red-team-windows = ["t1059", "t1547"]
+full             = ["t1059", "t1547"]

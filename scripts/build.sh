@@ -33,10 +33,18 @@ cd nexus-common
 cargo build --release
 cd ..
 
+# ATT&CK technique features (pass via NEXUS_FEATURES env var)
+FEATURES="${NEXUS_FEATURES:-}"
+FEATURE_FLAG=""
+if [ -n "$FEATURES" ]; then
+    FEATURE_FLAG="--features $FEATURES"
+    echo -e "${BLUE}ATT&CK techniques enabled: ${FEATURES}${NC}"
+fi
+
 # Build agent for current platform
 echo -e "${BLUE}🔧 Building nexus-agent for current platform...${NC}"
 cd nexus-agent
-cargo build --release
+cargo build --release $FEATURE_FLAG
 cp target/release/nexus-agent* ../target/builds/ 2>/dev/null || true
 cd ..
 
@@ -66,7 +74,7 @@ for TARGET in "${TARGETS[@]}"; do
     echo -e "${BLUE}🔧 Building nexus-agent for ${TARGET}...${NC}"
     cd nexus-agent
     
-    if cargo build --release --target "$TARGET" 2>/dev/null; then
+    if cargo build --release --target "$TARGET" $FEATURE_FLAG 2>/dev/null; then
         echo -e "${GREEN}✅ Successfully built for ${TARGET}${NC}"
         
         # Copy binaries to builds directory
