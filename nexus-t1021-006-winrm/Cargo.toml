@@ -1,0 +1,13 @@
+[package]
+name = "nexus-t1021-006-winrm"
+version = "0.1.0"
+edition = "2021"
+description = "MITRE ATT&CK T1021.006 - Remote Services: Windows Remote Management"
+
+[dependencies]
+nexus-common = { path = "../nexus-common" }
+async-trait = { workspace = true }
+log = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }

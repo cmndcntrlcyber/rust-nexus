@@ -9,7 +9,8 @@ members = [
     "nexus-hybrid-exec",
     "nexus-web-comms",
     "nexus-t1059-command-scripting",
-    "nexus-t1547-boot-logon-autostart"
+    "nexus-t1547-boot-logon-autostart",
+    "nexus-t1021-006-winrm"
 ]
 
 [workspace.dependencies]

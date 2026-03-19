@@ -40,6 +40,16 @@ impl TechniqueRegistry {
             }
         }
 
+        #[cfg(feature = "t1021-006")]
+        {
+            for tech in nexus_t1021_006_winrm::register() {
+                let task_types = tech.task_types();
+                if let Some(primary) = task_types.into_iter().next() {
+                    techniques.insert(primary, tech);
+                }
+            }
+        }
+
         // Future technique crates register here:
         // #[cfg(feature = "t1055")]
         // for tech in nexus_t1055_process_injection::register() { ... }
