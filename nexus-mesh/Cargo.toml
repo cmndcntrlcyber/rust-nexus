@@ -1,0 +1,14 @@
+[package]
+name = "nexus-mesh"
+version = "0.1.0"
+edition = "2021"
+description = "libp2p-based peer-to-peer mesh layer for rust-nexus (v2.9.6)"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+
+[features]
+default = []
