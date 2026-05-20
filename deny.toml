@@ -1,0 +1,53 @@
+# cargo-deny v1.3 config (Phase 1.3.8).
+#
+# Primary purpose: catch AGPL license regressions (D-2.1.2-A "No AGPL
+# code paths" — rust-nexus replicates GhostWire primitives rather than
+# embedding the AGPL-licensed crate).
+#
+# Run locally via `cargo deny check`; CI wires this into
+# .github/workflows/security-audit.yml.
+
+[graph]
+all-features = true
+
+[licenses]
+allow = [
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "MIT",
+    "MPL-2.0",
+    "Unicode-DFS-2016",
+    "Unicode-3.0",
+    "Zlib",
+    "OpenSSL",
+    "CC0-1.0",
+]
+# Hard-deny: AGPL paths break D-2.1.2-A. The exception list below is
+# strictly for unambiguously non-code-bearing crates we vetted.
+exceptions = []
+confidence-threshold = 0.93
+
+[[licenses.clarify]]
+# Some crates ship without explicit license text but have it in Cargo.toml.
+crate = "ring"
+expression = "MIT AND ISC AND OpenSSL"
+license-files = []
+
+[bans]
+multiple-versions = "warn"
+wildcards = "warn"
+deny = [
+    # Add specific dep bans here if needed.
+]
+
+[advisories]
+yanked = "warn"
+# vulnerability and unmaintained are surfaced by `cargo audit` (separate
+# CI job); cargo-deny's advisories DB is the same source.
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "warn"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

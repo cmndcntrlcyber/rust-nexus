@@ -1,0 +1,62 @@
+# v1.3 docker-compose for local dev (Phase 1.3.9 — scaffold).
+#
+# Brings up nexus-server + one nexus-agent + a Prometheus scrape
+# pod. The operator runs the Tauri console outside the compose
+# stack (it needs the host display).
+#
+# Usage:
+#   ./scripts/gen-certs.sh   # populate ./certs/ first
+#   docker compose up
+
+services:
+  nexus-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: nexus-server:dev
+    ports:
+      - "50052:50052"
+      - "9100:9100"
+    environment:
+      NEXUS_CA_CERT: /etc/nexus/ca.crt.pem
+      NEXUS_SERVER_CERT: /etc/nexus/server.crt.pem
+      NEXUS_SERVER_KEY: /etc/nexus/server.key.pem
+    volumes:
+      - ./certs:/etc/nexus:ro
+      - nexus-server-data:/var/lib/nexus
+    restart: unless-stopped
+
+  nexus-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+    image: nexus-agent:dev
+    command:
+      - --c2
+      - https://nexus-server:50052
+      - --transport
+      - grpc
+    environment:
+      NEXUS_CA_CERT: /etc/nexus-agent/ca.crt.pem
+      NEXUS_CLIENT_CERT: /etc/nexus-agent/client.crt.pem
+      NEXUS_CLIENT_KEY: /etc/nexus-agent/client.key.pem
+    volumes:
+      - ./certs:/etc/nexus-agent:ro
+      - nexus-agent-data:/var/lib/nexus-agent
+    depends_on:
+      - nexus-server
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - nexus-server
+    restart: unless-stopped
+
+volumes:
+  nexus-server-data:
+  nexus-agent-data:

@@ -8,10 +8,18 @@ members = [
     "nexus-recon",
     "nexus-hybrid-exec",
     "nexus-web-comms",
+    "nexus-mesh",
+    "nexus-a2a",
+    "nexus-console/src-tauri",
+    "integration-tests",
     "nexus-t1059-command-scripting",
     "nexus-t1547-boot-logon-autostart",
     "nexus-t1021-006-winrm"
 ]
+# nexus-console/ui targets wasm32-unknown-unknown via Trunk; excluding it
+# from the workspace prevents the native-target workspace operations from
+# tripping over wasm-only deps (Leptos CSR mode).
+exclude = ["nexus-console/ui"]
 
 [workspace.dependencies]
 serde = { version = "1.0", features = ["derive"] }
@@ -72,6 +80,56 @@ chrono = { version = "0.4", features = ["serde"] }
 # Logging
 log = "0.4"
 env_logger = "0.10"
+
+# ─── v1.1 integration additions (simple-mesh/v1.0 layer) ───
+# These deps support the additive A2A + libp2p mesh + Tauri console layer
+# (per ROADMAP D-V1.1-A "additive integration"). Existing deps above stay.
+
+# Identity + sealed envelope primitives
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+x25519-dalek = { version = "2", features = ["static_secrets"] }
+blake3 = "1"
+hkdf = "0.12"
+sha2 = "0.10"
+serde-big-array = "0.5"
+bincode = "1"
+
+# Async stream / utility
+tokio-stream = "0.1"
+tokio-util = { version = "0.7", features = ["codec"] }
+futures = "0.3"
+anyhow = "1"
+
+# PTY (used by the new nexus-agent shell module)
+portable-pty = "0.8"
+
+# libp2p mesh — pinned per the v1.0 plan
+libp2p = { version = "0.53", features = ["tcp", "noise", "yamux", "tokio", "macros", "identify", "gossipsub", "ping"] }
+
+# tracing (used by all v1.1 code)
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
+
+# Axum (for /healthz)
+axum = "0.8"
+
+# A2A gRPC uses Tonic 0.14 + tonic-prost; declared directly in nexus-a2a's
+# Cargo.toml (Cargo allows mixed versions in a workspace — nexus-infra stays
+# on the workspace-pinned Tonic 0.10).
+tonic-prost = "0.14"
+tonic-prost-build = "0.14"
+protoc-bin-vendored = "3"
+
+# WASM / Tauri (frontend + console backend)
+tauri = { version = "2", features = [] }
+tauri-build = { version = "2", features = [] }
+leptos = { version = "0.7", features = ["csr"] }
+
+# Internal cross-crate paths
+nexus-common = { path = "nexus-common" }
+nexus-a2a = { path = "nexus-a2a" }
+nexus-mesh = { path = "nexus-mesh" }
+nexus-web-comms = { path = "nexus-web-comms" }
 
 [profile.release]
 opt-level = 3

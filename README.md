@@ -1,458 +1,215 @@
-# Rust-Nexus: Enterprise Network Management Framework
+# rust-nexus
 
-An advanced network management framework built in Rust featuring enterprise-grade infrastructure automation, dynamic domain management, automated certificate provisioning, gRPC communication, and cross-platform execution capabilities.
+A Rust workspace for an authorized-engagement C2 / agent framework.
+Combines a libp2p-based mesh, an A2A gRPC control plane with mTLS +
+signed agent cards + a capability matrix + a hash-chained audit log,
+cross-platform agents with PTY-backed interactive shells, and a
+Tauri 2 + Leptos desktop operator console.
 
-## 🚀 Overview
+> **Use only with explicit authorization.** rust-nexus is intended for
+> authorized security testing, red-team engagements, and security
+> research. See the [Security Notice](#security-notice) below.
 
-Rust-Nexus combines distributed system capabilities with cutting-edge infrastructure automation to create a sophisticated, enterprise-ready framework for network management and automation.
+---
 
-### Core Framework Components
+## Status
 
-1. **🏗️ Infrastructure Management (`nexus-infra`)**: Automated DNS, certificates, and domain rotation
-2. **🔧 Agent Framework (`nexus-agent`)**: Cross-platform execution with advanced techniques  
-3. **🖥️ Management Server (`nexus-server`)**: gRPC-based server with node management
-4. **📚 Common Library (`nexus-common`)**: Shared utilities and cryptographic functions
+**v1.4 — code complete.** 222 / 222 tests pass; `./scripts/demo.sh`
+PASSes; workspace builds clean with `-D warnings` (all eleven v1.4
+phases closed, commit-prep done 2026-05-20).
 
-## ✨ Key Features
+For the per-phase rollup and what's deferred to v1.4.x / v1.5, see
+[`STATUS.md`](STATUS.md) and [`ROADMAP.md`](ROADMAP.md).
 
-### 🌐 **Enterprise Infrastructure**
-- ✅ **Cloudflare DNS Integration**: Automated subdomain creation and management
-- ✅ **Let's Encrypt Automation**: DNS-01 challenge certificate provisioning
-- ✅ **Origin Certificates**: Cloudflare origin certificate support with pinning
-- ✅ **Domain Fronting**: Traffic disguised as legitimate CDN requests
-- ✅ **Dynamic Domain Rotation**: Automated infrastructure changes for OPSEC
+---
 
-### 🔒 **Advanced Communication**
-- ✅ **gRPC over mTLS**: Modern protocol with bidirectional streaming
-- ✅ **Certificate Pinning**: Enhanced security with origin certificate validation
-- ✅ **Connection Resilience**: Automatic failover and retry mechanisms
-- ✅ **Traffic Obfuscation**: Legitimate-looking HTTPS patterns
-- ✅ **Geographic Distribution**: Leverage Cloudflare's global network
+## Quickstart
 
-### ⚡ **Enhanced Execution**
-- ✅ **BOF/COFF Support**: Windows Beacon Object File execution
-- ✅ **Fiber Techniques**: Direct fiber execution and process hollowing
-- ✅ **PE/COFF Parsing**: Complete COFF loader with API resolution
-- ✅ **Memory Management**: Safe allocation with proper cleanup
-- ✅ **Early Bird Injection**: Pre-process initialization techniques
-
-### 🛡️ **Security & Stealth**
-- ✅ **Anti-Analysis**: VM, debugger, and sandbox detection
-- ✅ **Timing Evasion**: Jitter and randomization techniques  
-- ✅ **Certificate Validation**: Multi-layer TLS security
-- ✅ **Operational Security**: Automated infrastructure rotation
-- ✅ **Traffic Legitimacy**: CDN-fronted communications
-
-## 🏗️ Enhanced Architecture
-
-```
-┌─────────────────────────┐    ┌─────────────────────────┐    ┌─────────────────────────┐
-│    Infrastructure       │    │     gRPC/TLS Comms     │    │       Agents            │
-│                         │    │                         │    │                         │
-├─────────────────────────┤    ├─────────────────────────┤    ├─────────────────────────┤
-│ • Cloudflare DNS API    │◄──►│ • Mutual TLS            │◄──►│ • BOF/COFF Execution   │
-│ • Let's Encrypt ACME    │    │ • Domain Fronting       │    │ • Fiber Techniques      │
-│ • Certificate Management│    │ • Certificate Pinning   │    │ • Advanced Injection    │
-│ • Domain Rotation       │    │ • Connection Pooling    │    │ • Anti-Analysis         │
-│ • Health Monitoring     │    │ • Streaming Tasks       │    │ • Persistence           │
-└─────────────────────────┘    └─────────────────────────┘    └─────────────────────────┘
-```
-
-## 📁 Project Structure
-
-```
-rust-nexus/
-├── nexus-infra/            # 🆕 Infrastructure management
-│   ├── proto/
-│   │   └── nexus.proto     # gRPC service definitions
-│   └── src/
-│       ├── cloudflare.rs   # Cloudflare DNS API client
-│       ├── letsencrypt.rs  # Let's Encrypt ACME automation
-│       ├── cert_manager.rs # Certificate and TLS management
-│       ├── domain_manager.rs # Domain rotation and health monitoring
-│       ├── grpc_client.rs  # Enhanced gRPC client
-│       ├── grpc_server.rs  # gRPC server implementation
-│       ├── bof_loader.rs   # BOF/COFF execution engine
-│       └── config.rs       # Configuration management
-├── nexus-common/           # Shared libraries
-│   └── src/
-│       ├── crypto.rs       # AES-256-GCM + RSA encryption
-│       ├── messages.rs     # Legacy TCP message types
-│       ├── agent.rs        # Agent data structures
-│       └── tasks.rs        # Task and result types
-├── nexus-agent/            # Enhanced agent
-│   └── src/
-│       ├── agent.rs        # Core agent with gRPC support
-│       ├── communication.rs # Multi-protocol communication
-│       ├── execution.rs    # Enhanced task execution
-│       ├── fiber_execution.rs # Windows fiber techniques
-│       ├── bof_execution.rs # 🆕 BOF execution integration
-│       ├── evasion.rs      # Anti-analysis techniques
-│       ├── persistence.rs  # Persistence mechanisms
-│       └── system.rs       # System information gathering
-├── nexus-server/           # 🆕 gRPC C2 server
-│   └── src/
-│       ├── main.rs         # Server main with infrastructure
-│       ├── handlers.rs     # gRPC service handlers
-│       ├── agent_manager.rs # Agent lifecycle management
-│       └── cli.rs          # Administrative interface
-├── config/                 # 🆕 Configuration templates
-│   ├── examples/           # Example configurations
-│   └── production/         # Production templates
-├── docs/                   # 🆕 Comprehensive documentation
-│   ├── infrastructure/     # Infrastructure guides
-│   ├── execution/          # Execution technique guides
-│   ├── configuration/      # Setup and config guides
-│   ├── api/               # API reference documentation
-│   └── operations/        # Operational guides
-└── scripts/               # Enhanced build and deployment
-    ├── build.sh           # Cross-platform builds
-    ├── deploy.sh          # Infrastructure deployment
-    └── setup-cloudflare.sh # Cloudflare initial setup
-```
-
-## 🚀 Quick Start
-
-### Prerequisites
-- Rust 1.70+ with cargo
-- Cloudflare account with API token
-- Domain managed by Cloudflare
-- Basic understanding of TLS/certificates
-
-### 1. **Infrastructure Setup**
+Local single-box demo in ~15 minutes:
 
 ```bash
-# Clone the repository
-git clone https://github.com/cmndcntrlcyber/rust-nexus.git
+git clone <repo>
 cd rust-nexus
-
-# Create configuration from template
-cp config/examples/nexus-config.toml ./nexus.toml
-
-# Edit configuration with your Cloudflare details
-vim nexus.toml  # Add your API token, zone ID, and domain
+cargo test --workspace --exclude nexus-console   # 170/170 pass
+./scripts/gen-certs.sh                            # dev mTLS certs
+./scripts/demo.sh                                 # headless PASS gate
 ```
 
-### 2. **Build Framework**
+For the full end-to-end walkthrough (server + agent + Tauri console
+with interactive shell), see [`docs/deployment/local-dev.md`](docs/deployment/local-dev.md).
+
+For production rollouts, see
+[`docs/deployment/README.md`](docs/deployment/README.md).
+
+---
+
+## Workspace map
+
+14 crates plus a Tauri UI sub-crate. v1.2 additions in **bold**.
+
+| Crate | Role |
+|---|---|
+| `nexus-common` | NodeIdentity (Ed25519 + X25519), sealed envelopes, OS detection, shared error / message types |
+| `nexus-a2a` | **v1.2 A2A gRPC plane:** server / client, signed AgentCards, mTLS env-var loader, capability matrix, hash-chained audit log, rate limit + 4 MiB message cap, agent-registration handler |
+| `nexus-mesh` | libp2p mesh transport (TCP + Noise + Yamux + Gossipsub + Identify + Ping); replicates GhostWire primitives from MIT/Apache libp2p crates (no AGPL paths) |
+| `nexus-infra` | C2 server runtime — OperatorRouter, AgentRegistrar, SessionRegistry, RegistryLister, mTLS plumbing. Hosts the A2A service (port 50052) alongside the legacy NexusC2 service (port 50051) |
+| `nexus-agent` | Cross-platform agent — PTY shell (`portable-pty`), transports (gRPC / mesh / legacy), **`a2a_client::connect_and_serve` agent-side bidi** |
+| `nexus-web-comms` | `Transport` trait abstraction + legacy HTTP / WebSocket transports |
+| **`nexus-console/src-tauri`** | **v1.2 Tauri 2 operator console** (Rust backend) — connect dialog, agent list, shell session management |
+| **`nexus-console/ui`** | **v1.2 Leptos + WASM frontend** with xterm.js terminal (excluded from the workspace; built by Trunk) |
+| `nexus-webui` | Optional web UI (overlay-era) |
+| `nexus-recon` | Reconnaissance helpers |
+| `nexus-hybrid-exec` | Hybrid SSH / WMI / API / PowerShell executor (feature-gated, mostly stubbed in v1.2.1) |
+| `nexus-t1059-command-scripting` | ATT&CK T1059 (Command and Scripting Interpreter) |
+| `nexus-t1547-boot-logon-autostart` | ATT&CK T1547 (Boot or Logon Autostart Execution) |
+| `nexus-t1021-006-winrm` | ATT&CK T1021.006 (Remote Services: Windows Remote Management) |
+| **`integration-tests`** | **v1.1 + v1.2 cross-crate integration tests** (A2A loopback, mTLS round-trip, agent-side bidi PTY round-trip) |
+
+---
+
+## Architecture
+
+```
++--------------------+        operator-A2A         +--------------------+
+|  nexus-console     | <─── mTLS + signed card ──► |  nexus-infra       |
+|  Tauri + Leptos    |   :50052 (Tonic 0.14)       |  C2 server         |
+|  + xterm.js        |                             |  (NodeIdentity,    |
++--------------------+                             |   AgentChannels,   |
+                                                   |   capability       |
++--------------------+      v1.2 agent-mode        |   matrix, audit    |
+|  nexus-agent       | <─ mTLS + AgentRegister ─►  |   sink, rate       |
+|  (PTY shell,       |    :50052 first frame       |   limiter)         |
+|   OS-aware shell   |    + per-session task_id    |                    |
+|   select)          |                             +────┬───────────────+
++--------------------+                                  │
+                                                        │ (Tonic 0.10 lane
++--------------------+     legacy task-pull             │  unchanged)
+|  overlay agents    | <────────────────────────────────┘
+|  (Cloudflare DNS,  |   :50051
+|   BOF, fiber...)   |
++--------------------+
+```
+
+Two gRPC services run on the same `nexus-infra` server process but on
+separate ports: A2A on 50052 (v1.2 mTLS + signed cards + capability
+gating + audit log + agent-mode bidi), and the legacy NexusC2 on 50051
+(Tonic 0.10, untouched). Overlay agents from the v1.0 era keep
+working via the legacy lane; v1.2 agents register on the A2A lane and
+support interactive shells.
+
+For the wire reference see
+[`docs/v1.0/shell-session-protocol.md`](docs/v1.0/shell-session-protocol.md);
+for the v1.2 API surface see
+[`docs/v1.2/migration-from-v1.1.md`](docs/v1.2/migration-from-v1.1.md).
+
+---
+
+## v1.2 features
+
+- **mTLS** via reserved env vars: `NEXUS_CA_CERT`, `NEXUS_SERVER_CERT`,
+  `NEXUS_SERVER_KEY`, `NEXUS_CLIENT_CERT`, `NEXUS_CLIENT_KEY` —
+  see [`nexus-a2a/src/tls.rs`](nexus-a2a/src/tls.rs).
+- **Ed25519-signed AgentCards** with canonical-JSON encoding — see
+  [`nexus-a2a/src/cards.rs`](nexus-a2a/src/cards.rs).
+- **Per-agent capability matrix** (HashMap-backed JSON; nalgebra
+  MatrixRouter queued for v1.3) — see
+  [`nexus-a2a/src/capabilities.rs`](nexus-a2a/src/capabilities.rs)
+  and [`config/capabilities.example.json`](config/capabilities.example.json).
+- **Hash-chained audit log** (`BLAKE3(prev || record)`) with an
+  `audit_verify` CLI — see
+  [`nexus-a2a/src/audit.rs`](nexus-a2a/src/audit.rs) and
+  [`nexus-a2a/src/bin/audit_verify.rs`](nexus-a2a/src/bin/audit_verify.rs).
+- **Token-bucket rate limit** + **4 MiB message size cap** — see
+  [`nexus-a2a/src/interceptors.rs`](nexus-a2a/src/interceptors.rs).
+- **Agent-side A2A bidi** — operator → C2 → agent → PTY → response —
+  see [`nexus-agent/src/a2a_client.rs`](nexus-agent/src/a2a_client.rs).
+- **Tauri 2 + Leptos operator console** — see
+  [`nexus-console/`](nexus-console/) and
+  [`docs/deployment/operator-console.md`](docs/deployment/operator-console.md).
+- **CI codesigning** for macOS + Windows Tauri bundles — see
+  [`.github/workflows/tauri-build.yml`](.github/workflows/tauri-build.yml)
+  and [`docs/v1.2/codesigning.md`](docs/v1.2/codesigning.md).
+
+The complete defense matrix and threat model is at
+[`docs/v1.2/security-overview.md`](docs/v1.2/security-overview.md).
+
+---
+
+## Documentation map
+
+| What you want | Where to look |
+|---|---|
+| Local-dev quickstart | [`docs/deployment/local-dev.md`](docs/deployment/local-dev.md) |
+| Production deployment | [`docs/deployment/production.md`](docs/deployment/production.md) |
+| Operator console distribution | [`docs/deployment/operator-console.md`](docs/deployment/operator-console.md) |
+| Day-2 operations / runbook | [`docs/deployment/operations.md`](docs/deployment/operations.md) |
+| v1.2 security overview | [`docs/v1.2/security-overview.md`](docs/v1.2/security-overview.md) |
+| v1.2 migration notes (from v1.1) | [`docs/v1.2/migration-from-v1.1.md`](docs/v1.2/migration-from-v1.1.md) |
+| Tauri codesigning (CI) | [`docs/v1.2/codesigning.md`](docs/v1.2/codesigning.md) |
+| Wire reference (shell-session protocol) | [`docs/v1.0/shell-session-protocol.md`](docs/v1.0/shell-session-protocol.md) |
+| Project status + version | [`STATUS.md`](STATUS.md) |
+| Roadmap / decisions log | [`ROADMAP.md`](ROADMAP.md) |
+| Per-PR / development notes | [`CLAUDE.md`](CLAUDE.md), [`docs/development/`](docs/development/) |
+
+---
+
+## Development
 
 ```bash
-# Build all components
-cargo build --release
+# Workspace builds (excludes the Tauri shell — that needs libwebkit2gtk).
+cargo check --workspace --exclude nexus-console
+cargo test --workspace --exclude nexus-console
+cargo clippy --workspace --exclude nexus-console --all-targets -- -D warnings
+cargo fmt --all --check
 
-# Or build specific components
-cargo build --release -p nexus-infra
-cargo build --release -p nexus-server  
-cargo build --release -p nexus-agent
+# Tauri UI compiles for wasm32 via trunk:
+cd nexus-console/ui && cargo build --target wasm32-unknown-unknown && cd ../..
+
+# Headless PASS gate (integration-tests/A2A loopback):
+./scripts/demo.sh
 ```
 
-### 3. **Deploy Infrastructure**
-
-```bash
-# Initialize Cloudflare DNS and certificates
-./target/release/nexus-infra setup --config nexus.toml
-
-# Start the gRPC C2 server
-./target/release/nexus-server --config nexus.toml
-
-# Deploy agents to targets
-./target/release/nexus-agent --config agent.toml
-```
-
-## 🔧 Configuration
-
-### Example Configuration (`nexus.toml`)
-
-```toml
-[cloudflare]
-api_token = "your_cloudflare_api_token"
-zone_id = "your_zone_id"
-domain = "example.com"
-proxy_enabled = true
-ttl = 300
-
-[letsencrypt]
-contact_email = "admin@example.com"
-challenge_type = "Dns01"
-cert_renewal_days = 30
-wildcard_enabled = true
-
-[grpc_server]
-bind_address = "0.0.0.0"
-port = 443
-mutual_tls = true
-max_connections = 1000
-
-[domains]
-primary_domains = ["c2.example.com"]
-rotation_interval = 24
-max_subdomains = 10
-
-[security]
-additional_encryption = true
-traffic_obfuscation = true
-anti_analysis = { vm_detection = true, debugger_detection = true }
-```
-
-## 🎯 Advanced Usage
-
-### **gRPC Communication**
-
-```bash
-# Register agent with gRPC server
-./nexus-agent --grpc-endpoint https://api.example.com:443
-
-# Execute commands with arguments
-nexus-cli execute agent-123 "system-info.obj" "go"
-
-# Domain rotation
-nexus-cli domain rotate --immediate
-```
-
-### **BOF Development & Execution**
-
-```rust
-use nexus_infra::{BOFLoader, BofArgument};
-
-let loader = BOFLoader::new();
-let bof_data = std::fs::read("custom.obj")?;
-let loaded_bof = loader.load_bof(&bof_data)?;
-
-let args = vec![
-    BofArgument::string("target_system"),
-    BofArgument::int32(1234),
-];
-
-let result = loader.execute_bof(&loaded_bof, "go", &args)?;
-```
-
-### **Dynamic Infrastructure**
-
-```rust
-use nexus_infra::{CloudflareManager, DomainManager};
-
-// Create new C2 subdomain
-let domain = domain_manager.create_new_domain().await?;
-println!("New C2 endpoint: {}", domain.full_domain);
-
-// Automatic certificate provisioning
-let cert = cert_manager.request_certificate(&domain.full_domain, &[]).await?;
-```
-
-## 📊 Monitoring & Operations
-
-### Health Monitoring
-```bash
-# Check infrastructure health  
-nexus-cli status --all
-
-# Domain health check
-nexus-cli domains health
-
-# Certificate status
-nexus-cli certificates status
-```
-
-### Operational Commands
-```bash
-# Rotate domains immediately
-nexus-cli domains rotate --immediate
-
-# Update all domains to new IP
-nexus-cli domains update-ip 203.0.113.10
-
-# Renew certificates
-nexus-cli certificates renew --all
-```
-
-## 🔐 Security Features
-
-### **Certificate Management**
-- **Automated Provisioning**: Let's Encrypt DNS-01 challenges via Cloudflare
-- **Origin Certificates**: Cloudflare origin certs for backend security
-- **Certificate Pinning**: Multi-layer validation and pinning
-- **Auto-Renewal**: Certificates renewed 30 days before expiration
-
-### **Domain Fronting**
-- **CDN Integration**: Traffic routed through Cloudflare's network
-- **Host Header Manipulation**: Proper domain fronting implementation
-- **Geographic Distribution**: Global edge location utilization
-- **Traffic Legitimacy**: Indistinguishable from normal CDN traffic
-
-### **Anti-Analysis** 
-- **Infrastructure Level**: Domain rotation defeats long-term analysis
-- **Certificate Level**: Valid TLS certificates prevent SSL inspection
-- **Application Level**: Enhanced VM/debugger/sandbox detection
-- **Network Level**: Traffic patterns match legitimate services
-
-## 🧪 Testing
-
-```bash
-# Run all tests
-cargo test
-
-# Test infrastructure components
-cargo test -p nexus-infra
-
-# Test BOF loading
-cargo test -p nexus-infra bof_loader
-
-# Integration tests
-./scripts/test-integration.sh
-```
-
-## 📚 Documentation
-
-- **[Infrastructure Setup](docs/infrastructure/README.md)** - Complete infrastructure guide
-- **[Cloudflare Integration](docs/infrastructure/cloudflare-setup.md)** - DNS API setup
-- **[Certificate Management](docs/infrastructure/certificates.md)** - TLS and Let's Encrypt
-- **[BOF Development](docs/execution/bof-guide.md)** - BOF creation and execution
-- **[Production Deployment](docs/configuration/production-setup.md)** - Enterprise deployment
-- **[API Reference](docs/api/grpc-reference.md)** - Complete API documentation
-
-## 🎯 Use Cases
-
-### **Red Team Operations**
-- **Stealth C2**: Domain fronting defeats network monitoring
-- **Infrastructure Agility**: Rapid domain rotation for persistence
-- **Advanced Payloads**: BOF support for sophisticated techniques
-- **Enterprise Evasion**: Multi-layer anti-analysis capabilities
-
-### **Security Research**
-- **Technique Development**: Framework for researching new methods
-- **Tool Integration**: BOF ecosystem compatibility
-- **Protocol Research**: gRPC-based C2 communication studies
-- **Infrastructure Automation**: Research operational automation
-
-### **Training & Education**
-- **C2 Architecture**: Modern framework design patterns
-- **Infrastructure Automation**: Cloud-native deployment techniques
-- **Certificate Management**: Automated PKI operations
-- **Advanced Execution**: Windows internals and injection methods
-
-## 🛠️ Development
-
-### Building from Source
-```bash
-# Development build with debug symbols
-cargo build
-
-# Optimized release build
-cargo build --release --all
-
-# Cross-compilation for Windows
-cargo build --release --target x86_64-pc-windows-gnu
-
-# Build with specific features
-cargo build --features "enterprise,monitoring"
-```
-
-### Contributing
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/enhancement`)
-3. Run tests (`cargo test`)
-4. Submit pull request with comprehensive description
-
-## 🔍 Troubleshooting
-
-### Common Issues
-
-**❌ Cloudflare API Connection Failed**
-```bash
-# Verify API token permissions
-curl -H "Authorization: Bearer YOUR_TOKEN" \
-     "https://api.cloudflare.com/client/v4/user/tokens/verify"
-
-# Check zone access
-nexus-cli cloudflare verify --zone-id YOUR_ZONE_ID
-```
-
-**❌ Certificate Provisioning Failed**
-```bash
-# Check DNS propagation
-dig TXT _acme-challenge.your-domain.com
-
-# Manual certificate request
-nexus-cli certificates request your-domain.com --force
-```
-
-**❌ gRPC Connection Issues**
-```bash
-# Test TLS connection
-openssl s_client -connect your-domain.com:443 -servername your-domain.com
-
-# Debug gRPC communication
-RUST_LOG=debug ./target/release/nexus-agent --config agent.toml
-```
-
-### Performance Tuning
-- **Connection Pools**: Adjust `max_connections` for load
-- **Domain Health**: Configure `health_monitoring` intervals  
-- **Certificate Cache**: Tune renewal thresholds
-- **Task Queues**: Optimize task distribution patterns
-
-## 📈 Performance & Scale
-
-### **Benchmarks**
-- **Agent Connections**: 1000+ concurrent agents per server
-- **Domain Rotation**: Sub-second DNS propagation via Cloudflare
-- **Certificate Provisioning**: <60 seconds for new certificates
-- **BOF Execution**: Minimal overhead compared to shellcode injection
-
-### **Scalability Features**
-- **Horizontal Scaling**: Multiple server instances with load balancing
-- **Geographic Distribution**: Regional server deployment
-- **Connection Pooling**: Efficient resource utilization
-- **Lazy Initialization**: On-demand resource allocation
-
-## 🎖️ Enterprise Features
-
-### **Compliance & Monitoring**
-- **Audit Logging**: Comprehensive operation logging
-- **Certificate Lifecycle**: Automated compliance tracking  
-- **Infrastructure Changes**: Detailed change management
-- **Agent Activity**: Real-time monitoring dashboards
-
-### **High Availability**
-- **Multi-Region**: Deploy across multiple cloud regions
-- **Failover**: Automatic failover between domains/servers
-- **Health Monitoring**: Continuous infrastructure health checks
-- **Disaster Recovery**: Automated backup and restore procedures
-
-## ⚠️ Security Notice
-
-This framework is designed for **authorized security testing and research purposes only**. Users must:
-
-- Ensure compliance with applicable laws and regulations
-- Obtain proper authorization before deployment
-- Use responsibly and ethically
-- Respect system and network boundaries
-- Follow responsible disclosure practices
+Development notes live under [`docs/development/`](docs/development/);
+the working agreement for AI-assisted contributions is in
+[`CLAUDE.md`](CLAUDE.md).
+
+---
+
+## Project conventions
+
+- **Mixed Tonic versions are intentional.** The new A2A plane uses
+  Tonic 0.14 (`tonic_14 = { package = "tonic", ... }`) while the
+  legacy NexusC2 plane stays on Tonic 0.10. Both compile side-by-side.
+- **`NEXUS_*_CERT` env var names are reserved.** Do not rename. They
+  are referenced from operator docs, CI workflows, and operator
+  consoles built in the field.
+- **`shared NodeIdentity`** between the mesh (libp2p) and A2A (signed
+  cards). One identity per node — do not introduce a second key.
+- **No AGPL code paths.** rust-nexus replicates GhostWire-style mesh
+  primitives directly from MIT/Apache libp2p crates rather than
+  embedding the AGPL-licensed GhostWire crate.
+
+For the full set of decisions (D-V1.0-A through D-V1.2-H, plus the
+v2.1.2 series), see [`ROADMAP.md`](ROADMAP.md).
+
+---
+
+## Security Notice
+
+rust-nexus is designed for **authorized security testing, red-team
+engagements, and security research**. Users must:
+
+- Ensure compliance with applicable laws and regulations.
+- Obtain explicit written authorization before deployment against any
+  system, network, or organization you do not own.
+- Follow responsible disclosure for any vulnerabilities discovered
+  using this framework.
+- Respect system, network, and organizational boundaries.
 
 **The authors are not responsible for misuse of this software.**
 
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- **Rust Community**: Exceptional tooling and ecosystem
-- **Cloudflare**: Robust API and global infrastructure
-- **Let's Encrypt**: Free, automated certificate authority  
-- **Sliver Framework**: Inspiration for gRPC architecture
-- **BOF Community**: Windows internals research and techniques
-- **Maldev Academy**: Fiber execution and evasion techniques
-
 ---
 
-## 🚀 Getting Started
+## License
 
-Ready to deploy? Check out our [Infrastructure Setup Guide](docs/infrastructure/README.md) for step-by-step instructions.
-
-For BOF development, see the [BOF Development Guide](docs/execution/bof-guide.md).
-
-For production deployments, review the [Enterprise Setup Guide](docs/configuration/production-setup.md).
-
----
-
-**Built with ❤️ in Rust | Enterprise-Ready | Research-Focused | Security-First**
+This project is licensed under the MIT License — see [LICENSE](LICENSE).

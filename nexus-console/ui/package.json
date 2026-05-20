@@ -1,0 +1,13 @@
+{
+  "name": "nexus-console-ui-assets",
+  "version": "0.1.0",
+  "private": true,
+  "description": "xterm.js + addons vendored into the Tauri webview.",
+  "scripts": {
+    "build-xterm": "node ./vendor-xterm.mjs"
+  },
+  "dependencies": {
+    "@xterm/xterm": "5.5.0",
+    "@xterm/addon-fit": "0.10.0"
+  }
+}

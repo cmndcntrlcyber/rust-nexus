@@ -1,8 +1,8 @@
 //! Web UI request handlers
 
-use warp::Reply;
+use crate::{TaskExecutionRequest, TaskExecutionResponse, WebUIState};
 use serde_json::json;
-use crate::{WebUIState, TaskExecutionRequest, TaskExecutionResponse};
+use warp::Reply;
 
 /// List all connected agents
 pub async fn list_agents(state: WebUIState) -> Result<impl Reply, warp::Rejection> {
@@ -11,7 +11,10 @@ pub async fn list_agents(state: WebUIState) -> Result<impl Reply, warp::Rejectio
 }
 
 /// Get agent details by ID
-pub async fn get_agent_details(agent_id: String, state: WebUIState) -> Result<Box<dyn Reply>, warp::Rejection> {
+pub async fn get_agent_details(
+    agent_id: String,
+    state: WebUIState,
+) -> Result<Box<dyn Reply>, warp::Rejection> {
     let agents = state.agent_connections.read().await;
 
     if let Some(agent) = agents.get(&agent_id) {
@@ -26,9 +29,9 @@ pub async fn get_agent_details(agent_id: String, state: WebUIState) -> Result<Bo
 
 /// Execute task on agent
 pub async fn execute_task(
-    agent_id: String,
-    request: TaskExecutionRequest,
-    state: WebUIState,
+    _agent_id: String,
+    _request: TaskExecutionRequest,
+    _state: WebUIState,
 ) -> Result<impl Reply, warp::Rejection> {
     // TODO: Integrate with gRPC client to send task to agent
     let response = TaskExecutionResponse {
@@ -43,13 +46,13 @@ pub async fn execute_task(
 }
 
 /// List managed domains
-pub async fn list_domains(state: WebUIState) -> Result<impl Reply, warp::Rejection> {
+pub async fn list_domains(_state: WebUIState) -> Result<impl Reply, warp::Rejection> {
     // TODO: Integrate with domain manager
     Ok(warp::reply::json(&json!({"domains": []})))
 }
 
 /// Trigger domain rotation
-pub async fn rotate_domain(state: WebUIState) -> Result<impl Reply, warp::Rejection> {
+pub async fn rotate_domain(_state: WebUIState) -> Result<impl Reply, warp::Rejection> {
     // TODO: Integrate with domain manager
     Ok(warp::reply::json(&json!({"status": "rotation_initiated"})))
 }

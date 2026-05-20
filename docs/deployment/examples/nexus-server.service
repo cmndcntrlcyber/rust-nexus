@@ -1,0 +1,49 @@
+[Unit]
+Description=rust-nexus C2 server (A2A + NexusC2)
+Documentation=file:///etc/nexus/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=nexus
+Group=nexus
+
+# Filesystem layout per docs/deployment/production.md.
+WorkingDirectory=/var/lib/nexus
+ExecStart=/usr/local/bin/nexus-server --config /etc/nexus/nexus.toml
+EnvironmentFile=/etc/nexus/server.env
+
+# Restart semantics: restart on crash but not on clean exit.
+Restart=on-failure
+RestartSec=5s
+TimeoutStartSec=30s
+TimeoutStopSec=30s
+
+# Resource limits.
+LimitNOFILE=65536
+
+# Hardening (systemd sandboxing). Comment out any line that breaks
+# your environment, but re-enable as much as possible.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/nexus /var/log/nexus
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+
+# Logging (defaults to journald; uncomment for a file sink if you
+# don't want journal-only retention).
+# StandardOutput=append:/var/log/nexus/server.log
+# StandardError=append:/var/log/nexus/server.log
+
+[Install]
+WantedBy=multi-user.target

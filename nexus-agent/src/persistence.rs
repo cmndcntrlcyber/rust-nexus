@@ -8,19 +8,27 @@ impl PersistenceManager {
     }
 
     #[cfg(target_os = "windows")]
-    pub async fn install_registry_persistence(&self, key_path: &str, value_name: &str) -> Result<()> {
+    pub async fn install_registry_persistence(
+        &self,
+        key_path: &str,
+        value_name: &str,
+    ) -> Result<()> {
         use std::process::Command;
-        
+
         let exe_path = std::env::current_exe()
             .map_err(|e| NexusError::AgentError(format!("Failed to get executable path: {}", e)))?;
 
         let output = Command::new("reg")
             .args(&[
-                "add", key_path,
-                "/v", value_name,
-                "/t", "REG_SZ",
-                "/d", &exe_path.to_string_lossy(),
-                "/f"
+                "add",
+                key_path,
+                "/v",
+                value_name,
+                "/t",
+                "REG_SZ",
+                "/d",
+                &exe_path.to_string_lossy(),
+                "/f",
             ])
             .output()
             .map_err(|e| NexusError::AgentError(format!("Registry persistence failed: {}", e)))?;
@@ -28,9 +36,10 @@ impl PersistenceManager {
         if output.status.success() {
             Ok(())
         } else {
-            Err(NexusError::AgentError(
-                format!("Registry persistence error: {}", String::from_utf8_lossy(&output.stderr))
-            ))
+            Err(NexusError::AgentError(format!(
+                "Registry persistence error: {}",
+                String::from_utf8_lossy(&output.stderr)
+            )))
         }
     }
 
@@ -45,7 +54,7 @@ impl PersistenceManager {
         );
 
         let service_path = format!("/etc/systemd/system/{}.service", service_name);
-        
+
         std::fs::write(&service_path, service_content)
             .map_err(|e| NexusError::AgentError(format!("Failed to write service file: {}", e)))?;
 

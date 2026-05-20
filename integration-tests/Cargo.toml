@@ -1,0 +1,28 @@
+[package]
+name = "integration-tests"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Cross-crate integration tests for the rust-nexus v1.1 simple-mesh integration."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+
+[dev-dependencies]
+nexus-common = { path = "../nexus-common" }
+nexus-a2a = { workspace = true }
+# v1.2: integration test for agent-side A2A bidi pulls in the agent's
+# library + the C2's router so the full round-trip runs in one process.
+nexus-agent = { path = "../nexus-agent" }
+nexus-infra = { path = "../nexus-infra" }
+# v1.4: regression tests touch nexus-mesh DTN.
+nexus-mesh = { workspace = true }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+futures = { workspace = true }
+tonic = { version = "0.14", default-features = false, features = ["transport", "channel"] }
+anyhow = { workspace = true }
+tracing-subscriber = { workspace = true }
+tempfile = "3"

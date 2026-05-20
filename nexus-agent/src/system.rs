@@ -37,13 +37,13 @@ impl SystemInfo {
     fn get_os_name() -> String {
         #[cfg(target_os = "windows")]
         return "Windows".to_string();
-        
+
         #[cfg(target_os = "linux")]
         return "Linux".to_string();
-        
+
         #[cfg(target_os = "macos")]
         return "macOS".to_string();
-        
+
         #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
         return "Unknown".to_string();
     }
@@ -54,7 +54,7 @@ impl SystemInfo {
             // Try to get Windows version via WMI or registry
             "Windows 10+".to_string()
         }
-        
+
         #[cfg(target_os = "linux")]
         {
             std::fs::read_to_string("/proc/version")
@@ -64,7 +64,7 @@ impl SystemInfo {
                 .unwrap_or("Linux Unknown")
                 .to_string()
         }
-        
+
         #[cfg(not(any(target_os = "windows", target_os = "linux")))]
         "Unknown".to_string()
     }
@@ -72,17 +72,22 @@ impl SystemInfo {
     fn get_architecture() -> String {
         #[cfg(target_arch = "x86_64")]
         return "x86_64".to_string();
-        
+
         #[cfg(target_arch = "x86")]
         return "x86".to_string();
-        
+
         #[cfg(target_arch = "arm")]
         return "arm".to_string();
-        
+
         #[cfg(target_arch = "aarch64")]
         return "aarch64".to_string();
-        
-        #[cfg(not(any(target_arch = "x86_64", target_arch = "x86", target_arch = "arm", target_arch = "aarch64")))]
+
+        #[cfg(not(any(
+            target_arch = "x86_64",
+            target_arch = "x86",
+            target_arch = "arm",
+            target_arch = "aarch64"
+        )))]
         return "unknown".to_string();
     }
 
@@ -95,7 +100,10 @@ impl SystemInfo {
     fn get_process_name() -> String {
         env::current_exe()
             .ok()
-            .and_then(|path| path.file_name().map(|name| name.to_string_lossy().to_string()))
+            .and_then(|path| {
+                path.file_name()
+                    .map(|name| name.to_string_lossy().to_string())
+            })
             .unwrap_or_else(|| "unknown".to_string())
     }
 

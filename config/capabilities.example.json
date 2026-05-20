@@ -1,0 +1,8 @@
+{
+  "_comment": "v1.2 capability matrix — D-V1.2-caps. Keys are 64-char hex agent peer-ids; values list allowed skill ids. The '*' key applies to any agent without an explicit entry. The '*' skill id within an entry allows every skill.",
+  "agents": {
+    "*": {
+      "skills": ["shell-session"]
+    }
+  }
+}

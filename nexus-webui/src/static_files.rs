@@ -3,11 +3,13 @@
 use warp::Filter;
 
 /// Serve embedded static files
-pub fn embedded_files() -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+pub fn embedded_files() -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone
+{
     // For now, serve a basic index page
     warp::path::end()
         .map(|| {
-            warp::reply::html(r#"
+            warp::reply::html(
+                r#"
 <!DOCTYPE html>
 <html>
 <head>
@@ -40,7 +42,8 @@ pub fn embedded_files() -> impl Filter<Extract = impl warp::Reply, Error = warp:
     </script>
 </body>
 </html>
-"#)
+"#,
+            )
         })
         .or(warp::path("health").map(|| {
             warp::reply::json(&serde_json::json!({

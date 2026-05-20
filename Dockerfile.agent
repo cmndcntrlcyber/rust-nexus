@@ -1,0 +1,36 @@
+# v1.3 nexus-agent Dockerfile (Phase 1.3.9 — scaffold).
+#
+# Same multi-stage cargo-chef pattern as the server. Final runtime
+# uses debian:stable-slim because the agent may need libc / PTY
+# support that distroless/static doesn't ship.
+#
+# Build:    docker buildx build -t nexus-agent:dev -f Dockerfile.agent .
+
+FROM rust:1-bookworm AS chef
+RUN cargo install cargo-chef --locked
+WORKDIR /app
+
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
+
+FROM chef AS builder
+COPY --from=planner /app/recipe.json recipe.json
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    protobuf-compiler libssl-dev pkg-config && \
+    rm -rf /var/lib/apt/lists/*
+RUN cargo chef cook --release --recipe-path recipe.json --bin nexus-agent
+COPY . .
+RUN cargo build --release -p nexus-agent --bin nexus-agent
+
+FROM debian:stable-slim AS runtime
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates libssl3 && \
+    rm -rf /var/lib/apt/lists/* && \
+    useradd --system --uid 65532 --no-create-home nexus-agent
+COPY --from=builder /app/target/release/nexus-agent /usr/local/bin/nexus-agent
+
+USER 65532:65532
+WORKDIR /var/lib/nexus-agent
+
+ENTRYPOINT ["/usr/local/bin/nexus-agent"]

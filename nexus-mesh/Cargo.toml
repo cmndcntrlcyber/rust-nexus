@@ -2,13 +2,39 @@
 name = "nexus-mesh"
 version = "0.1.0"
 edition = "2021"
-description = "libp2p-based peer-to-peer mesh layer for rust-nexus (v2.9.6)"
+description = "libp2p-based peer-to-peer mesh layer for rust-nexus (v1.1 simple-mesh integration)"
 
 [dependencies]
+nexus-common = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
+tokio-stream = { workspace = true }
+futures = { workspace = true }
+tracing = { workspace = true }
+anyhow = { workspace = true }
+bincode = { workspace = true }
+rand = { workspace = true }
+libp2p = { workspace = true, features = ["tcp", "noise", "yamux", "tokio", "macros", "identify", "gossipsub", "ping", "kad", "mdns"] }
+
+[dev-dependencies]
+tracing-subscriber = { workspace = true }
+tokio = { workspace = true, features = ["test-util"] }
+# v1.4.10 — DTN tests use a tempdir for the persistent queue root.
+tempfile = "3"
+
+[[example]]
+name = "two_node_ping"
+path = "examples/two_node_ping.rs"
+
+[[example]]
+name = "sealed_pubsub"
+path = "examples/sealed_pubsub.rs"
+
+[[example]]
+name = "kad_discovery"
+path = "examples/kad_discovery.rs"
 
 [features]
 default = []

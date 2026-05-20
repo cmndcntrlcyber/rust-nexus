@@ -1,0 +1,61 @@
+:root {
+    color-scheme: dark;
+    --bg: #0b1020;
+    --bg-elevated: #141a30;
+    --bg-elevated-2: #1c2440;
+    --fg: #e6edf3;
+    --fg-muted: #8b95a7;
+    --accent: #5eead4;
+    --accent-bright: #88f0d8;
+    --insecure: #f87171;
+    --secure: #6ee7b7;
+    --border: #1f2940;
+    --selected: #1e3a5f;
+}
+* { box-sizing: border-box; }
+html, body {
+    margin: 0; padding: 0; height: 100vh; overflow: hidden;
+    background: var(--bg); color: var(--fg);
+    font-family: ui-sans-serif, system-ui, sans-serif; font-size: 14px;
+}
+#root { height: 100vh; }
+
+.root.pre-connect { display: grid; place-items: center; height: 100vh; }
+.connect-dialog {
+    background: var(--bg-elevated); border: 1px solid var(--border);
+    border-radius: 8px; padding: 32px; width: 420px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.4);
+}
+.connect-dialog h1 { margin: 0; color: var(--accent); }
+.connect-dialog .subtitle { margin: 4px 0 24px; color: var(--fg-muted); font-size: 13px; }
+.connect-dialog label { display: block; margin-bottom: 16px; font-size: 12px; color: var(--fg-muted); text-transform: uppercase; }
+.connect-dialog label.checkbox { display: flex; align-items: center; gap: 8px; text-transform: none; color: var(--fg); font-size: 13px; }
+.connect-dialog input[type="text"] { display: block; width: 100%; margin-top: 6px; padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; color: var(--fg); font-family: inherit; font-size: 13px; }
+.connect-dialog input[type="text"]:focus { outline: none; border-color: var(--accent); }
+.connect-dialog button { margin-top: 8px; padding: 10px 20px; background: var(--accent); color: var(--bg); border: none; border-radius: 4px; font-weight: 600; cursor: pointer; }
+.connect-dialog button:hover:not(:disabled) { background: var(--accent-bright); }
+.connect-dialog button:disabled { opacity: 0.5; cursor: not-allowed; }
+.connect-dialog .status { margin-top: 16px; min-height: 18px; color: var(--fg-muted); font-size: 12px; }
+
+.root.connected {
+    display: grid; grid-template-columns: 280px 1fr; grid-template-rows: 1fr 32px;
+    grid-template-areas: "agents terminal" "status status"; height: 100vh;
+}
+.agent-list { grid-area: agents; background: var(--bg-elevated); border-right: 1px solid var(--border); padding: 12px 0; overflow-y: auto; }
+.agent-list h2 { margin: 0 16px 4px; font-size: 12px; text-transform: uppercase; color: var(--fg-muted); }
+.agent-list .agent-count { margin: 0 16px 12px; font-size: 11px; color: var(--fg-muted); }
+.agent-list ul { list-style: none; margin: 0; padding: 0; }
+.agent-list li { padding: 8px 16px; cursor: pointer; border-left: 3px solid transparent; }
+.agent-list li:hover { background: var(--bg-elevated-2); }
+.agent-list li.selected { background: var(--selected); border-left-color: var(--accent); }
+.agent-list .tag { font-weight: 600; }
+.agent-list .os { font-size: 11px; color: var(--fg-muted); }
+.agent-list .peer { font-family: ui-monospace, monospace; font-size: 10px; color: var(--fg-muted); }
+
+.terminal-pane { grid-area: terminal; padding: 8px; overflow: hidden; display: flex; }
+#terminal-host { width: 100%; height: 100%; background: #000; border-radius: 4px; }
+.empty-terminal { width: 100%; display: grid; place-items: center; color: var(--fg-muted); font-size: 13px; padding: 24px; text-align: center; }
+
+.status-bar { grid-area: status; background: var(--bg-elevated); border-top: 1px solid var(--border); padding: 0 12px; display: flex; align-items: center; gap: 12px; color: var(--fg-muted); font-size: 11px; font-family: ui-monospace, monospace; }
+.status-bar .insecure { color: var(--insecure); font-weight: 700; }
+.status-bar .secure { color: var(--secure); font-weight: 600; }

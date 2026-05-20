@@ -1,0 +1,92 @@
+# v1.4 Helm chart values for nexus-server.
+#
+# All values mirror the kustomize ConfigMap + Secret shape. Operators
+# replace the placeholder TLS material via:
+#
+#   helm install nexus-server ./deploy/helm/nexus-server \
+#     --set-file tls.caCert=./certs/ca.crt.pem \
+#     --set-file tls.serverCert=./certs/server.crt.pem \
+#     --set-file tls.serverKey=./certs/server.key.pem
+
+image:
+  # Operators override `image.repository` + `image.tag` per environment.
+  # v1.4 ships amd64 + arm64 manifests via buildx; the same tag works
+  # for both architectures.
+  repository: nexus-server
+  tag: dev
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+
+persistence:
+  # PVC size for /var/lib/nexus (server-identity.bin + audit.log).
+  size: 5Gi
+  # Storage class — leave empty to use the cluster default.
+  storageClassName: ""
+
+service:
+  type: ClusterIP
+  ports:
+    a2a: 50052
+    legacy: 50051
+    metrics: 9100
+
+# nexus.toml content. The full reference lives at
+# docs/deployment/examples/nexus.toml.example; override sections here
+# without re-shipping the whole file.
+nexusToml: |
+  [a2a]
+  bind = "0.0.0.0:50052"
+  insecure_network = false
+  identity_path = "/var/lib/nexus/server-identity.bin"
+
+  [capabilities]
+  file = "/etc/nexus/capabilities.json"
+
+  [audit]
+  sink = "file"
+  path = "/var/lib/nexus/audit.log"
+
+  [rate_limit]
+  requests_per_second = 100
+
+  [message_size]
+  max_bytes = 4194304
+
+  [metrics]
+  bind = "0.0.0.0:9100"
+
+  [logging]
+  level = "info"
+  format = "json"
+
+# TLS material. Placeholders — operators supply real PEM via
+# `--set-file` or an external secret manager (sealed-secrets,
+# external-secrets-operator).
+tls:
+  caCert: "PLACEHOLDER — supply via --set-file tls.caCert=ca.crt.pem"
+  serverCert: "PLACEHOLDER — supply via --set-file tls.serverCert=server.crt.pem"
+  serverKey: "PLACEHOLDER — supply via --set-file tls.serverKey=server.key.pem"
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+
+# Pod-level annotations. Operators add Prometheus scrape annotations
+# here if their cluster uses the prometheus.io/scrape pattern.
+podAnnotations: {}
+
+# Service account. Empty string creates one with the release name.
+serviceAccount:
+  create: true
+  name: ""

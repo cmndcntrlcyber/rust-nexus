@@ -2,6 +2,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> Deployment + operations docs live in `docs/deployment/`
+> (`README.md` is the index). The legacy paths under
+> `docs/configuration/`, `docs/infrastructure/`, and `docs/operations/`
+> are stubs that redirect there.
+
 ## Project Overview
 
 Rust-Nexus is an enterprise network management framework built in Rust. It's a Cargo workspace with 7 crates that together form a C2 (Command and Control) system for authorized security testing, red team operations, and security research.

@@ -4,6 +4,12 @@ use crate::*;
 
 pub struct BrowserFingerprinter;
 
+impl Default for BrowserFingerprinter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BrowserFingerprinter {
     pub fn new() -> Self {
         Self

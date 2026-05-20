@@ -1,0 +1,67 @@
+name: Docker (multi-arch)
+
+# v1.4.8 (D-V1.4-I). Builds the nexus-server + nexus-agent images
+# for linux/amd64 + linux/arm64 on tag push. Pushes to the configured
+# registry; operators override `IMAGE_REGISTRY` repo secret.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ${{ vars.IMAGE_REGISTRY || 'ghcr.io' }}
+
+jobs:
+  build-and-push:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - dockerfile: Dockerfile
+            image_name: nexus-server
+          - dockerfile: Dockerfile.agent
+            image_name: nexus-agent
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve tags
+        id: tags
+        run: |
+          REF="${GITHUB_REF##*/}"
+          REPO="${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image_name }}"
+          echo "tags=${REPO}:${REF},${REPO}:latest" >> "$GITHUB_OUTPUT"
+
+      - name: Build + push multi-arch
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          provenance: true
+          sbom: true
+          cache-from: type=gha,scope=${{ matrix.image_name }}
+          cache-to: type=gha,scope=${{ matrix.image_name }},mode=max

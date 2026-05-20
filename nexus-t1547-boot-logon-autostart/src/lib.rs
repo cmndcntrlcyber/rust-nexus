@@ -1,6 +1,6 @@
 use nexus_common::{
-    AttackTechnique, ExecutionContext, NexusError, Platform, Result, Tactic,
-    TechniqueParams, TechniqueResult,
+    AttackTechnique, ExecutionContext, NexusError, Platform, Result, Tactic, TechniqueParams,
+    TechniqueResult,
 };
 
 /// T1547.001 - Registry Run Keys / Startup Folder
@@ -77,15 +77,7 @@ impl AttackTechnique for RegistryRunKey {
 
             let output = Command::new("reg")
                 .args(&[
-                    "add",
-                    key_path,
-                    "/v",
-                    value_name,
-                    "/t",
-                    "REG_SZ",
-                    "/d",
-                    &exe_path,
-                    "/f",
+                    "add", key_path, "/v", value_name, "/t", "REG_SZ", "/d", &exe_path, "/f",
                 ])
                 .output()
                 .map_err(|e| {
@@ -232,7 +224,10 @@ mod tests {
     fn test_registry_run_key_metadata() {
         let tech = RegistryRunKey;
         assert_eq!(tech.technique_id(), "T1547.001");
-        assert_eq!(tech.tactics(), &[Tactic::Persistence, Tactic::PrivilegeEscalation]);
+        assert_eq!(
+            tech.tactics(),
+            &[Tactic::Persistence, Tactic::PrivilegeEscalation]
+        );
         assert_eq!(tech.platforms(), &[Platform::Windows]);
         assert_eq!(tech.task_types(), vec!["registry_persistence".to_string()]);
     }
@@ -241,7 +236,10 @@ mod tests {
     fn test_systemd_service_metadata() {
         let tech = SystemdService;
         assert_eq!(tech.technique_id(), "T1547");
-        assert_eq!(tech.tactics(), &[Tactic::Persistence, Tactic::PrivilegeEscalation]);
+        assert_eq!(
+            tech.tactics(),
+            &[Tactic::Persistence, Tactic::PrivilegeEscalation]
+        );
         assert_eq!(tech.platforms(), &[Platform::Linux]);
         assert_eq!(tech.task_types(), vec!["systemd_persistence".to_string()]);
     }
@@ -270,7 +268,10 @@ mod tests {
 
         // Missing value_name
         let mut partial = std::collections::HashMap::new();
-        partial.insert("key_path".to_string(), "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run".to_string());
+        partial.insert(
+            "key_path".to_string(),
+            "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run".to_string(),
+        );
         let partial_params = TechniqueParams {
             command: String::new(),
             parameters: partial,
@@ -280,7 +281,10 @@ mod tests {
 
         // All params present
         let mut full = std::collections::HashMap::new();
-        full.insert("key_path".to_string(), "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run".to_string());
+        full.insert(
+            "key_path".to_string(),
+            "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run".to_string(),
+        );
         full.insert("value_name".to_string(), "NexusAgent".to_string());
         let full_params = TechniqueParams {
             command: String::new(),

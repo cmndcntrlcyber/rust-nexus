@@ -1,7 +1,7 @@
+use crate::{Crypto, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use crate::{Crypto, Result};
 
 /// MITRE ATT&CK Tactic categories
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
@@ -124,7 +124,11 @@ pub trait AttackTechnique: Send + Sync {
     fn task_types(&self) -> Vec<String>;
 
     /// Execute the technique with the given parameters
-    async fn execute(&self, ctx: &ExecutionContext, params: TechniqueParams) -> Result<TechniqueResult>;
+    async fn execute(
+        &self,
+        ctx: &ExecutionContext,
+        params: TechniqueParams,
+    ) -> Result<TechniqueResult>;
 
     /// Validate parameters before execution (default: no-op)
     fn validate(&self, _params: &TechniqueParams) -> Result<()> {

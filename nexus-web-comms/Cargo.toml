@@ -42,6 +42,11 @@ nexus-common = { path = "../nexus-common" }
 # Temporarily commented out due to compilation issues
 # nexus-infra = { path = "../nexus-infra" }
 
+# v1.1 integration additions (Transport trait).
+async-trait = { workspace = true }
+futures = { workspace = true }
+anyhow = { workspace = true }
+
 [features]
 default = ["http-fallback", "websocket-fallback", "domain-fronting"]
 http-fallback = ["reqwest", "warp"]

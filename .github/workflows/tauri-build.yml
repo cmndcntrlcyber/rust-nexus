@@ -1,0 +1,85 @@
+name: Tauri bundle (signed)
+
+# v1.2.9 (D-V1.2-F) — builds the operator-console Tauri bundles for macOS
+# and Windows with codesigning + notarization. Driven by repo secrets.
+# Linux build is unsigned (no platform requirement).
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bundle:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: macos-latest
+            artifact: nexus-console-macos
+          - target: windows-latest
+            artifact: nexus-console-windows
+          - target: ubuntu-latest
+            artifact: nexus-console-linux
+    runs-on: ${{ matrix.target }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux Tauri prerequisites
+        if: matrix.target == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
+            librsvg2-dev patchelf libssl-dev
+
+      - name: Install Trunk
+        uses: jetli/trunk-action@v0.5.0
+        with:
+          version: 'latest'
+
+      - name: Add wasm32 target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Build the Leptos UI for wasm32
+        working-directory: nexus-console/ui
+        run: trunk build --release
+
+      - name: Build + bundle (macOS, signed + notarized)
+        if: matrix.target == 'macos-latest'
+        working-directory: nexus-console/src-tauri
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: cargo tauri build
+
+      - name: Build + bundle (Windows, signed)
+        if: matrix.target == 'windows-latest'
+        working-directory: nexus-console/src-tauri
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: cargo tauri build
+
+      - name: Build + bundle (Linux, unsigned)
+        if: matrix.target == 'ubuntu-latest'
+        working-directory: nexus-console/src-tauri
+        run: cargo tauri build
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            nexus-console/src-tauri/target/release/bundle/**/*
+          if-no-files-found: warn

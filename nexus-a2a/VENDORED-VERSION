@@ -1,0 +1,107 @@
+# A2A proto vendoring record (D-V1.2-E / D-2.1.2-B / D-V1.3-A / D-V1.4-A)
+
+## Status: stub (operator action required to pin)
+
+This file is the in-repo record. It currently holds a **stub**
+vendored proto under `nexus-a2a/vendor/a2a-upstream/a2a.v1.proto`
+that mirrors our own `proto/a2a/v1/a2a.proto` with the package
+renamed to `a2a.upstream.v1`.
+
+To pin to a concrete upstream commit, run:
+
+```bash
+./scripts/vendor-a2a-proto.sh v0.3.0
+```
+
+The script overwrites `vendor/a2a-upstream/a2a.v1.proto` with the
+real upstream bytes (with the package renamed automatically), then
+rewrites this file with the resolved commit sha + sha256 of the
+vendored content.
+
+## Vendored file (current state — stub)
+
+- Path: `nexus-a2a/vendor/a2a-upstream/a2a.v1.proto`
+- Package: `a2a.upstream.v1` (renamed from `a2a.v1` so the two
+  protos compile side-by-side in Rust without module collision)
+- Source: stub copy of `nexus-a2a/proto/a2a/v1/a2a.proto`
+- Will be replaced by operator running `scripts/vendor-a2a-proto.sh`
+- License: when a real upstream lands, commit upstream's
+  `LICENSE` file to `nexus-a2a/LICENSE-A2A`
+
+## Interop verification
+
+The pure-Rust interop test runs every PR:
+
+```bash
+cargo test -p nexus-a2a --test upstream_compat
+```
+
+Four tests cover:
+
+1. **agent_card_field_numbers_match** — symmetric prost encode/decode
+   round-trip between `pb::AgentCard` and `pb_upstream::AgentCard`.
+   Detects any field-number drift at runtime, but also at compile time
+   via tonic-prost-build's generated types.
+2. **audit_record_event_field_numbers_match** — symmetric encode in
+   the other direction (our proto → upstream).
+3. **live_get_agent_card_via_upstream_encoding** — end-to-end live
+   gRPC call: server runs our `A2aServer`, client encodes the response
+   bytes as `pb_upstream::AgentCard` and asserts they decode cleanly.
+4. **live_get_task_returns_unimplemented_to_upstream_client** —
+   confirms the v1.3 task-management RPCs return `Status::Unimplemented`
+   to a client speaking the upstream-style wire.
+
+Build-time drift detection: any incompatibility between our v1.4
+proto and the vendored upstream proto in shared messages / RPCs
+produces a `tonic-prost-build` mismatch — the Rust compiler refuses
+the build, drift never reaches a test.
+
+## Bumping the pin
+
+```bash
+./scripts/vendor-a2a-proto.sh v0.3.1
+cargo test -p nexus-a2a --test upstream_compat
+```
+
+If the test passes, the bump is drift-free; commit the modified
+files. If the test fails:
+
+- **Compile errors in `pb_upstream` codegen**: the upstream proto
+  uses syntax / messages our build pipeline doesn't support. Fix
+  the proto patches in `scripts/vendor-a2a-proto.sh` or escalate.
+- **Field-number mismatch in the symmetric round-trips**: upstream
+  re-numbered a field we depend on. Renumber our additions in
+  `proto/a2a/v1/a2a.proto` to avoid collision (the v1.4 additions
+  on `AgentCard` are at field 5 + 6; the v1.4 RPCs are at the end of
+  the service definition).
+- **Live-RPC failure**: a shared message changed shape in a way
+  prost-compatible decoding can't compensate for. Reconcile by
+  updating our proto's `signature` / `signer_peer_id` placement.
+
+## v1.4 rust-nexus additions
+
+Our `proto/a2a/v1/a2a.proto` ships these on top of the upstream
+subset (preserved across vendoring bumps):
+
+- `AgentCard.signature` (bytes 5)         — D-V1.2-cards
+- `AgentCard.signer_peer_id` (bytes 6)    — D-V1.2-cards
+- `StreamAuditRecords` RPC                — D-V1.4 / Phase 1.4.3
+- `IssueOperatorToken` RPC                — D-V1.4-D / Phase 1.4.7
+
+If the upstream proto ever uses field number 5 or 6 on `AgentCard`
+for something else, we must rename or renumber our additions before
+bumping the pin. The compile-time drift check catches this.
+
+## Why not a Python interop fixture?
+
+The original v1.4 plan called for a Python `a2a-python` SDK interop
+fixture. Phase 1.4.2 was revised to a pure-Rust approach (D-V1.4-B
+revised) because:
+
+- Pure Rust catches drift at **compile time** via tonic-prost-build's
+  generated types; Python would have caught drift only at runtime.
+- No second toolchain in CI / dev environments.
+- Vendored bytes are reproducible; `pip install a2a-python==…` and
+  its transitive deps could drift without our notice.
+- The test runs every PR by default; the Python variant required
+  an opt-in env var.

@@ -7,9 +7,13 @@
 
 # Cargo build outputs
 **/target/
-**/Cargo.lock
 **/*.rs.bk
 **/*.pdb
+# We DO commit the workspace-root Cargo.lock because this workspace
+# ships binary crates (nexus-server, nexus-agent, nexus-console). The
+# lock pins exact transitive deps for reproducible release builds.
+# Nested member-crate Cargo.lock files are still ignored because they
+# don't exist in a single-lockfile workspace.
 
 # Cargo cache and registry
 ~/.cargo/registry/
@@ -115,6 +119,22 @@
 **/cloudflare-token
 **/acme-account.json
 
+# v1.2+ runtime artifacts (never commit).
+# Server / agent NodeIdentity blobs (72-byte NXS_ID01).
+**/server-identity.bin
+**/identity.bin
+**/agent-identity.bin
+# Audit log files (the hash-chained on-disk store; per D-V1.2-audit).
+**/audit.log
+**/audit.log.*
+# DTN store-and-forward queue (Phase 1.4.10 — on-disk per-recipient
+# `<peer_id_hex>/<unix_seconds>-<seq>.bin`).
+**/nexus-mesh/dtn/
+**/dtn-queue/
+# Dev mTLS certs from scripts/gen-certs.sh (also covered by the *.pem
+# / *.key / *.crt globs above; explicit dir-level ignore for clarity).
+/certs/
+
 # Database files
 **/*.db
 **/*.sqlite
@@ -195,6 +215,10 @@
 # Process files
 **/*.pid
 **/*.lock
+# Re-include the workspace-root Cargo.lock that the `**/*.lock` glob
+# would otherwise eat. We DO commit it (binary crates → reproducible
+# release builds).
+!Cargo.lock
 
 # Crash dumps
 **/*.dmp

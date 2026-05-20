@@ -1,0 +1,44 @@
+[Unit]
+Description=rust-nexus agent
+Documentation=file:///etc/nexus-agent/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=nexus-agent
+Group=nexus-agent
+
+# Filesystem layout per docs/deployment/production.md § Agent provisioning.
+WorkingDirectory=/var/lib/nexus-agent
+ExecStart=/usr/local/bin/nexus-agent \
+    --c2 https://c2.internal:50052 \
+    --transport grpc \
+    --identity /var/lib/nexus-agent/identity.bin
+EnvironmentFile=/etc/nexus-agent/agent.env
+
+# Reconnect loop on transient failure.
+Restart=always
+RestartSec=15s
+TimeoutStartSec=30s
+TimeoutStopSec=10s
+
+# Resource limits.
+LimitNOFILE=65536
+
+# Hardening. Loosen `ReadWritePaths` if the agent's tasks require
+# wider filesystem access — but the v1.2 shell session only needs
+# the agent state dir.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/nexus-agent
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

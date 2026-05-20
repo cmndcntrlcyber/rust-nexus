@@ -1,0 +1,25 @@
+apiVersion: v2
+name: nexus-server
+description: |
+  rust-nexus v1.4 C2 server Helm chart. Mirrors the kustomize manifests
+  at deploy/k8s/base/ — operators can pick whichever tool their cluster
+  uses. Wraps the StatefulSet + Services + ConfigMap + Secret around
+  a values.yaml-driven image tag, replica count, and TLS material.
+
+type: application
+version: 0.1.0          # chart version (bump when the chart structure changes)
+appVersion: "0.1.0"     # rust-nexus app version this chart targets
+
+home: https://github.com/yourorg/rust-nexus
+sources:
+  - https://github.com/yourorg/rust-nexus
+
+keywords:
+  - rust-nexus
+  - c2
+  - red-team
+  - security-research
+
+maintainers:
+  - name: rust-nexus
+    url: https://github.com/yourorg/rust-nexus

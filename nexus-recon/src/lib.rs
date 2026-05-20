@@ -3,16 +3,20 @@
 //! Integrates the browser fingerprinting and reconnaissance capabilities from the catch system
 //! into the rust-nexus framework for comprehensive target profiling and information gathering.
 
-use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
+// v1.4 commit-prep: recon module ships as stub/overlay; the `config` fields on
+// NetworkRecon and SystemProfiler are populated but not yet wired to the send
+// path. Suppress at the crate level rather than chasing each unused field.
+#![allow(dead_code)]
+
+use log::info;
 use reqwest::Client;
-use base64::{Engine as _, engine::general_purpose};
-use log::{info, warn, error, debug};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 pub mod browser_fingerprint;
+pub mod javascript_engine;
 pub mod network_recon;
 pub mod system_profiler;
-pub mod javascript_engine;
 
 use nexus_common::*;
 
@@ -242,10 +246,12 @@ impl ReconEngine {
         // Add custom headers
         for (key, value) in &config.custom_headers {
             headers.insert(
-                reqwest::header::HeaderName::from_bytes(key.as_bytes())
-                    .map_err(|e| NexusError::ConfigurationError(format!("Invalid header name: {}", e)))?,
-                reqwest::header::HeaderValue::from_str(value)
-                    .map_err(|e| NexusError::ConfigurationError(format!("Invalid header value: {}", e)))?,
+                reqwest::header::HeaderName::from_bytes(key.as_bytes()).map_err(|e| {
+                    NexusError::ConfigurationError(format!("Invalid header name: {}", e))
+                })?,
+                reqwest::header::HeaderValue::from_str(value).map_err(|e| {
+                    NexusError::ConfigurationError(format!("Invalid header value: {}", e))
+                })?,
             );
         }
 
@@ -254,7 +260,9 @@ impl ReconEngine {
             .default_headers(headers)
             .danger_accept_invalid_certs(!config.stealth_mode) // Only for testing
             .build()
-            .map_err(|e| NexusError::NetworkError(format!("Failed to create HTTP client: {}", e)))?;
+            .map_err(|e| {
+                NexusError::NetworkError(format!("Failed to create HTTP client: {}", e))
+            })?;
 
         Ok(Self {
             config,
@@ -275,14 +283,19 @@ impl ReconEngine {
     }
 
     /// Execute JavaScript-based fingerprinting (integrating catch fingerprint.js logic)
-    async fn javascript_based_fingerprinting(&self, target_url: &str) -> Result<BrowserFingerprint> {
+    async fn javascript_based_fingerprinting(
+        &self,
+        target_url: &str,
+    ) -> Result<BrowserFingerprint> {
         use crate::javascript_engine::JSEngine;
 
         let js_engine = JSEngine::new()?;
 
         // Load and execute the fingerprinting JavaScript code (placeholder for now)
         let fingerprint_js = "// Browser fingerprinting JavaScript code would be loaded here";
-        let result = js_engine.execute_fingerprinting(fingerprint_js, target_url).await?;
+        let result = js_engine
+            .execute_fingerprinting(fingerprint_js, target_url)
+            .await?;
 
         Ok(result)
     }
@@ -290,13 +303,15 @@ impl ReconEngine {
     /// Passive reconnaissance without JavaScript execution
     async fn passive_reconnaissance(&self, target_url: &str) -> Result<BrowserFingerprint> {
         // Collect basic information through HTTP requests
-        let response = self.http_client
+        let response = self
+            .http_client
             .get(target_url)
             .send()
             .await
             .map_err(|e| NexusError::NetworkError(format!("HTTP request failed: {}", e)))?;
 
-        let headers: HashMap<String, String> = response.headers()
+        let headers: HashMap<String, String> = response
+            .headers()
             .iter()
             .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
             .collect();
@@ -304,7 +319,12 @@ impl ReconEngine {
         // Build a basic fingerprint from available data
         Ok(BrowserFingerprint {
             browser: BrowserInfo {
-                user_agent: self.config.user_agents.first().unwrap_or(&String::new()).clone(),
+                user_agent: self
+                    .config
+                    .user_agents
+                    .first()
+                    .unwrap_or(&String::new())
+                    .clone(),
                 language: "en-US".to_string(),
                 languages: vec!["en-US".to_string()],
                 platform: "unknown".to_string(),
@@ -412,7 +432,7 @@ impl ReconEngine {
 
     /// Calculate fingerprint hash from collected data
     async fn calculate_fingerprint_hash(&self, data: &HashMap<String, String>) -> String {
-        use sha2::{Sha256, Digest};
+        use sha2::{Digest, Sha256};
 
         let serialized = serde_json::to_string(data).unwrap_or_default();
         let mut hasher = Sha256::new();
@@ -425,7 +445,10 @@ impl ReconEngine {
         let mut parameters = HashMap::new();
         parameters.insert("target".to_string(), target);
         parameters.insert("recon_type".to_string(), format!("{:?}", recon_type));
-        parameters.insert("config".to_string(), serde_json::to_string(&self.config).unwrap_or_default());
+        parameters.insert(
+            "config".to_string(),
+            serde_json::to_string(&self.config).unwrap_or_default(),
+        );
 
         TaskData {
             task_id: uuid::Uuid::new_v4().to_string(),

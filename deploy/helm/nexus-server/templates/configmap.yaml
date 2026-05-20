@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "nexus-server.fullname" . }}-toml
+  labels:
+    {{- include "nexus-server.labels" . | nindent 4 }}
+data:
+  nexus.toml: |
+{{ .Values.nexusToml | indent 4 }}

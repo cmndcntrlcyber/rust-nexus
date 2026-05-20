@@ -1,0 +1,34 @@
+# v1.3 nexus.toml as a ConfigMap (Phase 1.3.9 — scaffold).
+# Operators replace the body via kustomize patch in their overlay.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nexus-toml
+  namespace: nexus
+data:
+  nexus.toml: |
+    [a2a]
+    bind = "0.0.0.0:50052"
+    insecure_network = false
+    identity_path = "/var/lib/nexus/server-identity.bin"
+
+    [capabilities]
+    file = "/etc/nexus/capabilities.json"
+
+    [audit]
+    sink = "file"
+    path = "/var/lib/nexus/audit.log"
+
+    [rate_limit]
+    requests_per_second = 100
+
+    [message_size]
+    max_bytes = 4194304
+
+    [metrics]
+    bind = "0.0.0.0:9100"
+
+    [logging]
+    level = "info"
+    format = "json"

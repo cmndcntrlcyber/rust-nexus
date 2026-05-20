@@ -3,10 +3,32 @@ name = "nexus-agent"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "nexus_agent"
+path = "src/lib.rs"
+
+[[bin]]
+name = "nexus-agent"
+path = "src/main.rs"
+
 [dependencies]
 nexus-common = { path = "../nexus-common" }
 nexus-infra = { path = "../nexus-infra" }
 async-trait = { workspace = true }
+
+# v1.1 additions (simple-mesh layer).
+nexus-a2a = { workspace = true }
+nexus-mesh = { workspace = true }
+nexus-web-comms = { path = "../nexus-web-comms" }
+libp2p = { workspace = true }
+portable-pty = { workspace = true }
+tokio-stream = { workspace = true }
+futures = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+# Tonic 0.14 alongside the overlay's 0.10 (Cargo allows mixed versions).
+tonic_14 = { package = "tonic", version = "0.14", default-features = false, features = ["transport", "codegen", "router", "channel"] }
 
 # ATT&CK technique crates (optional, feature-gated)
 nexus-t1059-command-scripting = { path = "../nexus-t1059-command-scripting", optional = true }
@@ -23,6 +45,8 @@ log = { workspace = true }
 env_logger = { workspace = true }
 thiserror = { workspace = true }
 num_cpus = "1.16"
+rand = { workspace = true }
+# v1.4.9 — per-agent audit log uses tempfile in tests.
 
 # Windows-specific dependencies
 [target.'cfg(target_os = "windows")'.dependencies]
@@ -67,3 +91,6 @@ persistence-kit  = ["t1547"]
 lateral-movement = ["t1021-006"]
 red-team-windows = ["t1059", "t1547", "t1021-006"]
 full             = ["t1059", "t1547", "t1021-006"]
+
+[dev-dependencies]
+tempfile = "3"

@@ -3,15 +3,22 @@
 //! Integrates tauri-executor's cross-platform execution capabilities with rust-nexus's
 //! enterprise C2 framework, providing multiple execution protocols and fallback methods.
 
-use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
-use tokio::process::Command;
-use log::{info, warn, error, debug};
+// v1.4 commit-prep: this crate's executors are all-stubs (per v1.2.1
+// scope cuts — the real wmi/ssh/api/powershell executors are pending).
+// The pre-existing dead-code warnings would block the new `-D warnings`
+// CI gate every PR; suppress at the crate level rather than chasing
+// each unused field.
+#![allow(dead_code, unused_assignments, clippy::field_reassign_with_default)]
 
-pub mod ssh_executor;
-pub mod wmi_executor;
+use log::{info, warn};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use tokio::process::Command;
+
 pub mod api_executor;
 pub mod powershell_executor;
+pub mod ssh_executor;
+pub mod wmi_executor;
 
 use nexus_common::*;
 
@@ -57,21 +64,11 @@ pub enum ExecutionProtocol {
 }
 
 /// Credentials storage for different execution methods
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CredentialsStore {
     pub ssh_credentials: HashMap<String, SshCredentials>,
     pub wmi_credentials: HashMap<String, WmiCredentials>,
     pub api_credentials: HashMap<String, ApiCredentials>,
-}
-
-impl Default for CredentialsStore {
-    fn default() -> Self {
-        Self {
-            ssh_credentials: HashMap::new(),
-            wmi_credentials: HashMap::new(),
-            api_credentials: HashMap::new(),
-        }
-    }
 }
 
 /// SSH connection credentials
@@ -159,10 +156,7 @@ impl HybridExecutor {
     }
 
     /// Execute a command using the specified method with automatic fallback
-    pub async fn execute(
-        &self,
-        request: ExecutionRequest,
-    ) -> Result<ExecutionResult> {
+    pub async fn execute(&self, request: ExecutionRequest) -> Result<ExecutionResult> {
         info!(
             "Executing command on {} via {:?}",
             request.target_endpoint, request.execution_method
@@ -244,10 +238,7 @@ impl HybridExecutor {
     }
 
     /// Execute command locally
-    async fn execute_local(
-        &self,
-        request: &ExecutionRequest,
-    ) -> Result<ExecutionResult> {
+    async fn execute_local(&self, request: &ExecutionRequest) -> Result<ExecutionResult> {
         let start_time = std::time::Instant::now();
 
         #[cfg(target_os = "windows")]
@@ -258,7 +249,7 @@ impl HybridExecutor {
         #[cfg(not(target_os = "windows"))]
         let mut cmd = Command::new("sh");
         #[cfg(not(target_os = "windows"))]
-        cmd.args(&["-c", &request.command]);
+        cmd.args(["-c", &request.command]);
 
         // Set timeout
         let timeout_duration =
@@ -266,16 +257,9 @@ impl HybridExecutor {
 
         let output = tokio::time::timeout(timeout_duration, cmd.output())
             .await
-            .map_err(|_| {
-                NexusError::TaskExecutionError(
-                    "Command execution timeout".to_string(),
-                )
-            })?
+            .map_err(|_| NexusError::TaskExecutionError("Command execution timeout".to_string()))?
             .map_err(|e| {
-                NexusError::TaskExecutionError(format!(
-                    "Command execution failed: {}",
-                    e
-                ))
+                NexusError::TaskExecutionError(format!("Command execution failed: {}", e))
             })?;
 
         Ok(ExecutionResult {
@@ -354,8 +338,10 @@ impl HybridExecutor {
         parameters.insert("method".to_string(), format!("{:?}", method));
 
         if let Some(creds) = credentials {
-            parameters.insert("credentials".to_string(), 
-                serde_json::to_string(&creds).unwrap_or_default());
+            parameters.insert(
+                "credentials".to_string(),
+                serde_json::to_string(&creds).unwrap_or_default(),
+            );
         }
 
         TaskData {
@@ -408,7 +394,16 @@ impl HybridExecutor {
 
         #[cfg(not(target_os = "windows"))]
         {
-            let output = Command::new("cat").args(&["/proc/uptime"]).output().await?;
+            let output = Command::new("cat")
+                .args(["/proc/uptime"])
+                .output()
+                .await
+                .map_err(|e| {
+                    nexus_common::NexusError::TaskExecutionError(format!(
+                        "uptime read failed: {}",
+                        e
+                    ))
+                })?;
 
             let uptime_str = String::from_utf8_lossy(&output.stdout);
             let uptime_float: f64 = uptime_str

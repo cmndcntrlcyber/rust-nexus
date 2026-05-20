@@ -1,6 +1,6 @@
 use nexus_common::{
-    AttackTechnique, ExecutionContext, NexusError, Platform, Result, Tactic,
-    TechniqueParams, TechniqueResult,
+    AttackTechnique, ExecutionContext, NexusError, Platform, Result, Tactic, TechniqueParams,
+    TechniqueResult,
 };
 use std::process::Command;
 
@@ -33,25 +33,45 @@ impl AttackTechnique for ShellInterpreter {
         vec!["shell".to_string()]
     }
 
-    async fn execute(&self, _ctx: &ExecutionContext, params: TechniqueParams) -> Result<TechniqueResult> {
-        let command = params.parameters.get("command")
-            .or_else(|| if !params.command.is_empty() { Some(&params.command) } else { None })
-            .ok_or_else(|| NexusError::TaskExecutionError("Missing command parameter".to_string()))?;
+    async fn execute(
+        &self,
+        _ctx: &ExecutionContext,
+        params: TechniqueParams,
+    ) -> Result<TechniqueResult> {
+        let command = params
+            .parameters
+            .get("command")
+            .or({
+                if !params.command.is_empty() {
+                    Some(&params.command)
+                } else {
+                    None
+                }
+            })
+            .ok_or_else(|| {
+                NexusError::TaskExecutionError("Missing command parameter".to_string())
+            })?;
 
         #[cfg(target_os = "windows")]
         let output = Command::new("cmd")
             .args(&["/C", command])
             .output()
-            .map_err(|e| NexusError::TaskExecutionError(format!("Command execution failed: {}", e)))?;
+            .map_err(|e| {
+                NexusError::TaskExecutionError(format!("Command execution failed: {}", e))
+            })?;
 
         #[cfg(not(target_os = "windows"))]
         let output = Command::new("sh")
-            .args(&["-c", command])
+            .args(["-c", command])
             .output()
-            .map_err(|e| NexusError::TaskExecutionError(format!("Command execution failed: {}", e)))?;
+            .map_err(|e| {
+                NexusError::TaskExecutionError(format!("Command execution failed: {}", e))
+            })?;
 
         if output.status.success() {
-            Ok(TechniqueResult::ok(String::from_utf8_lossy(&output.stdout).to_string()))
+            Ok(TechniqueResult::ok(
+                String::from_utf8_lossy(&output.stdout).to_string(),
+            ))
         } else {
             Ok(TechniqueResult::ok(format!(
                 "Error ({}): {}",
@@ -91,20 +111,45 @@ impl AttackTechnique for PowerShellInterpreter {
         vec!["powershell".to_string()]
     }
 
-    async fn execute(&self, _ctx: &ExecutionContext, _params: TechniqueParams) -> Result<TechniqueResult> {
+    async fn execute(
+        &self,
+        _ctx: &ExecutionContext,
+        _params: TechniqueParams,
+    ) -> Result<TechniqueResult> {
         #[cfg(target_os = "windows")]
         {
-            let command = _params.parameters.get("command")
-                .or_else(|| if !_params.command.is_empty() { Some(&_params.command) } else { None })
-                .ok_or_else(|| NexusError::TaskExecutionError("Missing command parameter".to_string()))?;
+            let command = _params
+                .parameters
+                .get("command")
+                .or_else(|| {
+                    if !_params.command.is_empty() {
+                        Some(&_params.command)
+                    } else {
+                        None
+                    }
+                })
+                .ok_or_else(|| {
+                    NexusError::TaskExecutionError("Missing command parameter".to_string())
+                })?;
 
             let output = Command::new("powershell")
-                .args(&["-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-Command", command])
+                .args(&[
+                    "-WindowStyle",
+                    "Hidden",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-Command",
+                    command,
+                ])
                 .output()
-                .map_err(|e| NexusError::TaskExecutionError(format!("PowerShell execution failed: {}", e)))?;
+                .map_err(|e| {
+                    NexusError::TaskExecutionError(format!("PowerShell execution failed: {}", e))
+                })?;
 
             if output.status.success() {
-                Ok(TechniqueResult::ok(String::from_utf8_lossy(&output.stdout).to_string()))
+                Ok(TechniqueResult::ok(
+                    String::from_utf8_lossy(&output.stdout).to_string(),
+                ))
             } else {
                 Ok(TechniqueResult::ok(format!(
                     "PowerShell Error ({}): {}",
@@ -115,7 +160,9 @@ impl AttackTechnique for PowerShellInterpreter {
         }
 
         #[cfg(not(target_os = "windows"))]
-        Err(NexusError::TaskExecutionError("PowerShell not available on this platform".to_string()))
+        Err(NexusError::TaskExecutionError(
+            "PowerShell not available on this platform".to_string(),
+        ))
     }
 }
 
@@ -159,7 +206,9 @@ mod tests {
     #[tokio::test]
     async fn test_shell_execution() {
         let shell = ShellInterpreter;
-        let crypto = std::sync::Arc::new(nexus_common::Crypto::new(nexus_common::Crypto::generate_key()));
+        let crypto = std::sync::Arc::new(nexus_common::Crypto::new(
+            nexus_common::Crypto::generate_key(),
+        ));
         let ctx = ExecutionContext {
             crypto,
             agent_id: "test-agent".to_string(),
@@ -170,7 +219,9 @@ mod tests {
             parameters: std::collections::HashMap::new(),
             timeout: None,
         };
-        params.parameters.insert("command".to_string(), "echo hello".to_string());
+        params
+            .parameters
+            .insert("command".to_string(), "echo hello".to_string());
 
         let result = shell.execute(&ctx, params).await.unwrap();
         assert!(result.success);

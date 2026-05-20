@@ -1,0 +1,103 @@
+# Example /etc/nexus/nexus.toml for rust-nexus v1.2 production
+# deployments. Copy to /etc/nexus/nexus.toml and edit per your
+# environment.
+#
+# Keys map to fields in nexus-infra::config. v1.2-specific sections
+# are marked [v1.2]; v1.0-era sections are still honored for the
+# legacy NexusC2 lane.
+
+# ---------------------------------------------------------------
+# A2A plane (v1.2)
+# ---------------------------------------------------------------
+
+[a2a]
+# Bind address for the A2A gRPC service. Production: 0.0.0.0 with a
+# firewall in front. Loopback dev: 127.0.0.1.
+bind = "0.0.0.0:50052"
+
+# D-V1-E gate. Always false in production; the server refuses to
+# bind a non-loopback address unless this is true OR mTLS is
+# configured (which it must be in v1.2 release builds).
+insecure_network = false
+
+# Path to the server's 72-byte NXS_ID01 NodeIdentity blob. Used to
+# sign the AgentCard (D-V1.2-cards). File mode must be 0o600.
+identity_path = "/var/lib/nexus/server-identity.bin"
+
+[a2a.tls]
+# mTLS env vars (NEXUS_CA_CERT, NEXUS_SERVER_CERT, NEXUS_SERVER_KEY)
+# are the canonical source. These config keys are read only as a
+# fallback for the cases where env vars can't be set (e.g. some
+# init systems). nexus-a2a/src/tls.rs is authoritative.
+# ca_cert  = "/etc/nexus/ca.crt.pem"
+# server_cert = "/etc/nexus/server.crt.pem"
+# server_key  = "/etc/nexus/server.key.pem"
+
+# ---------------------------------------------------------------
+# Capability matrix (D-V1.2-caps)
+# ---------------------------------------------------------------
+
+[capabilities]
+file = "/etc/nexus/capabilities.json"
+# v1.2 ships a HashMap-backed matrix. The nalgebra MatrixRouter is
+# v1.3+ work.
+
+# ---------------------------------------------------------------
+# Audit log (D-V1.2-audit)
+# ---------------------------------------------------------------
+
+[audit]
+sink = "file"
+path = "/var/lib/nexus/audit.log"
+# Rotation is operator's responsibility (logrotate); see
+# docs/deployment/operations.md § Audit log retention.
+
+# ---------------------------------------------------------------
+# Rate limit (per-peer, token-bucket)
+# ---------------------------------------------------------------
+
+[rate_limit]
+requests_per_second = 100   # nexus_a2a::interceptors::DEFAULT_RATE_LIMIT_RPS
+
+# ---------------------------------------------------------------
+# Per-message size cap (default 4 MiB)
+# ---------------------------------------------------------------
+
+[message_size]
+max_bytes = 4194304          # 4 * 1024 * 1024
+
+# ---------------------------------------------------------------
+# Legacy NexusC2 lane (Tonic 0.10, port 50051)
+# ---------------------------------------------------------------
+
+[grpc_server]
+# Bind for the legacy task-pull lane. Keep enabled if you have v1.1-
+# era agents that haven't been upgraded; disable in v1.2-only
+# deployments by commenting out the [grpc_server] section.
+bind = "0.0.0.0:50051"
+mutual_tls = true
+
+# ---------------------------------------------------------------
+# Logging (tracing-subscriber)
+# ---------------------------------------------------------------
+
+[logging]
+level = "info"
+format = "json"           # "json" or "compact"
+
+# ---------------------------------------------------------------
+# Optional: Cloudflare/ACME pipeline (v1.0 overlay)
+# ---------------------------------------------------------------
+
+# v1.2.1 stubbed the ACME order workflow ("deferred to v1.3").
+# Cloudflare DNS automation still works if you want it — point this
+# section at your Cloudflare API token. v1.2 production deployments
+# typically leave this disabled and provision certs externally.
+
+# [cloudflare]
+# api_token_env = "CLOUDFLARE_API_TOKEN"
+# zone_id = "your-zone-id"
+
+# [letsencrypt]
+# enabled = false          # ACME workflow is stubbed in v1.2.1
+# contact_email = "ops@example.com"

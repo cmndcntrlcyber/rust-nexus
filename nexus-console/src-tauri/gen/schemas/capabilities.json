@@ -1,0 +1,1 @@
+{"default":{"identifier":"default","description":"Default permissions for the nexus-console main window (v1.1 minimum allowlist).","local":true,"windows":["main"],"permissions":["core:default","core:event:default","core:window:default"]}}

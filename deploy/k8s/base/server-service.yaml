@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: nexus-server
+  namespace: nexus
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: nexus
+    app.kubernetes.io/component: server
+  ports:
+    - name: a2a
+      port: 50052
+      targetPort: a2a
+    - name: legacy
+      port: 50051
+      targetPort: legacy

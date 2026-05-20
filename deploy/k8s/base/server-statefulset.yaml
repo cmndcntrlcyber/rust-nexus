@@ -1,0 +1,92 @@
+# v1.3 nexus-server StatefulSet (Phase 1.3.9 — scaffold).
+#
+# StatefulSet rather than Deployment because the server persists:
+#   - /var/lib/nexus/server-identity.bin (72-byte NXS_ID01 — load-bearing)
+#   - /var/lib/nexus/audit.log (hash-chained, must survive pod restarts)
+#
+# Liveness probe hits the metrics port to confirm the server is alive.
+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nexus-server
+  namespace: nexus
+spec:
+  serviceName: nexus-server
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: nexus
+      app.kubernetes.io/component: server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: nexus
+        app.kubernetes.io/component: server
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+      containers:
+        - name: nexus-server
+          image: nexus-server:dev # overlay can pin a digest
+          ports:
+            - name: a2a
+              containerPort: 50052
+            - name: legacy
+              containerPort: 50051
+            - name: metrics
+              containerPort: 9100
+          env:
+            - name: NEXUS_CA_CERT
+              value: /etc/nexus/ca.crt.pem
+            - name: NEXUS_SERVER_CERT
+              value: /etc/nexus/server.crt.pem
+            - name: NEXUS_SERVER_KEY
+              value: /etc/nexus/server.key.pem
+          volumeMounts:
+            - name: nexus-toml
+              mountPath: /etc/nexus/nexus.toml
+              subPath: nexus.toml
+              readOnly: true
+            - name: tls
+              mountPath: /etc/nexus
+              readOnly: true
+            - name: data
+              mountPath: /var/lib/nexus
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            tcpSocket:
+              port: a2a
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+      volumes:
+        - name: nexus-toml
+          configMap:
+            name: nexus-toml
+        - name: tls
+          secret:
+            secretName: nexus-tls
+            defaultMode: 0600
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi

@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::{current_timestamp, generate_uuid};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -16,7 +16,7 @@ pub struct Agent {
     pub capabilities: Vec<String>,
     pub last_seen: u64,
     pub first_seen: u64,
-    pub tasks: Vec<String>, // Task IDs
+    pub tasks: Vec<String>,               // Task IDs
     pub results: HashMap<String, String>, // Task ID -> Result
     pub status: AgentStatus,
     pub metadata: HashMap<String, String>,
@@ -151,7 +151,7 @@ impl Agent {
         format!(
             "{} ({}) - {} @ {} - {} tasks pending",
             self.hostname,
-            self.id[..8].to_string(),
+            &self.id[..8],
             self.username,
             self.ip_address,
             self.tasks.len()
@@ -235,15 +235,33 @@ impl AgentCapabilities {
     pub fn to_string_list(&self) -> Vec<String> {
         let mut capabilities = Vec::new();
 
-        if self.shell_execution { capabilities.push("shell_execution".to_string()); }
-        if self.file_operations { capabilities.push("file_operations".to_string()); }
-        if self.network_operations { capabilities.push("network_operations".to_string()); }
-        if self.process_injection { capabilities.push("process_injection".to_string()); }
-        if self.shellcode_execution { capabilities.push("shellcode_execution".to_string()); }
-        if self.fiber_execution { capabilities.push("fiber_execution".to_string()); }
-        if self.privilege_escalation { capabilities.push("privilege_escalation".to_string()); }
-        if self.persistence { capabilities.push("persistence".to_string()); }
-        if self.anti_analysis { capabilities.push("anti_analysis".to_string()); }
+        if self.shell_execution {
+            capabilities.push("shell_execution".to_string());
+        }
+        if self.file_operations {
+            capabilities.push("file_operations".to_string());
+        }
+        if self.network_operations {
+            capabilities.push("network_operations".to_string());
+        }
+        if self.process_injection {
+            capabilities.push("process_injection".to_string());
+        }
+        if self.shellcode_execution {
+            capabilities.push("shellcode_execution".to_string());
+        }
+        if self.fiber_execution {
+            capabilities.push("fiber_execution".to_string());
+        }
+        if self.privilege_escalation {
+            capabilities.push("privilege_escalation".to_string());
+        }
+        if self.persistence {
+            capabilities.push("persistence".to_string());
+        }
+        if self.anti_analysis {
+            capabilities.push("anti_analysis".to_string());
+        }
 
         capabilities.extend(self.custom_capabilities.clone());
         capabilities

@@ -3,6 +3,12 @@
 /// Basic template rendering (placeholder)
 pub struct TemplateEngine;
 
+impl Default for TemplateEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TemplateEngine {
     pub fn new() -> Self {
         Self

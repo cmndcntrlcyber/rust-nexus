@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "nexus-server.fullname" . }}
+  labels:
+    {{- include "nexus-server.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "nexus-server.fullname" . }}
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "nexus-server.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "nexus-server.selectorLabels" . | nindent 8 }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "nexus-server.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      containers:
+        - name: nexus-server
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: a2a
+              containerPort: {{ .Values.service.ports.a2a }}
+            - name: legacy
+              containerPort: {{ .Values.service.ports.legacy }}
+            - name: metrics
+              containerPort: {{ .Values.service.ports.metrics }}
+          env:
+            - name: NEXUS_CA_CERT
+              value: /etc/nexus/ca.crt.pem
+            - name: NEXUS_SERVER_CERT
+              value: /etc/nexus/server.crt.pem
+            - name: NEXUS_SERVER_KEY
+              value: /etc/nexus/server.key.pem
+          volumeMounts:
+            - name: nexus-toml
+              mountPath: /etc/nexus/nexus.toml
+              subPath: nexus.toml
+              readOnly: true
+            - name: tls
+              mountPath: /etc/nexus
+              readOnly: true
+            - name: data
+              mountPath: /var/lib/nexus
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            tcpSocket:
+              port: a2a
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: nexus-toml
+          configMap:
+            name: {{ include "nexus-server.fullname" . }}-toml
+        - name: tls
+          secret:
+            secretName: {{ include "nexus-server.fullname" . }}-tls
+            defaultMode: 0600
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- if .Values.persistence.storageClassName }}
+        storageClassName: {{ .Values.persistence.storageClassName | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.persistence.size }}

@@ -1,0 +1,73 @@
+[package]
+name = "nexus-a2a"
+version = "0.1.0"
+edition = "2021"
+description = "A2A gRPC server/client for rust-nexus (v1.1 simple-mesh integration)."
+
+[dependencies]
+nexus-common = { workspace = true }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+futures = { workspace = true }
+async-trait = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde-big-array = { workspace = true }
+anyhow = { workspace = true }
+# v1.2: signed AgentCards (D-V1.2-cards). Uses the same Ed25519 surface
+# nexus-common::NodeIdentity uses.
+ed25519-dalek = { workspace = true }
+# v1.2: hash-chained audit log (D-V1.2-audit). BLAKE3 over canonical record
+# bytes, hex-encoded.
+blake3 = { workspace = true }
+# v1.3.6: Prometheus pull-based metrics (D-V1.3-C).
+prometheus = { version = "0.13", default-features = false }
+# v1.4.6 (D-V1.4-C): matrix-algebra CapabilityCheck backend. No SIMD;
+# default features only. Wildcard semantics are preserved as
+# HashSet overlays alongside the dense matrices.
+nalgebra = { version = "0.32", default-features = false, features = ["std"] }
+# v1.4.5 (D-V1.4 / Phase 1.4.5): optional OTel OTLP/gRPC trace export.
+# Off by default — operators rebuild with `--features otel`.
+opentelemetry = { version = "0.27", optional = true }
+opentelemetry-otlp = { version = "0.27", optional = true, default-features = false, features = ["grpc-tonic", "trace"] }
+opentelemetry_sdk = { version = "0.27", optional = true, features = ["rt-tokio"] }
+tracing-opentelemetry = { version = "0.28", optional = true }
+tracing-subscriber = { workspace = true, optional = true }
+
+# A2A uses Tonic 0.14 directly (the workspace's Tonic 0.10 is reserved for
+# the existing nexus-infra::nexus.proto wiring). Cargo allows mixed versions
+# within a workspace; both are compiled side-by-side in target/.
+tonic = { version = "0.14", default-features = false, features = ["transport", "codegen", "router", "server", "channel", "tls-ring"] }
+tonic-prost = { workspace = true }
+prost = "0.14"
+prost-types = "0.14"
+
+[build-dependencies]
+tonic-prost-build = { workspace = true }
+protoc-bin-vendored = { workspace = true }
+
+[dev-dependencies]
+tracing-subscriber = { workspace = true }
+tempfile = "3"
+
+[[example]]
+name = "headless_operator"
+path = "examples/headless_operator.rs"
+
+# shell_loopback is added at Phase 1.1.8 (depends on nexus-agent::shell::ShellSession).
+
+[features]
+default = []
+# v1.4.5: enable to compile in the real OTel OTLP/gRPC trace exporter.
+# Without this, `otel::init_tracing_with_otel` returns FeatureDisabled.
+otel = [
+    "dep:opentelemetry",
+    "dep:opentelemetry-otlp",
+    "dep:opentelemetry_sdk",
+    "dep:tracing-opentelemetry",
+    "tracing-subscriber",
+]
+# v1.4.9: pull in aws-sdk-s3 for the S3 audit archive sink.
+s3 = []

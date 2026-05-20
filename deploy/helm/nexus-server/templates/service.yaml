@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "nexus-server.fullname" . }}
+  labels:
+    {{- include "nexus-server.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    {{- include "nexus-server.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: a2a
+      port: {{ .Values.service.ports.a2a }}
+      targetPort: a2a
+    - name: legacy
+      port: {{ .Values.service.ports.legacy }}
+      targetPort: legacy
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "nexus-server.fullname" . }}-metrics
+  labels:
+    {{- include "nexus-server.labels" . | nindent 4 }}
+    prometheus.io/scrape: "true"
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "nexus-server.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: metrics
+      port: {{ .Values.service.ports.metrics }}
+      targetPort: metrics
