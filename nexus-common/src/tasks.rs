@@ -237,6 +237,13 @@ impl TaskResult {
         self
     }
 
+    /// Alias for [`failure`] — matches the `messages::LegacyTaskResult` API
+    /// so v1.5 migration call sites compile without a rename.
+    #[inline]
+    pub fn error(task_id: String, error: String, start_time: u64) -> Self {
+        Self::failure(task_id, error, start_time)
+    }
+
     pub fn with_exit_code(mut self, exit_code: i32) -> Self {
         self.exit_code = Some(exit_code);
         self

@@ -74,6 +74,12 @@ Next: v1.5 overlay cleanup.
 
 ## Recent activity
 
+- 2026-05-21 — **v1.5 overlay cleanup + mesh interop checkpoint complete.**
+  (1) `TaskResult` canonicalized — `messages::TaskResult` renamed to `LegacyTaskResult`; `tasks::TaskResult` is now the single canonical type, plus an `error()` alias for `failure()`. `nexus-agent` call sites updated to pass `start_time` directly. `#![allow(ambiguous_glob_reexports)]` removed from `nexus-common`.
+  (2) `AgentBuilder` added (`nexus-common/src/agent.rs`) — fluent 9-field builder for `Agent`; `Agent::builder()` factory; doctest passes. `#![allow(clippy::too_many_arguments)]` removed.
+  (3) `nexus-hybrid-exec` executors wired: SSH real impl via `russh` (behind `ssh` feature); API real impl via `reqwest` (behind `api` feature); PowerShell via `tokio::process::Command` spawning `pwsh`/`powershell.exe` (no broken crate dependency); WMI real impl via `wmi` + `Win32_Process.Create` (behind `all(feature="wmi", target_os="windows")`). All non-available-feature paths return explicit `TaskExecutionError` rather than silent stub output.
+  (4) D-XLINK-A resolved — `nexus-web-comms::mesh_a2a` module added: `TRANSPORT_PRIORITY` constant, `select_transport` helper, `MeshA2aBridge` boundary struct, 4 unit tests. A2A gRPC = primary; libp2p mesh = fallback; A2A-over-mesh tunnel deferred to Phase 5. All affected crates compile clean; test count 226 → 230.
+
 - 2026-05-20 — **v1.4.x close-out (all four deferred items closed).**
   v1.4.x-1: `nexus_a2a::audit_s3::S3Sink` real `aws-sdk-s3` 1.51 upload
   impl behind the `s3` Cargo feature — bounded queue + background

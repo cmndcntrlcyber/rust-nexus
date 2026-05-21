@@ -157,6 +157,83 @@ impl Agent {
             self.tasks.len()
         )
     }
+
+    /// Entry point for the fluent builder.
+    pub fn builder() -> AgentBuilder {
+        AgentBuilder::default()
+    }
+}
+
+/// Fluent builder for [`Agent`].  Replaces the 9-argument `Agent::new`
+/// constructor (v1.5 cleanup).
+///
+/// # Example
+/// ```
+/// use nexus_common::agent::{Agent, AgentBuilder};
+///
+/// let agent = Agent::builder()
+///     .hostname("ws01".into())
+///     .os_type("Windows".into())
+///     .os_version("10.0.19045".into())
+///     .ip_address("10.0.0.5".into())
+///     .username("SYSTEM".into())
+///     .process_id(4)
+///     .process_name("lsass.exe".into())
+///     .architecture("x64".into())
+///     .capabilities(vec!["shell_execution".into()])
+///     .build();
+/// assert_eq!(agent.hostname, "ws01");
+/// ```
+#[derive(Default)]
+pub struct AgentBuilder {
+    hostname: String,
+    os_type: String,
+    os_version: String,
+    ip_address: String,
+    username: String,
+    process_id: u32,
+    process_name: String,
+    architecture: String,
+    capabilities: Vec<String>,
+    metadata: HashMap<String, String>,
+}
+
+impl AgentBuilder {
+    pub fn hostname(mut self, v: String) -> Self { self.hostname = v; self }
+    pub fn os_type(mut self, v: String) -> Self { self.os_type = v; self }
+    pub fn os_version(mut self, v: String) -> Self { self.os_version = v; self }
+    pub fn ip_address(mut self, v: String) -> Self { self.ip_address = v; self }
+    pub fn username(mut self, v: String) -> Self { self.username = v; self }
+    pub fn process_id(mut self, v: u32) -> Self { self.process_id = v; self }
+    pub fn process_name(mut self, v: String) -> Self { self.process_name = v; self }
+    pub fn architecture(mut self, v: String) -> Self { self.architecture = v; self }
+    pub fn capabilities(mut self, v: Vec<String>) -> Self { self.capabilities = v; self }
+    pub fn metadata(mut self, key: String, value: String) -> Self {
+        self.metadata.insert(key, value);
+        self
+    }
+
+    pub fn build(self) -> Agent {
+        let now = current_timestamp();
+        Agent {
+            id: generate_uuid(),
+            hostname: self.hostname,
+            os_type: self.os_type,
+            os_version: self.os_version,
+            ip_address: self.ip_address,
+            username: self.username,
+            process_id: self.process_id,
+            process_name: self.process_name,
+            architecture: self.architecture,
+            capabilities: self.capabilities,
+            last_seen: now,
+            first_seen: now,
+            tasks: Vec::new(),
+            results: HashMap::new(),
+            status: AgentStatus::Online,
+            metadata: self.metadata,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

@@ -145,8 +145,13 @@ impl TaskData {
     }
 }
 
+/// Legacy TCP-wire task result (pre-gRPC overlay).
+///
+/// v1.5: renamed from `TaskResult` to end the `ambiguous_glob_reexports`
+/// conflict with `nexus_common::tasks::TaskResult`, which is now canonical.
+/// Call sites in `nexus-agent` have been migrated to the canonical type.
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct TaskResult {
+pub struct LegacyTaskResult {
     pub task_id: String,
     pub status: String, // "success", "error", "timeout"
     pub output: String,
@@ -155,7 +160,7 @@ pub struct TaskResult {
     pub timestamp: u64,
 }
 
-impl TaskResult {
+impl LegacyTaskResult {
     pub fn success(task_id: String, output: String, execution_time_ms: u64) -> Self {
         Self {
             task_id,

@@ -29,6 +29,10 @@ pub use transport::{
     shutdown_from, ShutdownFuture, Transport, TransportContext, TransportKind, UnknownTransport,
 };
 
+// v1.5 D-XLINK-A boundary checkpoint.
+pub mod mesh_a2a;
+pub use mesh_a2a::{select_transport, MeshA2aBridge, TRANSPORT_PRIORITY};
+
 use nexus_common::*;
 // Temporarily commented out due to compilation issues
 // use nexus_infra::domain_manager::DomainManager;

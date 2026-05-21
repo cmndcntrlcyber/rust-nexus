@@ -1,16 +1,8 @@
-// v1.0 overlay code is intentionally not refactored in v1.4. Two pre-
-// existing clippy patterns that the new `-D warnings` CI gate would
-// reject get module-level allows here:
-//
-// - `ambiguous_glob_reexports`: `pub use messages::*` and
-//   `pub use tasks::*` both export a `TaskResult` type. They've been
-//   ambiguous since v1.0; we keep both modules wildcard-re-exported
-//   so existing call sites compile, and treat the ambiguity as a
-//   known issue. A real refactor (one canonical TaskResult) is
-//   queued for v1.5.
-// - `too_many_arguments`: `agent::AgentSession::new` takes 9
-//   parameters. Overlay-supplied; tidied to a builder pattern in v1.5.
-#![allow(ambiguous_glob_reexports, clippy::too_many_arguments)]
+// v1.5: both v1.4 module-level allows removed.
+//   - `ambiguous_glob_reexports`: resolved — `messages::TaskResult` renamed
+//     to `LegacyTaskResult`; `tasks::TaskResult` is now canonical.
+//   - `too_many_arguments`: resolved — `Agent::new` (9-arg) replaced by
+//     `AgentBuilder` in the `agent` module.
 
 use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
@@ -27,7 +19,9 @@ pub mod identity;
 pub mod os;
 pub mod sealed;
 
-pub use agent::*;
+pub use agent::{
+    Agent, AgentBuilder, AgentCapabilities, AgentSession, AgentStatus,
+};
 pub use crypto::*;
 pub use messages::*;
 pub use tasks::*;

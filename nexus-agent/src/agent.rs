@@ -217,19 +217,9 @@ impl NexusAgent {
         };
 
         let task_result = match result {
-            Ok(Ok(output)) => TaskResult::success(
-                task_id.clone(),
-                output,
-                (current_timestamp() - start_time) * 1000,
-            ),
-            Ok(Err(e)) => TaskResult::error(
-                task_id.clone(),
-                e.to_string(),
-                (current_timestamp() - start_time) * 1000,
-            ),
-            Err(_) => {
-                TaskResult::timeout(task_id.clone(), (current_timestamp() - start_time) * 1000)
-            }
+            Ok(Ok(output)) => TaskResult::success(task_id.clone(), output, start_time),
+            Ok(Err(e)) => TaskResult::error(task_id.clone(), e.to_string(), start_time),
+            Err(_) => TaskResult::timeout(task_id.clone(), start_time),
         };
 
         // Send task result back to server
