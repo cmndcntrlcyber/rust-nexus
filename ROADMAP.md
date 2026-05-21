@@ -128,14 +128,14 @@ operator console) can be added to `scripts/demo.sh` and CI.
 - [x] Phase 1.4.10 — `DtnQueue` + `publish_helpers` DTN caller-driven helpers
 - [x] Phase 1.4.11 — v1.4 regression test suite
 
-**v1.4.x deferred items (need external resources — next session):**
+**v1.4.x close-out (2026-05-20) — all four items closed:**
 
-| ID | Item | Blocker |
+| ID | Item | Status |
 |---|---|---|
-| v1.4.x-1 | `S3Sink` real upload impl | `aws-sdk-s3` integration + S3-compatible endpoint |
-| v1.4.x-2 | Multi-arch Docker release build verification | Builder hardware (amd64 + arm64) |
-| v1.4.x-3 | Live ACME staging round-trip in CI | Real domain + Cloudflare creds as CI secrets |
-| v1.4.x-4 | DTN `MeshNode` publish-path integration | Swarm timeout coupling in `nexus_mesh::dtn::publish_helpers` |
+| v1.4.x-1 | `S3Sink` real upload impl | ✅ `aws-sdk-s3` 1.51 behind `s3` Cargo feature; KMS / endpoint override / static creds; 6 unit tests |
+| v1.4.x-2 | Multi-arch Docker release build verification | ✅ PR-trigger build-only added to `docker.yml`; `scripts/docker-multiarch-verify.sh` for dev hosts |
+| v1.4.x-3 | Live ACME staging round-trip in CI | ✅ `acme_smoke` consumes CF token + zone id from env; `acme-staging.yml` workflow (dispatch + weekly cron) |
+| v1.4.x-4 | DTN `MeshNode` publish-path integration | ✅ `MeshHandle::topic_subscribers` + `publish_or_dtn` with `tokio::time::timeout` Swarm coupling |
 
 ### v1.5 — overlay cleanup + mesh interop checkpoint
 

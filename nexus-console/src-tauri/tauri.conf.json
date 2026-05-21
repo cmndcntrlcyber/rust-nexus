@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "identifier": "dev.rust-nexus.console",
   "build": {
-    "beforeDevCommand": "cd ../ui && trunk serve",
+    "beforeDevCommand": "cd ui && trunk serve",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "cd ../ui && trunk build",
+    "beforeBuildCommand": "cd ui && trunk build",
     "frontendDist": "../ui/dist"
   },
   "app": {

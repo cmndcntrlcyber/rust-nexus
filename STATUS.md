@@ -1,7 +1,7 @@
 # STATUS
 
-Current phase: **v1.4 — code complete. 222 / 222 tests pass.**
-Next: final v1.4 items (see § Deferred below) + v1.5 overlay cleanup.
+Current phase: **v1.4 — code complete + v1.4.x close-out. 226 / 226 tests pass.**
+Next: v1.5 overlay cleanup.
 
 ## v1.2 deliverables
 
@@ -74,6 +74,25 @@ Next: final v1.4 items (see § Deferred below) + v1.5 overlay cleanup.
 
 ## Recent activity
 
+- 2026-05-20 — **v1.4.x close-out (all four deferred items closed).**
+  v1.4.x-1: `nexus_a2a::audit_s3::S3Sink` real `aws-sdk-s3` 1.51 upload
+  impl behind the `s3` Cargo feature — bounded queue + background
+  task + exponential backoff retry; KMS / endpoint-override / static-
+  credential surfaces wired; 6 unit tests on `--features s3`.
+  v1.4.x-2: `.github/workflows/docker.yml` extended to PR-trigger
+  multi-arch build-only verification; `scripts/docker-multiarch-verify.sh`
+  ships the same multi-arch buildx command for dev hosts.
+  v1.4.x-3: `nexus-infra/tests/acme_smoke.rs` now consumes
+  `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ZONE_ID` + contact email from
+  env; `.github/workflows/acme-staging.yml` runs the ignored
+  round-trip on workflow_dispatch + weekly cron when the secrets are
+  configured. v1.4.x-4: `MeshHandle::topic_subscribers` (gossipsub
+  mesh-peer probe) + `nexus_mesh::dtn::publish_helpers::publish_or_dtn`
+  Swarm-coupled publish with `tokio::time::timeout` falling back to
+  the DTN queue on zero subscribers / publish failure;
+  `PublishOutcome::Delivered` extended with `mesh_peers` count.
+  Test count: 222 → 226 (S3 feature-off + DTN unit + DTN integration).
+  All workspace tests + clippy + fmt pass.
 - 2026-05-19 — v1.3 execution continued (round 3): Phase 1.3.4 full Kademlia + mDNS Swarm integration (live in `MeshBehaviour`; `examples/kad_discovery.rs` smoke-test confirms two-node identify-over-Kademlia works end-to-end). Phase 1.3.1 partial shipped (six upstream A2A v0.3 RPC methods — `GetTask`, `CancelTask`, `TaskSubscription`, `CreateTaskPushNotificationConfig`, `ListTask`, `GetAuthenticatedExtendedAgentCard` — added to proto with best-effort message shapes; all five Task RPCs return Unimplemented; `GetAuthenticatedExtendedAgentCard` returns the standard card. Loopback test verifies they're reachable on the wire. Definitive sha pin against upstream remains v1.4 work). Phase 1.3.9 closed (manifests + Dockerfile authored; `rust:1-bookworm` base pin verified cargo-chef installs cleanly; full release-build verification disk-constrained on dev host; docker.md updated). Test count: 188 → 189, all green. Demo still PASSes.
 - 2026-05-19 — v1.4 execution round 5 (v1.4 close-out): Phase 1.4.4 closed (Tauri audit-log viewer — `audit_log_tail` / `audit_log_filter` / `audit_log_verify` Tauri commands in `nexus-console/src-tauri/src/commands.rs` consuming the v1.4.3 `StreamAuditRecords` RPC; `audit_log_verify` does a pure-Rust BLAKE3 chain check; new Leptos component `nexus-console/ui/src/components/audit_log_viewer.rs` ships a table view + filter inputs + verify button; WASM UI builds clean for wasm32-unknown-unknown). Phase 1.4.1 closed (acme-lib 0.8 real re-port — `nexus_infra::letsencrypt::request_certificate` now runs the full ACME DNS-01 flow inside `tokio::task::spawn_blocking`, bridging back to async land via `tokio::runtime::Handle` for Cloudflare TXT-record publish/delete; `CertBundle` + `run_acme_flow` private helpers; `CloudflareManager` derives `Clone`; new `tests/acme_smoke.rs` with `initialize_creates_storage_dir` (always runs) + `staging_dns01_round_trip` (`#[ignore]`d, activated by `LETSENCRYPT_STAGING_ENABLED=1` + `LETSENCRYPT_TEST_DOMAIN`)). Phase 1.3.7 marked complete (its Tauri viewer half landed via 1.4.4). Phase 1.3.2 task cleaned up (superseded by 1.4.1). Test count: 221 → 222. Demo PASSes. **All eleven v1.4 phases closed.**
 - 2026-05-19 — v1.4 execution round 4: bounded remaining work closed. Phase 1.4.3 finish — `nexus_infra::mesh_listener::pump_mesh_decoded` callback forwarder + test (synthesizes a MeshListener with a real MeshNode and confirms payloads route to the callback). Phase 1.4.7 finish — gRPC metadata extraction wired into `send_streaming_message`: `x-nexus-operator-token` hex header decoded + verified against the server's NodeIdentity public key BEFORE consuming the streaming body; `extract_operator_token` + `hex_decode` helpers in server.rs; `dispatch_stream` threads the extracted token through `ShellOpenParams.operator_token`; live end-to-end test (`v1_4_7_operator_token_metadata_extracted_at_dispatch`) covers the full path. Phase 1.4.10 finish — `nexus_mesh::dtn::publish_helpers::{publish_then_dtn, drain_on_reconnect, PublishOutcome}` caller-driven helpers with tests. `docs/v1.4/security-overview.md` + `docs/v1.4/migration-from-v1.3.md` fully written (cumulative defense matrix + API/wire/config diff tables + operational upgrade procedure). Test count: 217 → 221. Demo PASSes.
@@ -109,11 +128,32 @@ committable state of the workspace since v1.0.
 - `.gitignore` → `Cargo.lock` un-ignored; v1.2+ runtime artifact ignores added; `.dockerignore` added
 - No sensitive files in untracked set (no `*.pem`, `*.key`, `*.crt`, `audit.log*`, `*identity.bin`)
 
-**Deferred (final v1.4 items — need external resources):**
-1. `S3Sink` real upload impl — needs `aws-sdk-s3` integration + S3-compatible endpoint
-2. Multi-arch Docker release build verification — needs builder hardware (amd64 + arm64)
-3. Live ACME staging round-trip in CI — needs real domain + Cloudflare creds injected as CI secrets
-4. DTN `MeshNode` publish-path integration — needs Swarm timeout coupling (`nexus_mesh::dtn::publish_helpers`)
+**Deferred (final v1.4 items) — CLOSED 2026-05-20:**
+
+1. ✅ v1.4.x-1 — `S3Sink` real upload impl. `nexus-a2a` now ships an
+   `aws-sdk-s3` (1.51) implementation behind the `s3` Cargo feature.
+   `S3Sink::connect` spawns a bounded queue + background upload task
+   with exponential-backoff retry. KMS server-side encryption,
+   endpoint override (MinIO / R2 / B2 path-style), and standard AWS
+   credential chain are all wired. 6 unit tests (with `--features s3`).
+2. ✅ v1.4.x-2 — Multi-arch Docker release build. `.github/workflows/docker.yml`
+   now build-verifies `linux/amd64,linux/arm64` on every PR
+   (build-only, no push) in addition to the existing tag-push pipeline.
+   `scripts/docker-multiarch-verify.sh` ships the same build on dev
+   hardware once the user is in the `docker` group.
+3. ✅ v1.4.x-3 — Live ACME staging round-trip. `acme_smoke::staging_dns01_round_trip`
+   wired to consume `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ZONE_ID` +
+   `LETSENCRYPT_TEST_DOMAIN` from env. New
+   `.github/workflows/acme-staging.yml` runs the test on
+   `workflow_dispatch` + weekly cron (Mondays 04:17 UTC) when the
+   secrets are configured; no-ops cleanly on forks without secrets.
+4. ✅ v1.4.x-4 — DTN `MeshNode` publish-path integration.
+   `MeshHandle::topic_subscribers` reads the gossipsub mesh-peer count
+   from the swarm; `nexus_mesh::dtn::publish_helpers::publish_or_dtn`
+   couples publish-under-`tokio::time::timeout` to the subscriber
+   probe and routes to the DTN queue when zero peers are present.
+   Live two-node-fixture test + a regression test in
+   `integration-tests/tests/v1_4_regression.rs`.
 
 **v1.5 planned:**
 - Overlay cleanup: builder pattern for `AgentSession::new` (9-arg ctor → builder)

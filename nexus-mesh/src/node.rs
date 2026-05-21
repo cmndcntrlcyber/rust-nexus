@@ -101,6 +101,13 @@ enum MeshCmd {
     ListenAddrs {
         reply: oneshot::Sender<Vec<Multiaddr>>,
     },
+    /// v1.4.x-4: snapshot of the gossipsub mesh peers for `topic`.
+    /// Used by the DTN store-and-forward path to decide whether a
+    /// publish reached anyone before queuing.
+    TopicSubscribers {
+        topic: IdentTopic,
+        reply: oneshot::Sender<usize>,
+    },
 }
 
 /// Handle for interacting with a spawned mesh node.
@@ -166,6 +173,29 @@ impl MeshHandle {
             return Vec::new();
         }
         rx.await.unwrap_or_default()
+    }
+
+    /// v1.4.x-4: number of gossipsub mesh peers currently subscribed to
+    /// `topic`. Used by the DTN store-and-forward decision: gossipsub
+    /// `publish` can succeed with zero subscribers, so callers needing
+    /// "delivered to *someone*" semantics check this before deciding
+    /// whether to enqueue into [`crate::dtn::DtnQueue`].
+    ///
+    /// Returns 0 if the swarm task is gone.
+    pub async fn topic_subscribers(&self, topic: &IdentTopic) -> usize {
+        let (tx, rx) = oneshot::channel();
+        if self
+            .cmd_tx
+            .send(MeshCmd::TopicSubscribers {
+                topic: topic.clone(),
+                reply: tx,
+            })
+            .await
+            .is_err()
+        {
+            return 0;
+        }
+        rx.await.unwrap_or(0)
     }
 
     /// Receive the next event.
@@ -305,6 +335,11 @@ async fn handle_cmd(swarm: &mut Swarm<MeshBehaviour>, cmd: MeshCmd) {
         MeshCmd::ListenAddrs { reply } => {
             let addrs: Vec<Multiaddr> = swarm.listeners().cloned().collect();
             let _ = reply.send(addrs);
+        }
+        MeshCmd::TopicSubscribers { topic, reply } => {
+            let hash = topic.hash();
+            let count = swarm.behaviour_mut().gossipsub.mesh_peers(&hash).count();
+            let _ = reply.send(count);
         }
     }
 }

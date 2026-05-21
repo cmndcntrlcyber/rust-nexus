@@ -1,9 +1,18 @@
 //! v1.4.1 ACME smoke test (Phase 1.4.1 / D-V1.4-A).
 //!
-//! Activates when all three env vars are set:
-//! `LETSENCRYPT_STAGING_ENABLED=1`, `CLOUDFLARE_API_TOKEN`,
-//! `LETSENCRYPT_TEST_DOMAIN`. Dials Let's Encrypt staging, provisions
-//! a real cert via DNS-01, and asserts the saved cert + key files exist.
+//! `staging_dns01_round_trip` activates when these env vars are all set:
+//!
+//! - `LETSENCRYPT_STAGING_ENABLED=1` (gate)
+//! - `LETSENCRYPT_TEST_DOMAIN` — primary domain to issue against
+//! - `CLOUDFLARE_API_TOKEN` — token scoped to `Zone:DNS:Edit` for the
+//!   zone serving `LETSENCRYPT_TEST_DOMAIN`
+//! - `CLOUDFLARE_ZONE_ID` — the zone id (Cloudflare dashboard →
+//!   Overview → Zone ID)
+//! - Optional: `LETSENCRYPT_CONTACT_EMAIL` (default
+//!   `ops@example.com`)
+//!
+//! Dials Let's Encrypt staging, provisions a real cert via DNS-01,
+//! and asserts the saved cert + key files exist.
 //!
 //! `#[ignore]`d by default so CI without staging access skips cleanly.
 //! This test makes real network calls when activated.
@@ -21,15 +30,26 @@ async fn staging_dns01_round_trip() {
 
     let domain = std::env::var("LETSENCRYPT_TEST_DOMAIN")
         .expect("LETSENCRYPT_TEST_DOMAIN required for staging test");
+    let api_token = std::env::var("CLOUDFLARE_API_TOKEN")
+        .expect("CLOUDFLARE_API_TOKEN required for staging test");
+    let zone_id =
+        std::env::var("CLOUDFLARE_ZONE_ID").expect("CLOUDFLARE_ZONE_ID required for staging test");
+    let contact_email = std::env::var("LETSENCRYPT_CONTACT_EMAIL")
+        .unwrap_or_else(|_| "ops@example.com".to_string());
 
     let tmp = tempfile::tempdir().expect("tempdir");
 
-    let cf_config = nexus_infra::config::CloudflareConfig::default();
+    let cf_config = nexus_infra::config::CloudflareConfig {
+        api_token,
+        zone_id,
+        domain: domain.clone(),
+        ..nexus_infra::config::CloudflareConfig::default()
+    };
     let cloudflare = CloudflareManager::new(cf_config).expect("cf manager");
 
     let le_config = nexus_infra::config::LetsEncryptConfig {
         acme_directory_url: "https://acme-staging-v02.api.letsencrypt.org/directory".to_string(),
-        contact_email: "ops@example.com".to_string(),
+        contact_email,
         cert_storage_dir: tmp.path().to_path_buf(),
         cert_renewal_days: 30,
         ..Default::default()

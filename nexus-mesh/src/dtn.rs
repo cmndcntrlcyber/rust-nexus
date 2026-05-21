@@ -209,19 +209,51 @@ fn parse_timestamp_prefix(filename: &str) -> Option<u64> {
 /// The decoupling matters: libp2p gossipsub `publish` can succeed
 /// with zero subscribers, so "publish returned Ok" ≠ "delivered".
 /// DTN policy stays at the caller's layer.
+///
+/// v1.4.x-4 adds [`publish_or_dtn`], which couples the policy to the
+/// live swarm: it issues `mesh.publish` under a timeout and reads
+/// `mesh.topic_subscribers` to confirm at least one peer is in the
+/// gossipsub mesh before reporting `Delivered`.
 pub mod publish_helpers {
+    use std::time::Duration;
+
+    use libp2p::gossipsub::IdentTopic;
+    use tokio::time::timeout;
+    use tracing::warn;
+
+    use crate::node::MeshHandle;
+
     use super::*;
 
-    /// Outcome of a [`publish_then_dtn`] call.
+    /// Outcome of a publish-then-DTN call.
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub enum PublishOutcome {
         /// Caller indicated recipient is online; payload was not queued.
-        Delivered,
+        ///
+        /// For [`publish_or_dtn`], also reports the number of gossipsub
+        /// mesh peers that received the publish.
+        Delivered {
+            /// Count of gossipsub mesh peers at publish time. 0 with
+            /// this variant only when the caller passed
+            /// `live_delivery_ok = true` via [`publish_then_dtn`].
+            mesh_peers: usize,
+        },
         /// Recipient was deemed offline; payload was queued in the DTN.
         Queued,
     }
 
+    /// Default per-publish timeout used by [`publish_or_dtn`]. Tuned to
+    /// be longer than gossipsub's default heartbeat (1s) so a freshly
+    /// subscribed peer's GRAFT can land before we decide nobody's home.
+    pub const DEFAULT_PUBLISH_TIMEOUT: Duration = Duration::from_millis(2_500);
+
     /// Queue `bytes` in DTN unless `live_delivery_ok` is true.
+    ///
+    /// This is the *caller-driven* variant — the caller has already
+    /// decided whether the recipient is online (e.g. via a side-channel
+    /// presence check). Prefer [`publish_or_dtn`] when the
+    /// [`MeshHandle`] is available because it makes the decision from
+    /// the swarm's actual mesh-peer set.
     pub fn publish_then_dtn(
         queue: &DtnQueue,
         recipient_peer_id_hex: &str,
@@ -229,10 +261,67 @@ pub mod publish_helpers {
         live_delivery_ok: bool,
     ) -> Result<PublishOutcome, DtnError> {
         if live_delivery_ok {
-            return Ok(PublishOutcome::Delivered);
+            return Ok(PublishOutcome::Delivered { mesh_peers: 0 });
         }
         queue.enqueue(recipient_peer_id_hex, bytes)?;
         Ok(PublishOutcome::Queued)
+    }
+
+    /// v1.4.x-4 — Swarm-coupled publish. Issues `mesh.publish(topic, bytes)`
+    /// under `publish_timeout` and consults `mesh.topic_subscribers` to
+    /// confirm delivery. Behaviour:
+    ///
+    /// - publish returns Err, or times out, or returns Ok with zero
+    ///   mesh peers → enqueue under `recipient_peer_id_hex` and return
+    ///   [`PublishOutcome::Queued`].
+    /// - publish returns Ok with ≥1 mesh peer → return
+    ///   [`PublishOutcome::Delivered`] with the mesh-peer count.
+    ///
+    /// The caller still owns the recipient hex: it's the DTN per-recipient
+    /// queue key, distinct from the gossipsub topic (one topic can serve
+    /// many recipients via the sealed-envelope `target` field).
+    pub async fn publish_or_dtn(
+        queue: &DtnQueue,
+        mesh: &MeshHandle,
+        topic: &IdentTopic,
+        recipient_peer_id_hex: &str,
+        bytes: Vec<u8>,
+        publish_timeout: Duration,
+    ) -> Result<PublishOutcome, DtnError> {
+        // Snapshot the bytes before the publish so we can re-queue
+        // them verbatim on failure.
+        let queued_bytes = bytes.clone();
+        let publish_fut = mesh.publish(topic, bytes);
+
+        let publish_result = match timeout(publish_timeout, publish_fut).await {
+            Ok(inner) => inner,
+            Err(_) => {
+                warn!(topic = %topic, "publish_or_dtn: timeout; queuing to DTN");
+                queue.enqueue(recipient_peer_id_hex, &queued_bytes)?;
+                return Ok(PublishOutcome::Queued);
+            }
+        };
+
+        let publish_ok = match publish_result {
+            Ok(_msg_id) => true,
+            Err(err) => {
+                warn!(topic = %topic, error = %err, "publish_or_dtn: publish failed; queuing to DTN");
+                false
+            }
+        };
+
+        // Even when publish returns Ok, gossipsub considers a publish
+        // successful even with zero mesh peers (it stores the message
+        // for forwarding once peers GRAFT). For "delivered to someone"
+        // semantics we re-check the mesh-peer count.
+        let mesh_peers = mesh.topic_subscribers(topic).await;
+
+        if publish_ok && mesh_peers > 0 {
+            Ok(PublishOutcome::Delivered { mesh_peers })
+        } else {
+            queue.enqueue(recipient_peer_id_hex, &queued_bytes)?;
+            Ok(PublishOutcome::Queued)
+        }
     }
 
     /// Drain a recipient's queue (symmetry with `publish_then_dtn`).
@@ -330,8 +419,52 @@ mod tests {
         assert_eq!(queue.depth_for("deadbeef").unwrap(), 1);
 
         let outcome = publish_then_dtn(&queue, "deadbeef", b"live", true).expect("live");
-        assert_eq!(outcome, PublishOutcome::Delivered);
+        assert!(matches!(outcome, PublishOutcome::Delivered { .. }));
         assert_eq!(queue.depth_for("deadbeef").unwrap(), 1);
+    }
+
+    // v1.4.x-4 — publish_or_dtn against a real single-node MeshHandle.
+    // A solo node has zero gossipsub mesh peers, so every publish_or_dtn
+    // call must end up in the DTN queue regardless of whether publish
+    // itself returns Ok or Err.
+
+    #[tokio::test]
+    async fn publish_or_dtn_queues_when_no_mesh_peers() {
+        use crate::node::MeshNode;
+        use crate::topics::server_inbox;
+        use libp2p::Multiaddr;
+        use nexus_common::NodeIdentity;
+        use publish_helpers::{publish_or_dtn, PublishOutcome, DEFAULT_PUBLISH_TIMEOUT};
+
+        let (_tmp, opts) = tempdir_opts();
+        let queue = DtnQueue::open(opts).expect("open");
+
+        let identity = NodeIdentity::from_seed(&[7u8; 32]);
+        let listen: Multiaddr = "/ip4/127.0.0.1/tcp/0".parse().unwrap();
+        let mesh = MeshNode::spawn(&identity, listen).expect("spawn");
+        // Give the swarm a moment to start listening so publish has a
+        // valid swarm state. We don't need to actually be listening on
+        // any peer — the solo-node behaviour is the same.
+        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+
+        let topic = server_inbox();
+        let outcome = publish_or_dtn(
+            &queue,
+            &mesh,
+            &topic,
+            "deadbeef",
+            b"hello".to_vec(),
+            DEFAULT_PUBLISH_TIMEOUT,
+        )
+        .await
+        .expect("publish_or_dtn");
+
+        assert_eq!(outcome, PublishOutcome::Queued, "solo node ⇒ queued");
+        assert_eq!(queue.depth_for("deadbeef").unwrap(), 1);
+
+        let drained = queue.drain_for("deadbeef").expect("drain");
+        assert_eq!(drained.len(), 1);
+        assert_eq!(&drained[0].bytes, b"hello");
     }
 
     #[test]

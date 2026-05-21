@@ -36,6 +36,15 @@ opentelemetry_sdk = { version = "0.27", optional = true, features = ["rt-tokio"]
 tracing-opentelemetry = { version = "0.28", optional = true }
 tracing-subscriber = { workspace = true, optional = true }
 
+# v1.4.9 / v1.4.x-1 (Phase 1.4.9 / D-V1.4-G): optional S3 archive sink.
+# Off by default — operators rebuild with `--features s3`. Works against
+# AWS S3, MinIO, Cloudflare R2, Backblaze B2 (set endpoint_url for
+# S3-compatible providers).
+aws-config = { version = "1.5", optional = true, default-features = false, features = ["behavior-version-latest", "rustls", "rt-tokio"] }
+aws-sdk-s3 = { version = "1.51", optional = true, default-features = false, features = ["behavior-version-latest", "rustls", "rt-tokio"] }
+aws-smithy-types = { version = "1.2", optional = true }
+aws-credential-types = { version = "1.2", optional = true, features = ["hardcoded-credentials"] }
+
 # A2A uses Tonic 0.14 directly (the workspace's Tonic 0.10 is reserved for
 # the existing nexus-infra::nexus.proto wiring). Cargo allows mixed versions
 # within a workspace; both are compiled side-by-side in target/.
@@ -70,4 +79,9 @@ otel = [
     "tracing-subscriber",
 ]
 # v1.4.9: pull in aws-sdk-s3 for the S3 audit archive sink.
-s3 = []
+s3 = [
+    "dep:aws-config",
+    "dep:aws-sdk-s3",
+    "dep:aws-smithy-types",
+    "dep:aws-credential-types",
+]

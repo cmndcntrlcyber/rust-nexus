@@ -19,6 +19,8 @@ nexus-agent = { path = "../nexus-agent" }
 nexus-infra = { path = "../nexus-infra" }
 # v1.4: regression tests touch nexus-mesh DTN.
 nexus-mesh = { workspace = true }
+# v1.4.x-4: integration test for publish_or_dtn needs a Multiaddr.
+libp2p = { version = "0.53", default-features = false }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 futures = { workspace = true }

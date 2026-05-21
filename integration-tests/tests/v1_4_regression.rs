@@ -17,7 +17,10 @@ use nexus_a2a::audit::{make_record, AuditSink, MemSink, MultiSink};
 use nexus_a2a::capabilities::{CapabilityCheck, CapabilityError};
 use nexus_a2a::tokens::{OperatorToken, TokenError, DEFAULT_LIFETIME_SECONDS};
 use nexus_common::NodeIdentity;
+use nexus_mesh::dtn::publish_helpers::{publish_or_dtn, PublishOutcome, DEFAULT_PUBLISH_TIMEOUT};
 use nexus_mesh::dtn::{DtnOptions, DtnQueue};
+use nexus_mesh::topics::server_inbox;
+use nexus_mesh::MeshNode;
 
 #[test]
 fn matrix_router_preserves_v1_3_semantics() {
@@ -118,6 +121,45 @@ async fn multi_sink_fans_out_v1_4_records() {
         .await;
     assert_eq!(primary.records().len(), 1);
     assert_eq!(extra.records().len(), 1);
+}
+
+// v1.4.x-4 — Swarm-coupled publish queues into DTN when no peers
+// are in the gossipsub mesh.
+#[tokio::test]
+async fn publish_or_dtn_queues_solo_node_publish() {
+    use libp2p::Multiaddr;
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let opts = DtnOptions {
+        root: dir.path().to_path_buf(),
+        max_depth: 16,
+        max_age_seconds: 3600,
+    };
+    let queue = DtnQueue::open(opts).expect("open");
+
+    let identity = NodeIdentity::from_seed(&[19u8; 32]);
+    let listen: Multiaddr = "/ip4/127.0.0.1/tcp/0".parse().unwrap();
+    let mesh = MeshNode::spawn(&identity, listen).expect("spawn");
+    // Let the swarm finish starting up.
+    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+
+    let topic = server_inbox();
+    let outcome = publish_or_dtn(
+        &queue,
+        &mesh,
+        &topic,
+        "1122aabb",
+        b"v1.4.x-4 payload".to_vec(),
+        DEFAULT_PUBLISH_TIMEOUT,
+    )
+    .await
+    .expect("publish_or_dtn");
+
+    assert_eq!(outcome, PublishOutcome::Queued);
+    assert_eq!(queue.depth_for("1122aabb").unwrap(), 1);
+
+    // mesh.topic_subscribers must report 0 on a solo node.
+    assert_eq!(mesh.topic_subscribers(&topic).await, 0);
 }
 
 #[tokio::test]
