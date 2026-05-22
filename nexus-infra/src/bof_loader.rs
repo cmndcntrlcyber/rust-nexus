@@ -7,6 +7,9 @@ use std::collections::HashMap;
 use std::ptr;
 
 #[cfg(target_os = "windows")]
+use std::ffi::CString;
+
+#[cfg(target_os = "windows")]
 use windows_sys::Win32::{
     Foundation::GetLastError,
     System::LibraryLoader::{GetModuleHandleA, GetProcAddress},

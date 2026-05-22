@@ -14,6 +14,162 @@ operator consoles installed on operator workstations.
 
 ---
 
+## Just the Commands
+
+Minimum copy-paste path for a first production rollout on an EC2 box
+(domain → public IP, BYO CA certs in hand, building from source on the
+host). Each step is the smallest thing that has to happen; for the
+**why**, see the detailed sections below.
+
+**Assumptions before step 1**
+
+- EC2 security group: inbound TCP **50052** allowed from your operator
+  and agent CIDRs. Outbound unrestricted.
+- DNS: `c2.example.com` A record points at the EC2 public IP.
+- You have a CA and have already issued: `ca.crt.pem`, `server.crt.pem`
+  + `server.key.pem` (server cert SANs include
+  `DNS:c2.example.com,IP:<ec2-public-ip>`), plus per-agent and
+  per-operator client cert/key pairs. If you don't have a CA, see
+  [CA strategy](#ca-strategy) and `scripts/gen-certs.sh` first.
+- NTP enabled: `sudo timedatectl set-ntp true`.
+
+### 1. Host prep + build (on the EC2 box)
+
+```bash
+sudo apt-get update
+sudo apt-get install -y build-essential pkg-config libssl-dev git curl protobuf-compiler
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+source "$HOME/.cargo/env"
+
+git clone https://github.com/cmndcntrlcyber/rust-nexus.git
+cd rust-nexus
+cargo build --release -p nexus-infra --bin nexus-server
+cargo build --release -p nexus-agent --bin nexus-agent
+sudo install -m 0755 target/release/nexus-server /usr/local/bin/
+sudo install -m 0755 target/release/nexus-agent  /usr/local/bin/
+```
+
+> `nexus-server` is a `[[bin]]` inside the `nexus-infra` crate, not a
+> top-level package — `-p nexus-server` will error with
+> `package ID specification did not match any packages`.
+
+### 2. Users, directories, and cert drop
+
+```bash
+# Server side
+sudo useradd --system --no-create-home --shell /usr/sbin/nologin nexus
+sudo mkdir -p /etc/nexus /var/lib/nexus /var/log/nexus
+sudo chown -R nexus:nexus /var/lib/nexus /var/log/nexus
+sudo chown root:nexus /etc/nexus && sudo chmod 750 /etc/nexus
+
+# Agent side (same box for a smoke test, or each endpoint host)
+sudo useradd --system --no-create-home --shell /usr/sbin/nologin nexus-agent
+sudo mkdir -p /etc/nexus-agent /var/lib/nexus-agent
+sudo chown -R nexus-agent:nexus-agent /var/lib/nexus-agent
+sudo chown root:nexus-agent /etc/nexus-agent && sudo chmod 750 /etc/nexus-agent
+```
+
+Copy your BYO CA-signed PEMs into place:
+
+```
+/etc/nexus/ca.crt.pem            root:nexus      0644
+/etc/nexus/server.crt.pem        root:nexus      0644
+/etc/nexus/server.key.pem        nexus:nexus     0600
+/etc/nexus-agent/ca.crt.pem      root:nexus-agent  0644
+/etc/nexus-agent/client.crt.pem  root:nexus-agent  0644
+/etc/nexus-agent/client.key.pem  nexus-agent:nexus-agent  0600
+```
+
+### 3. Server NodeIdentity, config, capabilities
+
+```bash
+sudo -u nexus /usr/local/bin/nexus-server --init-identity /var/lib/nexus/server-identity.bin
+sudo chmod 600 /var/lib/nexus/server-identity.bin
+
+sudo cp docs/deployment/examples/nexus.toml.example /etc/nexus/nexus.toml
+sudo cp config/capabilities.example.json /etc/nexus/capabilities.json
+```
+
+Leave `capabilities.json` as-is for now; you'll add the agent's peer-id
+in step 6.
+
+### 4. Server env file (the three required `NEXUS_*` vars)
+
+```ini
+# /etc/nexus/server.env
+NEXUS_CA_CERT=/etc/nexus/ca.crt.pem
+NEXUS_SERVER_CERT=/etc/nexus/server.crt.pem
+NEXUS_SERVER_KEY=/etc/nexus/server.key.pem
+RUST_LOG=info
+```
+
+```bash
+sudo chown root:nexus /etc/nexus/server.env
+sudo chmod 640 /etc/nexus/server.env
+```
+
+### 5. Start the server
+
+```bash
+sudo cp docs/deployment/examples/nexus-server.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now nexus-server
+sudo systemctl status nexus-server
+```
+
+Look for `A2A server starting addr=0.0.0.0:50052 insecure_network=false mtls=true`
+in `journalctl -u nexus-server`.
+
+### 6. Start the agent and wire its peer-id into the capability matrix
+
+Agent env file:
+
+```ini
+# /etc/nexus-agent/agent.env
+NEXUS_CA_CERT=/etc/nexus-agent/ca.crt.pem
+NEXUS_CLIENT_CERT=/etc/nexus-agent/client.crt.pem
+NEXUS_CLIENT_KEY=/etc/nexus-agent/client.key.pem
+NEXUS_SERVER_ADDR=https://c2.example.com:50052
+RUST_LOG=info
+```
+
+```bash
+sudo chown root:nexus-agent /etc/nexus-agent/agent.env
+sudo chmod 640 /etc/nexus-agent/agent.env
+sudo cp docs/deployment/examples/nexus-agent.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now nexus-agent
+
+# Grab the agent's peer-id from the server journal
+sudo journalctl -u nexus-server --since "5 min ago" | grep "agent registered"
+# Add that peer_id to /etc/nexus/capabilities.json with ["shell-session"]
+sudoedit /etc/nexus/capabilities.json
+sudo systemctl restart nexus-server
+```
+
+### 7. Operator console (on the operator workstation, not EC2)
+
+Set these env vars before launching the Tauri console (see
+[`operator-console.md`](operator-console.md) for the install bundle):
+
+```ini
+NEXUS_CA_CERT=...            # operator's copy of ca.crt.pem
+NEXUS_CLIENT_CERT=...        # operator-<name>.crt.pem from your CA
+NEXUS_CLIENT_KEY=...         # matching key
+NEXUS_SERVER_ADDR=https://c2.example.com:50052
+```
+
+### 8. Smoke test
+
+- Operator console sees the agent in `ListRegisteredAgents`.
+- Open a shell on the agent, run `whoami`, see output round-trip.
+- `sudo tail /var/lib/nexus/audit.log` shows fresh signed records.
+
+For deeper verification (mTLS handshake errors, AgentCard signature,
+audit-log chain), see [First-run verification](#first-run-verification).
+
+---
+
 ## Pre-flight checklist
 
 ### Infrastructure

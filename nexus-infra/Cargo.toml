@@ -63,6 +63,10 @@ reqwest = { workspace = true }
 
 # Let's Encrypt ACME
 acme-lib = { workspace = true }
+# acme-lib transitively depends on openssl-sys. Force the `vendored` feature
+# so the build compiles OpenSSL from source statically — required for
+# cross-compiling to x86_64-pc-windows-gnu (where no system OpenSSL exists).
+openssl = { version = "0.10", features = ["vendored"] }
 rcgen = { workspace = true }
 pem = "3.0"
 

