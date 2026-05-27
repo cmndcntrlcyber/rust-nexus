@@ -5251,6 +5251,7 @@ dependencies = [
  "tonic 0.14.6",
  "tonic-build 0.10.2",
  "tracing",
+ "tracing-subscriber",
  "uuid",
  "webpki-roots 0.25.4",
  "windows-sys 0.52.0",

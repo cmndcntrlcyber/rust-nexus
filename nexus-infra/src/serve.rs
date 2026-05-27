@@ -101,7 +101,11 @@ pub async fn run_a2a(
     state: A2aSharedState,
     shutdown: impl std::future::Future<Output = ()> + Send + 'static,
 ) -> Result<()> {
-    nexus_a2a::insecure::enforce(opts.bind, opts.insecure_network)
+    // `run_a2a` does not own a TLS config — pass tls_configured=false. For
+    // production mTLS, the `nexus-server` binary calls
+    // `A2aServer::serve_with_optional_tls` directly so the gate sees
+    // tls_configured=true and accepts non-loopback binds.
+    nexus_a2a::insecure::enforce(opts.bind, opts.insecure_network, false)
         .context("loopback gate (A2A)")?;
 
     info!(

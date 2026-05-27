@@ -123,8 +123,8 @@ impl<H: ShellHandler> A2aServer<H> {
         tls: Option<tonic::transport::ServerTlsConfig>,
         shutdown: impl std::future::Future<Output = ()> + Send + 'static,
     ) -> anyhow::Result<()> {
-        insecure::enforce(addr, insecure_network)?;
         let with_tls = tls.is_some();
+        insecure::enforce(addr, insecure_network, with_tls)?;
         info!(
             ?addr,
             insecure_network,

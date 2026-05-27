@@ -40,7 +40,8 @@ impl A2aClient {
             .port_u16()
             .ok_or_else(|| anyhow::anyhow!("missing port in {addr}"))?;
         let socket = format!("{host}:{port}");
-        insecure::enforce(socket.as_str(), insecure_network)?;
+        let tls_configured = tls.is_some();
+        insecure::enforce(socket.as_str(), insecure_network, tls_configured)?;
         if let Some(t) = tls {
             endpoint = endpoint.tls_config(t)?;
         }

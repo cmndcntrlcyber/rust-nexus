@@ -20,6 +20,7 @@ blake3 = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
 tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 anyhow = { workspace = true }
 # The A2A trait surface needs tonic 0.14 types (Streaming, Status). The
 # overlay code on this crate uses tonic 0.10 as `tonic`. Both coexist:
