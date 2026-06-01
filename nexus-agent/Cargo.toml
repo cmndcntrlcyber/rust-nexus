@@ -51,6 +51,7 @@ rand = { workspace = true }
 # Windows-specific dependencies
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-sys = { workspace = true }
+windows-service = "0.6"
 
 # Linux-specific dependencies
 [target.'cfg(target_os = "linux")'.dependencies]

