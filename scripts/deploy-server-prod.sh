@@ -17,7 +17,7 @@
 #   --local              Deploy to localhost (needs sudo)
 #   --cert-dir DIR       Local dir with prod certs (default: ./certs/prod)
 #                        Must contain: ca.crt.pem, server.crt.pem, server.key.pem
-#   --config FILE        Path to nexus.toml to ship (default: nexus.toml.example)
+#   --config FILE        Path to nexus.toml to ship (default: docs/deployment/examples/nexus.toml.example)
 #   --ssh-key FILE       SSH identity file (passed as -i FILE to ssh/scp)
 #   --no-build           Skip cargo build; use existing target/release/nexus-server
 #   --build-only         Build and copy binary; skip user/cert/service setup
@@ -47,9 +47,9 @@ export PATH
 # ---------- paths ----------
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CERT_DIR="${CERT_DIR:-${REPO_ROOT}/certs/prod}"
-NEXUS_CONFIG="${NEXUS_CONFIG:-${REPO_ROOT}/nexus.toml}"
+NEXUS_CONFIG="${NEXUS_CONFIG:-${REPO_ROOT}/docs/deployment/examples/nexus.toml.example}"
 SERVICE_UNIT="${REPO_ROOT}/docs/deployment/examples/nexus-server.service"
-CAPABILITIES_EXAMPLE="${REPO_ROOT}/config/capabilities.json"
+CAPABILITIES_EXAMPLE="${REPO_ROOT}/config/capabilities.example.json"
 BINARY="${REPO_ROOT}/target/release/nexus-server"
 
 # ---------- flags ----------
@@ -122,6 +122,8 @@ log "certs OK"
 
 # ---------- 2. validate config ----------
 [[ -r "$NEXUS_CONFIG" ]] || die "nexus config not found: ${NEXUS_CONFIG}"
+grep -q '^\[a2a\]' "$NEXUS_CONFIG" || die "config is missing [a2a] section: ${NEXUS_CONFIG}
+The v1.2 server requires [a2a] (not [grpc_server]). Use docs/deployment/examples/nexus.toml.example as a template."
 if [[ "$NEXUS_CONFIG" == *.example ]]; then
     warn "deploying example config (${NEXUS_CONFIG}) — update /etc/nexus/nexus.toml on the target host"
 fi
