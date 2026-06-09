@@ -563,21 +563,163 @@ If you're upgrading from v1.1, the order is:
 
 ## Cloudflare/ACME appendix
 
+### Background
+
 The v1.0 overlay shipped a Cloudflare DNS automation +
 Let's Encrypt ACME pipeline (`nexus-infra/src/{cloudflare,
-letsencrypt, domain_manager}.rs`). **v1.2 makes this optional** and
-v1.2.1 stubbed the ACME `request_certificate` path — it now returns
-`InfraError::LetsEncryptError("ACME order workflow deferred to v1.3
-— use scripts/gen-certs.sh + NEXUS_*_CERT env vars in v1.2")`.
+letsencrypt, domain_manager}.rs`). v1.2.1 stubbed the in-process ACME
+`request_certificate` path. Cert provisioning now comes from external
+tooling (your CA or external certbot). Full in-process ACME is queued
+for v1.3 — see `nexus-infra/src/letsencrypt.rs`.
 
 If you want to keep using the Cloudflare side for domain rotation /
-DNS-fronting, the code is still in place and the `CloudflareManager`
-APIs still work. But cert provisioning has to come from elsewhere
-(your CA, or external ACME via certbot). The path back to fully
-in-process ACME is queued for v1.3 — see
-`nexus-infra/src/letsencrypt.rs` and the
-`docs/configuration/production-setup.md` redirect stub for the
-historical pipeline doc.
+DNS-fronting, the `CloudflareManager` APIs still work.
+
+---
+
+### Automated Let's Encrypt + Cloudflare DNS-01 (`--acme` mode)
+
+`scripts/gen-certs-prod.sh` now includes a fully automated certbot
+DNS-01 workflow. It writes temporary auth/cleanup hook scripts that
+call the Cloudflare API to add and remove `_acme-challenge` TXT
+records, then invokes certbot non-interactively.
+
+#### Prerequisites
+
+```bash
+sudo apt install certbot jq curl
+```
+
+Your Cloudflare API token must have **Zone:DNS:Edit** permission for
+the target zone. Create one at
+`dash.cloudflare.com → My Profile → API Tokens`.
+
+Look up your zone ID:
+
+```bash
+curl -sH "Authorization: Bearer $CF_API_TOKEN" \
+  "https://api.cloudflare.com/client/v4/zones?name=attck-deploy.net" \
+  | jq -r '.result[0].id'
+```
+
+#### Usage
+
+**ACME alongside mTLS certs** (both sets generated in one run):
+
+```bash
+sudo ./scripts/gen-certs-prod.sh \
+  --domain hr.attck-deploy.net --ip 1.2.3.4 \
+  --acme \
+  --email user.name@example.com \
+  --cf-api-token  <CF_API_TOKEN> \
+  --cf-zone-id    <CF_ZONE_ID> \
+  --le-domains    "hr.attck-deploy.net mail.attck-deploy.net" \
+  --out ./certs/prod
+```
+
+**ACME only** (skip mTLS CA generation):
+
+```bash
+sudo ./scripts/gen-certs-prod.sh \
+  --acme-only \
+  --email user.name@example.com \
+  --cf-api-token  <CF_API_TOKEN> \
+  --cf-zone-id    <CF_ZONE_ID> \
+  --le-domains    "hr.attck-deploy.net mail.attck-deploy.net" \
+  --out ./certs/prod
+```
+
+Additional flags:
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--dns-wait <sec>` | `30` | Seconds to sleep after adding the TXT record before certbot verifies |
+
+#### What happens under the hood
+
+1. The script writes two temporary hook scripts to a `mktemp` directory
+   (removed on exit):
+   - `cf-auth-hook.sh` — POSTs a TXT record to
+     `https://api.cloudflare.com/client/v4/zones/<ZONE_ID>/dns_records`
+     with `{"type":"TXT","name":"_acme-challenge.<domain>","content":"<token>","ttl":120}`,
+     then sleeps `$DNS_WAIT` seconds.
+   - `cf-cleanup-hook.sh` — DELETEs the same record by the ID echoed
+     from the auth hook (or looks it up by name+content if the ID is
+     unavailable).
+
+2. certbot is invoked as:
+
+   ```
+   certbot certonly \
+     --manual --preferred-challenges dns \
+     --manual-auth-hook    cf-auth-hook.sh \
+     --manual-cleanup-hook cf-cleanup-hook.sh \
+     --email <email> \
+     --server https://acme-v02.api.letsencrypt.org/directory \
+     --agree-tos --non-interactive \
+     -d hr.attck-deploy.net -d mail.attck-deploy.net
+   ```
+
+3. On success, `fullchain.pem` and `privkey.pem` from
+   `/etc/letsencrypt/live/<primary-domain>/` are copied to `$OUT_DIR`
+   as `le-cert.pem` and `le-key.pem` (mode 600 for the key).
+
+#### Output files
+
+```
+./certs/prod/
+  le-cert.pem     # fullchain — HTTPS/TLS listeners, nginx ssl_certificate
+  le-key.pem      # privkey   — mode 600
+```
+
+Deploy to the server:
+
+```bash
+sudo install -m 0644 -o root -g nexus ./certs/prod/le-cert.pem /etc/nexus/le-cert.pem
+sudo install -m 0600 -o nexus -g nexus ./certs/prod/le-key.pem  /etc/nexus/le-key.pem
+```
+
+#### Certificate renewal
+
+certbot registers an auto-renewal job at `/etc/cron.d/certbot` or the
+`certbot.timer` systemd unit. To automatically re-copy certs after
+renewal, add a `post_hook` to the renewal config:
+
+```ini
+# /etc/letsencrypt/renewal/hr.attck-deploy.net.conf
+[renewalparams]
+...
+post_hook = cp /etc/letsencrypt/live/hr.attck-deploy.net/fullchain.pem /etc/nexus/le-cert.pem && \
+            cp /etc/letsencrypt/live/hr.attck-deploy.net/privkey.pem   /etc/nexus/le-key.pem && \
+            chmod 600 /etc/nexus/le-key.pem && \
+            systemctl reload nexus-server
+```
+
+Test renewal dry-run:
+
+```bash
+sudo certbot renew --dry-run
+```
+
+#### Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|---------|-------------|-----|
+| `Cloudflare API call failed` with `9103` | Token lacks DNS:Edit perm | Re-generate token with correct scope |
+| certbot `DNS problem: NXDOMAIN` | DNS_WAIT too short | Increase `--dns-wait 60` |
+| certbot `rate limit` error | Too many issuances for domain | Wait per [LE rate limits](https://letsencrypt.org/docs/rate-limits/); use `--staging` to test |
+| `expected /etc/letsencrypt/live/... not found` | certbot put cert under a different name | Check `ls /etc/letsencrypt/live/` and copy manually |
+
+To test against the Let's Encrypt staging server (no rate limits, cert
+not trusted):
+
+```bash
+sudo ./scripts/gen-certs-prod.sh --acme-only \
+  --email user.name@example.com \
+  --cf-api-token <TOKEN> --cf-zone-id <ZONE_ID> \
+  --le-domains "hr.attck-deploy.net mail.attck-deploy.net"
+# Then add to the certbot invocation inside the script: --server https://acme-staging-v02.api.letsencrypt.org/directory
+```
 
 ---
 
