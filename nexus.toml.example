@@ -1,7 +1,57 @@
-# Rust-Nexus Configuration Template
-# Copy this file to nexus.toml and customize for your environment
-# NEVER commit nexus.toml with real credentials to version control
+# Rust-Nexus Configuration Template — Full Reference
+# Copy this file to nexus.toml and customize for your environment.
+# NEVER commit nexus.toml with real credentials to version control.
+#
+# NOTE: This file documents the FULL config surface across all entry points.
+# The `nexus-server` binary (v1.2+) only reads the [a2a] section below.
+# All other sections are consumed by the legacy infrastructure overlay
+# (NexusConfig in nexus-infra/src/config.rs).
+#
+# For the minimal production template used by `nexus-server`, see:
+#   docs/deployment/examples/nexus.toml.example
 
+# ===========================================================================
+# [a2a] — Required by the nexus-server binary (v1.2+)
+# ===========================================================================
+# This is the ONLY section the nexus-server binary reads at startup.
+[a2a]
+bind = "0.0.0.0:50052"
+insecure_network = false
+identity_path = "/var/lib/nexus/server-identity.bin"
+
+# ===========================================================================
+# Everything below is consumed by the legacy infrastructure overlay
+# (NexusConfig), NOT by the nexus-server binary.
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# PKI — programmatic certificate and key management
+# ---------------------------------------------------------------------------
+# Use `nexus-server pki init` to generate all certs from a single CA in one
+# atomic step, eliminating the risk of cert/key mismatches between components.
+#
+# Commands:
+#   nexus-server pki init \
+#     --domain c2.example.com \
+#     --ip 1.2.3.4            \
+#     --agents 5              \
+#     --out ./certs/prod
+#
+#   nexus-server pki agent \
+#     --certs-dir ./certs/prod \
+#     --name agent-win01
+[pki]
+# Output directory for all generated cert/key files.
+out_dir = "./certs/prod"
+
+# ACME contact email (used when Cloudflare config is also present to
+# automatically acquire a publicly-trusted server cert via DNS-01 challenge).
+acme_email = "admin@your-domain.com"
+
+# Days before server cert expiry to trigger automatic renewal (requires ACME).
+cert_renewal_days = 30
+
+# ---------------------------------------------------------------------------
 [cloudflare]
 # Cloudflare API token - requires Zone:Edit and DNS:Edit permissions
 # Generate at: https://dash.cloudflare.com/profile/api-tokens
@@ -61,12 +111,30 @@ pin_validation = true
 # Certificate validity period in days
 validity_days = 365
 
+# Multi-domain TLS profiles (optional). When present, the server uses
+# SNI-based cert selection. Each profile has its own cert, key, and CA.
+# The single-cert fields above serve as the fallback when no SNI match.
+#
+# [[origin_cert.profiles]]
+# name = "primary"
+# domains = ["c2.example.com"]
+# cert_path = "./certs/prod/server.crt.pem"
+# key_path = "./certs/prod/server.key.pem"
+# ca_cert_path = "./certs/prod/ca.crt.pem"
+#
+# [[origin_cert.profiles]]
+# name = "fallback"
+# domains = ["backup.example.com", "cdn.example.com"]
+# cert_path = "./certs/fallback/server.crt.pem"
+# key_path = "./certs/fallback/server.key.pem"
+# ca_cert_path = "./certs/fallback/ca.crt.pem"
+
 [grpc_server]
 # Server bind address
 bind_address = "0.0.0.0"
 
 # Server port (443 recommended for HTTPS masquerading)
-port = 8443
+port = 50052
 
 # Enable mutual TLS authentication
 mutual_tls = true

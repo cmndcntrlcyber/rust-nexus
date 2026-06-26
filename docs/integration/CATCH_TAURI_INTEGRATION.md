@@ -1,3 +1,7 @@
+> **Note:** This document references the `catch` and `tauri-executor`
+> submodules which are maintained in separate repositories. They are not
+> included in the main rust-nexus workspace checkout.
+
 # Catch & Tauri-Executor Integration Guide
 
 This document provides a comprehensive guide for the integration of the `catch` browser fingerprinting system and `tauri-executor` cross-platform execution framework into the rust-nexus C2 infrastructure.
@@ -330,7 +334,7 @@ COPY catch/js/ /opt/nexus/web/js/
 COPY catch/index.html /opt/nexus/web/
 COPY tauri-executor/src/ /opt/nexus/web/tauri/
 
-EXPOSE 443 8080 8443
+EXPOSE 443 8080 50052
 CMD ["nexus-server", "--config", "/etc/nexus/config.toml"]
 ```
 
@@ -417,7 +421,7 @@ cargo build --no-default-features --features minimal
 #### Communication Failures  
 ```bash
 # Test gRPC connectivity
-grpcurl -insecure c2.attck-deploy.net:8443 list
+grpcurl -insecure c2.attck-deploy.net:50052 list
 
 # Test HTTP fallback
 curl -k https://c2.attck-deploy.net/api/health

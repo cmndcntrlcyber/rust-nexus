@@ -23,14 +23,14 @@ async fn handle_websocket_connection(ws: warp::ws::WebSocket, state: WebUIState)
             match result {
                 Ok(msg) if msg.is_text() => {
                     // Handle incoming WebSocket messages
-                    log::debug!("Received WebSocket message: {:?}", msg);
+                    tracing::debug!("Received WebSocket message: {:?}", msg);
                 }
                 Ok(msg) if msg.is_close() => {
-                    log::info!("WebSocket connection closed");
+                    tracing::info!("WebSocket connection closed");
                     break;
                 }
                 Err(e) => {
-                    log::error!("WebSocket receive error: {}", e);
+                    tracing::error!("WebSocket receive error: {}", e);
                     break;
                 }
                 _ => {}
@@ -44,13 +44,13 @@ async fn handle_websocket_connection(ws: warp::ws::WebSocket, state: WebUIState)
             let message = match serde_json::to_string(&event) {
                 Ok(json) => warp::ws::Message::text(json),
                 Err(e) => {
-                    log::error!("Failed to serialize broadcast event: {}", e);
+                    tracing::error!("Failed to serialize broadcast event: {}", e);
                     continue;
                 }
             };
 
             if let Err(e) = ws_tx.send(message).await {
-                log::error!("Failed to send WebSocket message: {}", e);
+                tracing::error!("Failed to send WebSocket message: {}", e);
                 break;
             }
         }

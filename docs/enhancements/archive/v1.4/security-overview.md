@@ -1,9 +1,9 @@
 # v1.4 security overview
 
-> See [`../deployment/README.md`](../deployment/README.md) for
+> See [`../../../deployment/README.md`](../../../deployment/README.md) for
 > deployment guidance, [`../v1.3/security-overview.md`](../v1.3/security-overview.md)
 > for the v1.3 defense matrix, and
-> [`../v1.2/security-overview.md`](../v1.2/security-overview.md) for
+> [`../../agent-swarm-mesh/v1.2/security-overview.md`](../../agent-swarm-mesh/v1.2/security-overview.md) for
 > the original v1.2 baseline.
 
 v1.4 extends the v1.3 matrix with **eight** new defenses and closes

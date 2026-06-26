@@ -1,18 +1,20 @@
-// Copies xterm.js assets from node_modules into dist/vendor/.
+// Copies xterm.js assets from node_modules into vendor/ (source tree).
+// Trunk's copy-dir pipeline then moves vendor/ into dist/ at build time.
+// Run: cd nexus-console/ui && npm install && node vendor-xterm.mjs
 
 import { mkdirSync, copyFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const distVendor = resolve(__dirname, "dist/vendor");
-mkdirSync(distVendor, { recursive: true });
+const vendorDir = resolve(__dirname, "vendor");
+mkdirSync(vendorDir, { recursive: true });
 
 const copies = [
-    ["node_modules/@xterm/xterm/lib/xterm.js", "dist/vendor/xterm.js"],
-    ["node_modules/@xterm/xterm/lib/xterm.js.map", "dist/vendor/xterm.js.map"],
-    ["node_modules/@xterm/xterm/css/xterm.css", "dist/vendor/xterm.css"],
-    ["node_modules/@xterm/addon-fit/lib/addon-fit.js", "dist/vendor/addon-fit.js"],
+    ["node_modules/@xterm/xterm/lib/xterm.js", "vendor/xterm.js"],
+    ["node_modules/@xterm/xterm/lib/xterm.js.map", "vendor/xterm.js.map"],
+    ["node_modules/@xterm/xterm/css/xterm.css", "vendor/xterm.css"],
+    ["node_modules/@xterm/addon-fit/lib/addon-fit.js", "vendor/addon-fit.js"],
 ];
 
 for (const [src, dst] of copies) {

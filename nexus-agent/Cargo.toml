@@ -12,14 +12,15 @@ name = "nexus-agent"
 path = "src/main.rs"
 
 [dependencies]
-nexus-common = { path = "../nexus-common" }
+nexus-common = { workspace = true }
+# Not in workspace.dependencies — intentional (mixed Tonic versions)
 nexus-infra = { path = "../nexus-infra" }
 async-trait = { workspace = true }
 
 # v1.1 additions (simple-mesh layer).
 nexus-a2a = { workspace = true }
 nexus-mesh = { workspace = true }
-nexus-web-comms = { path = "../nexus-web-comms" }
+nexus-web-comms = { workspace = true }
 libp2p = { workspace = true }
 portable-pty = { workspace = true }
 tokio-stream = { workspace = true }
@@ -41,8 +42,6 @@ uuid = { workspace = true }
 hostname = { workspace = true }
 local-ip-address = { workspace = true }
 base64 = { workspace = true }
-log = { workspace = true }
-env_logger = { workspace = true }
 thiserror = { workspace = true }
 num_cpus = "1.16"
 rand = { workspace = true }

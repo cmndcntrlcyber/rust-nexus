@@ -19,6 +19,7 @@ fn main() {
 #[cfg(target_os = "windows")]
 fn build_keylogger_bof() {
     use std::fs;
+    use std::process::Command;
 
     let out_dir = env::var("OUT_DIR").unwrap();
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();

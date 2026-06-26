@@ -7,7 +7,7 @@ description = "MITRE ATT&CK T1021.006 - Remote Services: Windows Remote Manageme
 [dependencies]
 nexus-common = { path = "../nexus-common" }
 async-trait = { workspace = true }
-log = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }

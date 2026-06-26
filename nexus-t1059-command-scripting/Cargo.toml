@@ -7,7 +7,7 @@ description = "MITRE ATT&CK T1059 - Command and Scripting Interpreter"
 [dependencies]
 nexus-common = { path = "../nexus-common" }
 async-trait = { workspace = true }
-log = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }

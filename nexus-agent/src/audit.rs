@@ -8,7 +8,7 @@
 //! `nexus_a2a::audit`); per-agent records are independent of the C2
 //! chain.
 
-#![allow(dead_code)]
+// Per-agent audit is wired in v1.4.9 but not all methods are called yet.
 
 use std::path::PathBuf;
 use std::sync::Arc;

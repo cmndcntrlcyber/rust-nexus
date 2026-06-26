@@ -20,9 +20,25 @@
 
 set -euo pipefail
 
+# Ensure cargo is on PATH regardless of how the script is invoked (e.g. via
+# sudo where /root/.cargo/bin may not be inherited). Try every common location.
+for _cb in \
+    "${CARGO_HOME:+${CARGO_HOME}/bin}" \
+    "${HOME:-}/.cargo/bin" \
+    "/root/.cargo/bin" \
+    "/usr/local/cargo/bin"; do
+    [[ -n "$_cb" && -d "$_cb" && ":${PATH}:" != *":${_cb}:"* ]] && PATH="${_cb}:${PATH}"
+done
+export PATH
+
 # ---------- paths ----------
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CERT_DIR="${CERT_DIR:-${REPO_ROOT}/certs/nexus-agent}"
+# Prefer prod certs if present; fall back to dev/test certs.
+if [[ -d "${REPO_ROOT}/certs/nexus-agent" && -r "${REPO_ROOT}/certs/prod/ca.crt.pem" ]]; then
+    CERT_DIR="${CERT_DIR:-${REPO_ROOT}/certs/prod}"
+else
+    CERT_DIR="${CERT_DIR:-${REPO_ROOT}/certs/nexus-agent}"
+fi
 CONSOLE_DIR="${REPO_ROOT}/nexus-console"
 TAURI_DIR="${CONSOLE_DIR}/src-tauri"
 
@@ -52,6 +68,22 @@ need_cmd() { command -v "$1" >/dev/null 2>&1; }
 
 # ---------- 1. cert validation ----------
 log "validating certs in ${CERT_DIR}"
+_missing_cert=0
+for f in ca.crt.pem client.crt.pem client.key.pem; do
+    [[ -r "${CERT_DIR}/${f}" ]] || { _missing_cert=1; break; }
+done
+if [[ $_missing_cert -eq 1 ]]; then
+    warn "cert(s) missing from ${CERT_DIR} — generating dev/test certs now"
+    warn "For production, provision your own CA and set CERT_DIR accordingly."
+    GEN_SCRIPT="${REPO_ROOT}/scripts/gen-certs.sh"
+    [[ -x "$GEN_SCRIPT" ]] || die "gen-certs.sh not found or not executable: $GEN_SCRIPT"
+    bash "$GEN_SCRIPT" "${CERT_DIR}"
+    # gen-certs.sh writes ca/server/client — alias client→expected names if needed.
+    for pair in "client.crt.pem:client.crt.pem" "client.key.pem:client.key.pem" "ca.crt.pem:ca.crt.pem"; do
+        src="${CERT_DIR}/${pair#*:}"; dst="${CERT_DIR}/${pair%%:*}"
+        [[ -f "$src" && ! -f "$dst" ]] && cp "$src" "$dst"
+    done
+fi
 for f in ca.crt.pem client.crt.pem client.key.pem; do
     [[ -r "${CERT_DIR}/${f}" ]] || die "missing or unreadable cert: ${CERT_DIR}/${f}"
 done
@@ -68,7 +100,7 @@ if [[ "${DO_BUILD}" -eq 1 ]]; then
     log "checking system build deps"
     APT_PKGS=(
         libwebkit2gtk-4.1-dev
-        libappindicator3-dev
+        libayatana-appindicator3-dev
         librsvg2-dev
         patchelf
         libssl-dev
@@ -120,13 +152,13 @@ if [[ "${DO_BUILD}" -eq 1 ]]; then
 fi
 
 # ---------- 4. build ----------
-BUNDLE_BIN="${TAURI_DIR}/target/release/nexus-console"
+BUNDLE_BIN="${REPO_ROOT}/target/release/nexus-console"
 
 if [[ "${DO_BUILD}" -eq 1 ]]; then
     if [[ "${MODE}" == "release" ]]; then
         log "building Tauri release bundle (this takes a while on first build)"
         (cd "${TAURI_DIR}" && cargo tauri build)
-        log "bundles in: ${TAURI_DIR}/target/release/bundle/"
+        log "bundles in: ${REPO_ROOT}/target/release/bundle/"
     fi
     # In dev mode the build happens at launch time via `cargo tauri dev`.
 fi

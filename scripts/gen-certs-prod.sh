@@ -27,7 +27,7 @@ set -euo pipefail
 # ---------- defaults ----------
 DOMAIN=""
 IP=""
-OUT_DIR="./certs/prod"
+OUT_DIR="./certs/nexus-agent"  # default output dir (matches where deploy-operator-console.sh looks for certs)
 ORG="rust-nexus"
 DAYS_CA=1825        # 5 years for the CA
 DAYS_LEAF=365       # 1 year for leaf certs
@@ -66,6 +66,7 @@ fi
 command -v openssl >/dev/null || { echo "openssl not on PATH" >&2; exit 2; }
 
 mkdir -p "$OUT_DIR"
+umask 077
 cd "$OUT_DIR"
 echo "[gen-certs-prod] writing into $(pwd)"
 echo "[gen-certs-prod] domain=$DOMAIN ip=$IP org=$ORG"
@@ -108,6 +109,9 @@ openssl x509 -req -in operator.csr.pem -CA ca.crt.pem -CAkey ca.key.pem \
     -CAcreateserial -days "$DAYS_LEAF" -out operator.crt.pem \
     -extfile client.ext.cnf
 rm -f operator.csr.pem
+# Alias: deploy-operator-console.sh expects client.{crt,key}.pem
+ln -sf operator.crt.pem client.crt.pem
+ln -sf operator.key.pem client.key.pem
 
 # ---------- agent client ----------
 echo "[gen-certs-prod] generating agent client cert (CN=${AGENT_CN})"

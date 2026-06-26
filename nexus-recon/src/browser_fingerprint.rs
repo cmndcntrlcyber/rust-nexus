@@ -4,6 +4,33 @@ use crate::*;
 
 pub struct BrowserFingerprinter;
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_browser_fingerprinter_construction() {
+        let fp = BrowserFingerprinter::new();
+        let _ = fp;
+    }
+
+    #[test]
+    fn test_browser_fingerprinter_default() {
+        let fp = BrowserFingerprinter::default();
+        let _ = fp;
+    }
+
+    #[tokio::test]
+    async fn test_collect_fingerprint_stub_fields() {
+        let fp = BrowserFingerprinter::new();
+        let result = fp.collect_fingerprint("https://example.com").await;
+        assert!(result.is_ok());
+        let print = result.unwrap();
+        assert_eq!(print.browser.language, "en");
+        assert!(print.browser.cookie_enabled);
+    }
+}
+
 impl Default for BrowserFingerprinter {
     fn default() -> Self {
         Self::new()

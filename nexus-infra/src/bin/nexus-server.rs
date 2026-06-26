@@ -32,6 +32,7 @@ use nexus_infra::a2a_lister::RegistryLister;
 use nexus_infra::a2a_router::{AgentChannels, AgentRegistrar, OperatorRouter};
 use nexus_infra::serve::default_agent_card;
 use nexus_infra::sessions::SessionRegistry;
+use nexus_infra::PkiManager;
 
 const HELP: &str = "\
 nexus-server — rust-nexus C2 (v1.3)
@@ -39,6 +40,8 @@ nexus-server — rust-nexus C2 (v1.3)
 USAGE:
     nexus-server [--config <PATH>]
     nexus-server --init-identity <PATH>
+    nexus-server pki init   --domain <DOMAIN> --ip <IP> [--agents <N>] [--out <DIR>]
+    nexus-server pki agent  --certs-dir <DIR> --name <NAME>
     nexus-server --help
     nexus-server --version
 
@@ -50,6 +53,29 @@ OPTIONS:
                               overwrite an existing file.
     --help                    Print this help.
     --version                 Print the build version.
+
+PKI SUBCOMMANDS:
+    pki init   Generate a complete PKI in one atomic operation:
+               CA + server cert + operator cert + N agent certs.
+               --domain     C2 hostname (added as DNS SAN to server cert)
+               --ip         C2 IP address (added as IP SAN to server cert)
+               --agents     Number of agent certs to mint (default: 1)
+               --out        Output directory (default: ./certs/prod)
+               --cf-token     CF API token (Zone:SSL+Certs:Edit + Zone:ClientCerts:Edit).
+                              Server cert → CF Origin CA (POST /certificates).
+                              Client certs → CF Client Certs (POST /zones/{id}/client_certificates).
+               --cf-zone-id   Zone ID for CF Client Certs API.
+                              Required when --cf-token is provided.
+               --cf-client-ca Path to CF zone managed CA cert PEM.
+                              Required when --cf-zone-id is set.
+                              Download: CF Dashboard → SSL/TLS → Client Certificates
+                              → Certificate Authorities → Download.
+
+    pki agent  Mint one additional agent cert.
+               --certs-dir    Directory written by pki init
+               --name         CN / file stem for the new agent cert
+               --cf-token     CF API token (CF mode; same token as pki init)
+               --cf-zone-id   Zone ID (CF mode)
 
 ENVIRONMENT:
     NEXUS_CA_CERT             CA bundle for mTLS (PEM, path or inline).
@@ -81,6 +107,17 @@ fn main() -> ExitCode {
         }
         Action::InitIdentity(path) => run_init_identity(&path),
         Action::Serve(config_path) => run_serve(config_path),
+        Action::PkiInit { domain, ip, agents, out, cf_token, cf_zone_id, cf_client_ca } => {
+            run_pki_init(
+                &domain, &ip, agents, &out,
+                cf_token.as_deref(),
+                cf_zone_id.as_deref(),
+                cf_client_ca.as_deref(),
+            )
+        }
+        Action::PkiAgent { certs_dir, name, cf_token, cf_zone_id } => {
+            run_pki_agent(&certs_dir, &name, cf_token.as_deref(), cf_zone_id.as_deref())
+        }
     }
 }
 
@@ -89,6 +126,21 @@ enum Action {
     Version,
     InitIdentity(PathBuf),
     Serve(Option<PathBuf>),
+    PkiInit {
+        domain: String,
+        ip: String,
+        agents: u8,
+        out: PathBuf,
+        cf_token: Option<String>,
+        cf_zone_id: Option<String>,
+        cf_client_ca: Option<PathBuf>,
+    },
+    PkiAgent {
+        certs_dir: PathBuf,
+        name: String,
+        cf_token: Option<String>,
+        cf_zone_id: Option<String>,
+    },
 }
 
 struct Parsed {
@@ -117,6 +169,14 @@ fn parse_args(args: &[String]) -> Result<Parsed, String> {
                     .ok_or_else(|| "--init-identity requires a path".to_string())?;
                 init_identity = Some(PathBuf::from(v));
             }
+            "pki" => {
+                let sub = iter
+                    .next()
+                    .ok_or_else(|| "pki requires a subcommand: init | agent".to_string())?;
+                return Ok(Parsed {
+                    action: parse_pki_args(sub.as_str(), &mut iter)?,
+                });
+            }
             other => return Err(format!("unknown argument: {other}")),
         }
     }
@@ -142,6 +202,95 @@ fn parse_args(args: &[String]) -> Result<Parsed, String> {
     Ok(Parsed {
         action: Action::Serve(config),
     })
+}
+
+fn parse_pki_args(
+    sub: &str,
+    iter: &mut std::iter::Peekable<std::slice::Iter<'_, String>>,
+) -> Result<Action, String> {
+    match sub {
+        "init" => {
+            let mut domain: Option<String> = None;
+            let mut ip: Option<String> = None;
+            let mut agents: u8 = 1;
+            let mut out = PathBuf::from("./certs/prod");
+            let mut cf_token: Option<String> = None;
+            let mut cf_zone_id: Option<String> = None;
+            let mut cf_client_ca: Option<PathBuf> = None;
+            while let Some(arg) = iter.next() {
+                match arg.as_str() {
+                    "--domain" => {
+                        domain = Some(iter.next().ok_or("--domain requires a value")?.clone());
+                    }
+                    "--ip" => {
+                        ip = Some(iter.next().ok_or("--ip requires a value")?.clone());
+                    }
+                    "--agents" => {
+                        let v = iter.next().ok_or("--agents requires a number")?;
+                        agents = v
+                            .parse::<u8>()
+                            .map_err(|_| format!("--agents: not a valid u8: {v}"))?;
+                    }
+                    "--out" => {
+                        out = PathBuf::from(iter.next().ok_or("--out requires a path")?.as_str());
+                    }
+                    "--cf-token" => {
+                        cf_token = Some(iter.next().ok_or("--cf-token requires a value")?.clone());
+                    }
+                    "--cf-zone-id" => {
+                        cf_zone_id = Some(iter.next().ok_or("--cf-zone-id requires a value")?.clone());
+                    }
+                    "--cf-client-ca" => {
+                        cf_client_ca = Some(PathBuf::from(
+                            iter.next().ok_or("--cf-client-ca requires a path")?.as_str(),
+                        ));
+                    }
+                    other => return Err(format!("pki init: unknown flag: {other}")),
+                }
+            }
+            Ok(Action::PkiInit {
+                domain: domain.ok_or("pki init: --domain is required")?,
+                ip: ip.ok_or("pki init: --ip is required")?,
+                agents,
+                out,
+                cf_token,
+                cf_zone_id,
+                cf_client_ca,
+            })
+        }
+        "agent" => {
+            let mut certs_dir: Option<PathBuf> = None;
+            let mut name: Option<String> = None;
+            let mut cf_token: Option<String> = None;
+            let mut cf_zone_id: Option<String> = None;
+            while let Some(arg) = iter.next() {
+                match arg.as_str() {
+                    "--certs-dir" => {
+                        certs_dir = Some(PathBuf::from(
+                            iter.next().ok_or("--certs-dir requires a path")?.as_str(),
+                        ));
+                    }
+                    "--name" => {
+                        name = Some(iter.next().ok_or("--name requires a value")?.clone());
+                    }
+                    "--cf-token" => {
+                        cf_token = Some(iter.next().ok_or("--cf-token requires a value")?.clone());
+                    }
+                    "--cf-zone-id" => {
+                        cf_zone_id = Some(iter.next().ok_or("--cf-zone-id requires a value")?.clone());
+                    }
+                    other => return Err(format!("pki agent: unknown flag: {other}")),
+                }
+            }
+            Ok(Action::PkiAgent {
+                certs_dir: certs_dir.ok_or("pki agent: --certs-dir is required")?,
+                name: name.ok_or("pki agent: --name is required")?,
+                cf_token,
+                cf_zone_id,
+            })
+        }
+        other => Err(format!("pki: unknown subcommand: {other}; expected init | agent")),
+    }
 }
 
 fn run_init_identity(path: &Path) -> ExitCode {
@@ -171,6 +320,76 @@ fn run_init_identity(path: &Path) -> ExitCode {
         peer_id_hex
     );
     ExitCode::SUCCESS
+}
+
+fn run_pki_init(
+    domain: &str,
+    ip: &str,
+    agents: u8,
+    out: &Path,
+    cf_token: Option<&str>,
+    cf_zone_id: Option<&str>,
+    cf_client_ca: Option<&Path>,
+) -> ExitCode {
+    let ip_addr: std::net::IpAddr = match ip.parse() {
+        Ok(a) => a,
+        Err(e) => {
+            eprintln!("nexus-server pki init: invalid --ip '{ip}': {e}");
+            return ExitCode::from(1);
+        }
+    };
+    match PkiManager::init(domain, ip_addr, agents, out, cf_token, cf_zone_id, cf_client_ca) {
+        Ok(b) => {
+            println!("PKI initialized in {}", b.out_dir.display());
+            println!();
+            println!("Server env vars:");
+            println!("  NEXUS_SERVER_CERT={}", b.server_cert.display());
+            println!("  NEXUS_SERVER_KEY={}", b.server_key.display());
+            println!("  NEXUS_CA_CERT={}   # CF zone client CA — validates incoming client certs", b.client_ca_cert.display());
+            println!();
+            println!("Agent env vars (per agent):");
+            println!("  NEXUS_CA_CERT={}   # CF Origin CA ECC root — verifies server cert", b.server_ca_cert.display());
+            if let Some(a) = b.agents.first() {
+                println!("  NEXUS_CLIENT_CERT={}", a.cert.display());
+                println!("  NEXUS_CLIENT_KEY={}", a.key.display());
+            }
+            println!();
+            println!("Console env vars:");
+            println!("  NEXUS_CA_CERT={}", b.server_ca_cert.display());
+            println!("  NEXUS_CLIENT_CERT={}", b.console_cert.display());
+            println!("  NEXUS_CLIENT_KEY={}", b.console_key.display());
+            println!();
+            println!("Operator env vars:");
+            println!("  NEXUS_CA_CERT={}", b.server_ca_cert.display());
+            println!("  NEXUS_CLIENT_CERT={}", b.operator_cert.display());
+            println!("  NEXUS_CLIENT_KEY={}", b.operator_key.display());
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("nexus-server pki init: {e}");
+            ExitCode::from(1)
+        }
+    }
+}
+
+fn run_pki_agent(
+    certs_dir: &Path,
+    name: &str,
+    cf_token: Option<&str>,
+    cf_zone_id: Option<&str>,
+) -> ExitCode {
+    match PkiManager::add_agent(certs_dir, name, cf_token, cf_zone_id) {
+        Ok(ab) => {
+            println!("Agent cert minted:");
+            println!("  cert: {}", ab.cert.display());
+            println!("  key:  {}", ab.key.display());
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("nexus-server pki agent: {e}");
+            ExitCode::from(1)
+        }
+    }
 }
 
 fn run_serve(config_path: Option<PathBuf>) -> ExitCode {

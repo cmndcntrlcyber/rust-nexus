@@ -13,7 +13,7 @@
 //!   logs a warning and returns `Ok(())` so consumer code stays
 //!   feature-agnostic.
 
-#![allow(dead_code)]
+// OTel config struct is always available; init is behind `otel` feature.
 
 /// Default OTLP collector endpoint (assumed local-dev Jaeger / Tempo).
 pub const DEFAULT_OTLP_ENDPOINT: &str = "http://localhost:4317";

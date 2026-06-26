@@ -67,6 +67,34 @@ requests_per_second = 100   # nexus_a2a::interceptors::DEFAULT_RATE_LIMIT_RPS
 max_bytes = 4194304          # 4 * 1024 * 1024
 
 # ---------------------------------------------------------------
+# Origin cert (legacy NexusC2 lane)
+# ---------------------------------------------------------------
+
+# [origin_cert]
+# cert_path = "./certs/origin.crt"
+# key_path = "./certs/origin.key"
+# ca_cert_path = "./certs/origin_ca.crt"
+# pin_validation = true
+# validity_days = 365
+#
+# Multi-domain TLS profiles (optional). Each profile has its own
+# cert, key, and CA. The server selects the profile by SNI hostname.
+#
+# [[origin_cert.profiles]]
+# name = "primary"
+# domains = ["c2.example.com"]
+# cert_path = "./certs/prod/server.crt.pem"
+# key_path = "./certs/prod/server.key.pem"
+# ca_cert_path = "./certs/prod/ca.crt.pem"
+#
+# [[origin_cert.profiles]]
+# name = "fallback"
+# domains = ["backup.example.com"]
+# cert_path = "./certs/fallback/server.crt.pem"
+# key_path = "./certs/fallback/server.key.pem"
+# ca_cert_path = "./certs/fallback/ca.crt.pem"
+
+# ---------------------------------------------------------------
 # Legacy NexusC2 lane (Tonic 0.10, port 50051)
 # ---------------------------------------------------------------
 

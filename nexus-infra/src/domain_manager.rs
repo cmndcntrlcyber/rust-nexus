@@ -5,7 +5,7 @@ use crate::{
 };
 use chrono::{DateTime, Duration, Utc};
 use hickory_resolver::{config::*, TokioAsyncResolver};
-use log::{debug, info, warn};
+use tracing::{debug, info, warn};
 use rand::Rng;
 use std::collections::HashMap;
 use std::net::IpAddr;
@@ -236,7 +236,7 @@ impl DomainManager {
         match &self.config.subdomain_pattern {
             SubdomainPattern::Random { length } => Ok(generate_subdomain(*length)),
             SubdomainPattern::Dictionary { wordlist: _ } => {
-                // TODO: Implement dictionary-based generation
+                // Dictionary-based generation deferred — falls back to random.
                 warn!("Dictionary pattern not implemented, falling back to random");
                 Ok(generate_subdomain(8))
             }

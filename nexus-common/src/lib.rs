@@ -1,3 +1,5 @@
+//! Shared library for the rust-nexus C2 framework: crypto, message types, identity, and error handling.
+
 // v1.5: both v1.4 module-level allows removed.
 //   - `ambiguous_glob_reexports`: resolved — `messages::TaskResult` renamed
 //     to `LegacyTaskResult`; `tasks::TaskResult` is now canonical.
@@ -32,6 +34,7 @@ pub use identity::{NodeIdentity, PeerId, IDENTITY_BLOB_LEN};
 pub use os::OsKind;
 pub use sealed::{ReplayWindow, SealedEnvelope};
 
+/// Errors produced by nexus-common modules.
 #[derive(Error, Debug)]
 pub enum NexusError {
     #[error("Encryption failed: {0}")]
@@ -68,6 +71,7 @@ pub enum NexusError {
     BincodeError(String),
 }
 
+/// Convenience alias for `std::result::Result<T, NexusError>`.
 pub type Result<T> = std::result::Result<T, NexusError>;
 
 impl From<std::io::Error> for NexusError {
@@ -76,6 +80,7 @@ impl From<std::io::Error> for NexusError {
     }
 }
 
+/// Current Unix timestamp in seconds.
 pub fn current_timestamp() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -83,6 +88,7 @@ pub fn current_timestamp() -> u64 {
         .as_secs()
 }
 
+/// Generate a random v4 UUID string.
 pub fn generate_uuid() -> String {
     uuid::Uuid::new_v4().to_string()
 }

@@ -11,8 +11,5 @@ address = "127.0.0.1"
 port = 1420
 open = false
 
-# xterm.js vendoring (v1.0 D-V1-F carry-over) — Trunk pre-build hook.
-[[hooks]]
-stage = "pre_build"
-command = "sh"
-command_arguments = ["-c", "npm install --silent && npm run build-xterm"]
+# xterm.js vendor files are in ui/vendor/ and copied by Trunk's copy-dir pipeline.
+# To update: cd nexus-console/ui && npm install && npm run build-xterm-src

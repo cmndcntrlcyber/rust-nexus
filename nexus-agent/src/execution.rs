@@ -1,5 +1,5 @@
 use base64::{engine::general_purpose, Engine as _};
-use log::{debug, error, info, warn};
+use tracing::{debug, error, info, warn};
 use nexus_common::*;
 use std::process::Command;
 

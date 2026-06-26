@@ -1,7 +1,10 @@
+//! Agent registration, status tracking, and session management.
+
 use crate::{current_timestamp, generate_uuid};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/// A registered C2 agent with its host metadata and task history.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Agent {
     pub id: String,
@@ -22,6 +25,7 @@ pub struct Agent {
     pub metadata: HashMap<String, String>,
 }
 
+/// Connectivity status of an agent (derived from heartbeat recency).
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum AgentStatus {
     Online,

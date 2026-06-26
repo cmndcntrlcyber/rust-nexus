@@ -10,7 +10,7 @@
 // each unused field.
 #![allow(dead_code, unused_assignments, clippy::field_reassign_with_default)]
 
-use log::{info, warn};
+use tracing::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tokio::process::Command;
@@ -223,13 +223,13 @@ impl HybridExecutor {
             ExecutionProtocol::Api => self.api_executor.execute(request).await,
             ExecutionProtocol::PowerShell => self.powershell_executor.execute(request).await,
             ExecutionProtocol::Grpc => {
-                // TODO: Integrate with existing gRPC infrastructure
+                // DEPRECATED(v1): gRPC execution deferred — A2A plane handles this
                 Err(NexusError::TaskExecutionError(
                     "gRPC execution not yet implemented in hybrid executor".to_string(),
                 ))
             }
             ExecutionProtocol::WebSocket => {
-                // TODO: Implement WebSocket execution
+                // DEPRECATED(v1): WebSocket execution deferred — web-comms fallback handles this
                 Err(NexusError::TaskExecutionError(
                     "WebSocket execution not yet implemented".to_string(),
                 ))

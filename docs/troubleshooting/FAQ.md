@@ -84,7 +84,7 @@ openssl verify -CAfile certs/chain.pem certs/yourdomain.com.crt
 openssl x509 -in certs/yourdomain.com.crt -noout -text | grep -A 5 "Subject Alternative Name"
 
 # Test TLS connection
-openssl s_client -connect yourdomain.com:443 -servername yourdomain.com
+openssl s_client -connect yourdomain.com:50052 -servername yourdomain.com
 ```
 
 #### Q: "Certificate pinning validation failed"
@@ -110,10 +110,10 @@ vim nexus.toml  # Update pinned_fingerprints array
 telnet yourdomain.com 443
 
 # Test TLS handshake
-openssl s_client -connect yourdomain.com:443
+openssl s_client -connect yourdomain.com:50052
 
 # Check gRPC service availability
-grpcurl -insecure yourdomain.com:443 list
+grpcurl -insecure yourdomain.com:50052 list
 
 # Test with verbose logging
 RUST_LOG=debug ./target/release/nexus-agent --config agent.toml
@@ -131,7 +131,7 @@ openssl verify -CAfile ca.crt client.crt
 
 # Test mutual TLS connection
 curl --cert client.crt --key client.key --cacert ca.crt \
-     https://yourdomain.com:443
+     https://yourdomain.com:50052
 ```
 
 #### Q: "gRPC streaming interrupted"
@@ -603,6 +603,40 @@ health_check_interval = 300  # Check health less often
 enable_caching = true
 cache_ttl = 3600  # 1-hour cache
 ```
+
+## Production Deployment Script Errors
+
+Common errors encountered when running the production deployment scripts
+(`gen-certs-prod.sh`, `transfer-prep.sh`, `deploy-server-prod.sh`,
+`deliverables-prep.sh`, `deploy-operator-console.sh`) and their fixes.
+
+| # | Script | Error | Root Cause | Fix |
+|---|--------|-------|-----------|-----|
+| 1 | `gen-certs-prod.sh` | `openssl: command not found` | OpenSSL not installed | `sudo apt-get install openssl` |
+| 2 | `gen-certs-prod.sh` | ED25519 vs P-256 mismatch with `pki init` | `gen-certs-prod.sh` uses ED25519, `pki init` uses ECDSA P-256 | Use one PKI path consistently per deployment |
+| 3 | `gen-certs-prod.sh` | Key file permissions not 0600 | `umask` not set before key generation | Fixed in v1.5.9: `umask 077` added before key writes |
+| 4 | `transfer-prep.sh` | Missing cert files | `gen-certs-prod.sh` not yet run | Run cert generation first |
+| 5 | `remote-host-prep.sh` | `ufw: command not found` | Non-Debian host | Set `SKIP_FIREWALL=1` env var |
+| 6 | `deploy-server-prod.sh` | `config is missing [a2a] section` | Wrong config template (root `nexus.toml.example` lacks `[a2a]`) | Use `docs/deployment/examples/nexus.toml.example` |
+| 7 | `deploy-server-prod.sh` | NodeIdentity init fails | Wrong permissions on `/var/lib/nexus/` | `sudo chown nexus:nexus /var/lib/nexus/` |
+| 8 | `deliverables-prep.sh` | `ca.key.pem not found` | CF-mode PKI has no CA private key | Use `gen-certs-prod.sh` or `pki init` (both produce CA key) |
+| 9 | `build-agent-bundles.sh` | `zip: command not found` | `zip` not installed | `sudo apt-get install zip` |
+| 10 | `deploy-operator-console.sh` | `client.crt.pem` not found | `gen-certs-prod.sh` produced `operator.crt.pem` | Fixed in v1.5.9: symlinks `client.{crt,key}.pem` now created by `gen-certs-prod.sh` |
+| 11 | `deploy-operator-console.sh` | Missing Tauri build deps | WebKit/GTK libs not installed | `sudo apt-get install libwebkit2gtk-4.1-dev libayatana-appindicator3-dev` |
+
+### IPv4-only limitation
+
+The `--ip` flag in `gen-certs-prod.sh` validates against the regex
+`^[0-9]+(\.[0-9]+){3}$` (IPv4 dotted-quad only). IPv6 addresses are not
+supported; use an IPv4 address or omit the `--ip` flag and rely on the
+`--domain` SAN only.
+
+### Mixing PKI paths
+
+Do not mix certs from `gen-certs-prod.sh` (ED25519) with certs from
+`nexus-server pki init` (ECDSA P-256) in the same deployment. Choose one
+PKI generation method and use it for all components (server, agents,
+operators).
 
 ## Community Support
 

@@ -3,7 +3,7 @@
 //! Provides a modern web-based management interface for the rust-nexus C2 framework.
 //! Integrates tauri-executor's web interface technology with rust-nexus's enterprise features.
 
-use log::{info, warn};
+use tracing::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
@@ -64,7 +64,7 @@ impl Default for WebUIConfig {
             port: 8080,
             enable_websockets: true,
             static_files_path: None,
-            grpc_endpoint: "https://127.0.0.1:8443".to_string(),
+            grpc_endpoint: "https://127.0.0.1:50052".to_string(),
             cors_origins: vec!["*".to_string()],
         }
     }

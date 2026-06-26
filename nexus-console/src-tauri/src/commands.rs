@@ -17,6 +17,21 @@ pub struct ConnectResponse {
     pub summary: ConnectionSummary,
 }
 
+/// Startup configuration read from environment variables.
+#[derive(Debug, Serialize)]
+pub struct StartupConfig {
+    /// Value of `NEXUS_SERVER_ADDR` if set.
+    pub server_addr: Option<String>,
+}
+
+/// Return environment-supplied startup config to the frontend.
+#[tauri::command]
+pub fn get_startup_config() -> StartupConfig {
+    StartupConfig {
+        server_addr: std::env::var("NEXUS_SERVER_ADDR").ok(),
+    }
+}
+
 /// Connect to the C2's A2A service.
 #[tauri::command]
 pub async fn connect_c2(
@@ -25,13 +40,27 @@ pub async fn connect_c2(
     insecure_network: bool,
 ) -> Result<ConnectResponse, String> {
     info!(c2 = %addr, insecure_network, "console: connecting");
-    let mut client = A2aClient::connect(&addr, insecure_network)
-        .await
-        .map_err(|e| format!("connect: {e:#}"))?;
-    let card = client
-        .get_agent_card()
-        .await
-        .map_err(|e| format!("get_agent_card: {e}"))?;
+    let tls = nexus_a2a::tls::load_client_config_from_env().ok();
+    let addr2 = addr.clone();
+    let (mut client, card) = tokio::time::timeout(
+        std::time::Duration::from_secs(15),
+        async move {
+            let mut c = A2aClient::connect_with_optional_tls(&addr2, insecure_network, tls)
+                .await
+                .map_err(|e| format!("connect: {e:#}"))?;
+            let card = c
+                .get_agent_card()
+                .await
+                .map_err(|e| format!("get_agent_card: {e}"))?;
+            Ok::<_, String>((c, card))
+        },
+    )
+    .await
+    .map_err(|_| {
+        "timed out after 15 s — is the nexus-server A2A service running at that address?"
+            .to_string()
+    })?
+    .map_err(|e| e)?;
 
     let conn = Connection {
         addr: addr.clone(),
@@ -262,9 +291,9 @@ pub async fn audit_log_filter(
     use std::time::Duration;
 
     let mut client = state
-        .clone_client()
+        .client()
         .await
-        .ok_or_else(|| "not connected".to_string())?;
+        .map_err(|e| e.to_string())?;
     let mut stream = client
         .stream_audit_records(nexus_a2a::pb::StreamAuditRecordsRequest {
             actor_filter: filter.actor,
@@ -336,4 +365,97 @@ pub fn audit_log_verify(records: Vec<AuditRecord>) -> Result<Option<usize>, Stri
 #[allow(dead_code)]
 fn _hex_lower_used_for_shell_sessions(b: &[u8]) -> String {
     hex_lower(b)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_hex_lower_empty() {
+        assert_eq!(hex_lower(&[]), "");
+    }
+
+    #[test]
+    fn test_hex_lower_known_values() {
+        assert_eq!(hex_lower(&[0x00]), "00");
+        assert_eq!(hex_lower(&[0xff]), "ff");
+        assert_eq!(hex_lower(&[0xde, 0xad, 0xbe, 0xef]), "deadbeef");
+    }
+
+    #[test]
+    fn test_audit_log_verify_empty_chain() {
+        let result = audit_log_verify(vec![]).unwrap();
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_audit_log_verify_valid_chain() {
+        use blake3::Hasher;
+
+        let genesis = "0".repeat(64);
+
+        let make_hash = |ts: u64, actor: &str, action: &str, resource: &str, prev: &str| -> String {
+            let mut h = Hasher::new();
+            h.update(&ts.to_be_bytes());
+            h.update(b"|");
+            h.update(actor.as_bytes());
+            h.update(b"|");
+            h.update(action.as_bytes());
+            h.update(b"|");
+            h.update(resource.as_bytes());
+            h.update(b"|");
+            h.update(prev.as_bytes());
+            h.finalize().as_bytes().iter().map(|b| format!("{:02x}", b)).collect()
+        };
+
+        let hash0 = make_hash(1000, "operator", "login", "console", &genesis);
+        let hash1 = make_hash(1001, "operator", "shell_open", "agent-001", &hash0);
+
+        let records = vec![
+            AuditRecord {
+                timestamp_unix: 1000,
+                actor: "operator".into(),
+                action: "login".into(),
+                resource: "console".into(),
+                prev_hash: genesis,
+                record_hash: hash0.clone(),
+            },
+            AuditRecord {
+                timestamp_unix: 1001,
+                actor: "operator".into(),
+                action: "shell_open".into(),
+                resource: "agent-001".into(),
+                prev_hash: hash0,
+                record_hash: hash1,
+            },
+        ];
+
+        let result = audit_log_verify(records).unwrap();
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_audit_log_verify_detects_tampered_record() {
+        let genesis = "0".repeat(64);
+        let records = vec![AuditRecord {
+            timestamp_unix: 1000,
+            actor: "operator".into(),
+            action: "login".into(),
+            resource: "console".into(),
+            prev_hash: genesis,
+            record_hash: "bad_hash".into(),
+        }];
+
+        let result = audit_log_verify(records).unwrap();
+        assert_eq!(result, Some(0));
+    }
+
+    #[test]
+    fn test_audit_filter_default() {
+        let filter = AuditFilter::default();
+        assert!(filter.actor.is_empty());
+        assert!(filter.action.is_empty());
+        assert_eq!(filter.since_unix, 0);
+    }
 }

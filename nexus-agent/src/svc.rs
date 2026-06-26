@@ -92,7 +92,8 @@ pub fn install() -> anyhow::Result<()> {
     // Write per-service environment vars to the registry so SCM injects them
     // before spawning the service process.
     let server_addr = std::env::var("NEXUS_SERVER_ADDR")
-        .unwrap_or_else(|_| "https://c2.onoiroi.us:50052".to_string());
+        .unwrap_or_else(|_| std::env::var("NEXUS_C2_ADDR")
+            .unwrap_or_else(|_| "https://127.0.0.1:50052".to_string()));
     set_service_env(&root, &server_addr)?;
     println!("[install] environment vars written to registry");
 

@@ -19,7 +19,7 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
 use nexus_a2a::framing::{bytes_request, control_request, ShellControl};
-use nexus_a2a::{pb, A2aClient};
+use nexus_a2a::{pb, tls, A2aClient};
 use nexus_common::{NodeIdentity, OsKind};
 use tokio::sync::{mpsc, Mutex};
 use tracing::{debug, info, warn};
@@ -29,22 +29,30 @@ use crate::shell::{ShellSelect, ShellSession};
 /// Configuration for the agent-side A2A bidi client.
 #[derive(Debug, Clone)]
 pub struct A2aClientConfig {
-    /// C2 A2A gRPC URL (e.g. `"http://127.0.0.1:50052"`).
+    /// C2 A2A gRPC URL (e.g. `"https://c2.example.com:50052"`).
     pub c2_addr: String,
     /// Operator-supplied tag.
     pub tag: String,
-    /// Allow non-loopback dials per D-V1-E.
+    /// Allow non-loopback dials without TLS (dev/test only). In production
+    /// NEXUS_CA_CERT supplies TLS config which satisfies the loopback gate.
     pub insecure_network: bool,
 }
 
 const SESSION_CMD_CAPACITY: usize = 64;
 
+/// Load mTLS config from env vars. Returns `None` if NEXUS_CA_CERT is unset
+/// (falls back to system trust store via the `https://` URI scheme).
+fn client_tls() -> Option<tonic_14::transport::ClientTlsConfig> {
+    tls::load_client_config_from_env().ok()
+}
+
 /// Probe the C2's A2A endpoint to verify connectivity. Returns the server's
 /// `AgentCard.name` on success.
 pub async fn probe_c2(cfg: &A2aClientConfig) -> Result<String> {
-    let mut client = A2aClient::connect(&cfg.c2_addr, cfg.insecure_network)
-        .await
-        .with_context(|| format!("connect A2A {}", cfg.c2_addr))?;
+    let mut client =
+        A2aClient::connect_with_optional_tls(&cfg.c2_addr, cfg.insecure_network, client_tls())
+            .await
+            .with_context(|| format!("connect A2A {}", cfg.c2_addr))?;
     let card = client.get_agent_card().await.context("get_agent_card")?;
     Ok(card.name)
 }
@@ -56,9 +64,10 @@ pub async fn connect_and_serve(
     identity: &NodeIdentity,
     shutdown: impl std::future::Future<Output = ()> + Send,
 ) -> Result<()> {
-    let mut client = A2aClient::connect(&cfg.c2_addr, cfg.insecure_network)
-        .await
-        .with_context(|| format!("connect A2A {}", cfg.c2_addr))?;
+    let mut client =
+        A2aClient::connect_with_optional_tls(&cfg.c2_addr, cfg.insecure_network, client_tls())
+            .await
+            .with_context(|| format!("connect A2A {}", cfg.c2_addr))?;
 
     let (tx, mut rx) = client
         .open_streaming_message()

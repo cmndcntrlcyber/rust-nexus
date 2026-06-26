@@ -122,6 +122,51 @@ impl ConsoleState {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_console_state_construction() {
+        let state = ConsoleState::new();
+        let _ = state;
+    }
+
+    #[test]
+    fn test_console_state_default() {
+        let state = ConsoleState::default();
+        let _ = state;
+    }
+
+    #[test]
+    fn test_allocate_session_id_increments() {
+        let state = ConsoleState::new();
+        let id1 = state.allocate_session_id();
+        let id2 = state.allocate_session_id();
+        assert_eq!(id1, 1);
+        assert_eq!(id2, 2);
+    }
+
+    #[tokio::test]
+    async fn test_no_connection_returns_error() {
+        let state = ConsoleState::new();
+        let result = state.client().await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_connection_summary_none_when_disconnected() {
+        let state = ConsoleState::new();
+        assert!(state.connection_summary().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_active_session_count_starts_at_zero() {
+        let state = ConsoleState::new();
+        assert_eq!(state.active_session_count().await, 0);
+    }
+}
+
 /// Tauri-command-friendly summary.
 #[derive(Debug, Clone, Serialize)]
 pub struct ConnectionSummary {

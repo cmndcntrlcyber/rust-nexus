@@ -1,23 +1,32 @@
+//! AES-256-GCM symmetric encryption for C2 message payloads.
+
 use crate::{NexusError, Result};
 use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
 use base64::{engine::general_purpose, Engine as _};
 use rand::Rng;
 
+/// Symmetric encryption context using AES-256-GCM.
+///
+/// Each [`encrypt`](Crypto::encrypt) call generates a random 12-byte nonce
+/// and prepends it to the ciphertext. The output is base64-encoded.
 pub struct Crypto {
     key: [u8; 32],
 }
 
 impl Crypto {
+    /// Create a new encryption context from a 256-bit key.
     pub fn new(key: [u8; 32]) -> Self {
         Self { key }
     }
 
+    /// Generate a cryptographically random 256-bit key.
     pub fn generate_key() -> [u8; 32] {
         let mut key = [0u8; 32];
         rand::thread_rng().fill(&mut key);
         key
     }
 
+    /// Encrypt a UTF-8 string, returning a base64-encoded `nonce || ciphertext`.
     pub fn encrypt(&self, data: &str) -> Result<String> {
         let cipher = Aes256Gcm::new_from_slice(&self.key)
             .map_err(|e| NexusError::EncryptionError(e.to_string()))?;
@@ -37,6 +46,7 @@ impl Crypto {
         Ok(general_purpose::STANDARD.encode(result))
     }
 
+    /// Decrypt a base64-encoded `nonce || ciphertext` back to a UTF-8 string.
     pub fn decrypt(&self, data: &str) -> Result<String> {
         let decoded = general_purpose::STANDARD
             .decode(data)
