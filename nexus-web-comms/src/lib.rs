@@ -3,15 +3,12 @@
 //! Provides HTTP/WebSocket fallback communication methods integrating catch system's
 //! data exfiltration techniques with rust-nexus's secure gRPC communication layer.
 
-// v1.4 commit-prep: overlay-supplied module with unused fields on the
-// HTTP/WebSocket clients (real wiring is pending). Suppress at the
-// crate level rather than annotating each unused field — the planned
-// v1.5 refactor wires them.
-#![allow(dead_code)]
+// v1.4: some config fields are declared for future wiring but not yet
+// read in production paths. Per-item #[allow(dead_code)] is used below.
 
 use base64::{engine::general_purpose, Engine as _};
 use futures_util::{SinkExt, StreamExt};
-use log::{debug, error, info, warn};
+use tracing::{debug, error, info, warn};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -259,6 +256,7 @@ pub struct AssetRequestData {
 }
 
 /// Main web communications client
+#[allow(dead_code)] // fields wired in upcoming HTTP/WS fallback integration
 pub struct WebCommsClient {
     config: WebCommsConfig,
     http_client: Client,

@@ -3,6 +3,7 @@
 #![warn(missing_docs)]
 
 use leptos::prelude::*;
+use wasm_bindgen::JsCast;
 
 mod components;
 mod tauri_api;
@@ -17,7 +18,14 @@ use types::ConnectionInfo;
 
 fn main() {
     console_error_panic_hook::set_once();
-    leptos::mount::mount_to_body(App);
+    let root = web_sys::window()
+        .unwrap()
+        .document()
+        .unwrap()
+        .get_element_by_id("root")
+        .expect("#root not found")
+        .unchecked_into::<web_sys::HtmlElement>();
+    leptos::mount::mount_to(root, App).forget();
 }
 
 #[component]

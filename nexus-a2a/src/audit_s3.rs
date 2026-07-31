@@ -20,7 +20,7 @@
 //! instance/IRSA roles. This matches the AWS SDK's
 //! `behavior-version-latest` defaults.
 
-#![allow(dead_code)]
+// S3 sink config struct is always available; implementation is behind `s3` feature.
 
 /// Hardcoded static credentials (use only when an external secret store
 /// supplies the values at process start; otherwise leave `None` and let
@@ -78,6 +78,7 @@ impl Default for S3SinkOptions {
 }
 
 impl S3SinkOptions {
+    #[allow(dead_code)] // used only in feature-gated tests
     fn new_for_test(bucket: impl Into<String>) -> Self {
         Self {
             bucket: bucket.into(),

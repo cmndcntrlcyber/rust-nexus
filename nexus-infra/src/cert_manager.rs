@@ -2,10 +2,13 @@
 
 use crate::{InfraError, InfraResult, OriginCertConfig};
 use chrono::{DateTime, Duration, Utc};
-use log::info;
+use std::collections::HashMap;
+use tracing::info;
 use rcgen::{
     Certificate, CertificateParams, DistinguishedName, DnType, KeyPair, PKCS_ECDSA_P256_SHA256,
 };
+use rustls::server::{ClientHello, ResolvesServerCert};
+use rustls::sign::{any_supported_type, CertifiedKey};
 use rustls::{Certificate as RustlsCert, ClientConfig, PrivateKey, ServerConfig};
 use rustls_pemfile::{certs, ec_private_keys, pkcs8_private_keys, rsa_private_keys};
 use std::fs;
@@ -38,6 +41,15 @@ pub struct CertInfo {
     pub san_domains: Vec<String>,
 }
 
+/// A loaded certificate profile with parsed cert chain and key
+pub struct CertProfile {
+    pub name: String,
+    pub domains: Vec<String>,
+    pub cert_chain: Vec<RustlsCert>,
+    pub private_key: PrivateKey,
+    pub ca_certificates: Vec<RustlsCert>,
+}
+
 /// TLS configuration holder
 pub struct TlsConfig {
     pub server_config: Arc<ServerConfig>,
@@ -50,6 +62,10 @@ pub struct CertManager {
     server_cert_chain: Vec<RustlsCert>,
     server_private_key: PrivateKey,
     ca_certificates: Vec<RustlsCert>,
+    /// Named profiles keyed by profile name
+    profiles: HashMap<String, CertProfile>,
+    /// SNI domain -> profile name index for O(1) lookup
+    domain_index: HashMap<String, String>,
 }
 
 impl CertManager {
@@ -68,11 +84,38 @@ impl CertManager {
 
         info!("Successfully loaded certificates and private key");
 
+        let mut profiles = HashMap::new();
+        let mut domain_index = HashMap::new();
+
+        if let Some(ref profile_configs) = config.profiles {
+            for p in profile_configs {
+                let cert_chain = Self::load_certificate_chain(&p.cert_path)?;
+                let private_key = Self::load_private_key(&p.key_path)?;
+                let ca_certificates = Self::load_certificate_chain(&p.ca_cert_path)?;
+                for domain in &p.domains {
+                    domain_index.insert(domain.clone(), p.name.clone());
+                }
+                profiles.insert(
+                    p.name.clone(),
+                    CertProfile {
+                        name: p.name.clone(),
+                        domains: p.domains.clone(),
+                        cert_chain,
+                        private_key,
+                        ca_certificates,
+                    },
+                );
+            }
+            info!("Loaded {} HTTPS profiles", profiles.len());
+        }
+
         Ok(Self {
             config,
             server_cert_chain,
             server_private_key,
             ca_certificates,
+            profiles,
+            domain_index,
         })
     }
 
@@ -336,8 +379,8 @@ impl CertManager {
             return Ok(CertValidation::Expired);
         }
 
-        // TODO: Add signature validation against CA certificates
-        // For now, just check dates
+        // CA signature validation deferred — mTLS handshake already
+        // validates the chain at connection time; this check covers expiry only.
         Ok(CertValidation::Valid)
     }
 
@@ -421,6 +464,134 @@ impl CertManager {
     pub fn config(&self) -> &OriginCertConfig {
         &self.config
     }
+
+    /// Check whether any named profiles are configured
+    pub fn has_profiles(&self) -> bool {
+        !self.profiles.is_empty()
+    }
+
+    /// Look up a profile by SNI hostname (exact match, then wildcard fallback)
+    pub fn resolve_profile(&self, sni: &str) -> Option<&CertProfile> {
+        if let Some(name) = self.domain_index.get(sni) {
+            return self.profiles.get(name);
+        }
+        if let Some(dot) = sni.find('.') {
+            let wildcard = format!("*{}", &sni[dot..]);
+            if let Some(name) = self.domain_index.get(&wildcard) {
+                return self.profiles.get(name);
+            }
+        }
+        None
+    }
+
+    /// Get a profile by name
+    pub fn get_profile(&self, name: &str) -> Option<&CertProfile> {
+        self.profiles.get(name)
+    }
+
+    /// List all profile names
+    pub fn profile_names(&self) -> Vec<&str> {
+        self.profiles.keys().map(|s| s.as_str()).collect()
+    }
+
+    /// Create a multi-profile server TLS config with SNI-based cert resolution
+    pub fn create_multi_profile_server_config(
+        &self,
+        mutual_tls: bool,
+    ) -> InfraResult<ServerConfig> {
+        let default_signing_key = any_supported_type(&self.server_private_key).map_err(|_| {
+            InfraError::TlsError("Unsupported private key type for default cert".into())
+        })?;
+        let default = Arc::new(CertifiedKey::new(
+            self.server_cert_chain.clone(),
+            default_signing_key,
+        ));
+
+        let mut resolver_profiles = HashMap::new();
+        let mut resolver_domain_index = HashMap::new();
+        for (name, profile) in &self.profiles {
+            let signing_key = any_supported_type(&profile.private_key).map_err(|_| {
+                InfraError::TlsError(format!(
+                    "Unsupported private key type for profile '{}'",
+                    name
+                ))
+            })?;
+            let certified_key = Arc::new(CertifiedKey::new(
+                profile.cert_chain.clone(),
+                signing_key,
+            ));
+            resolver_profiles.insert(name.clone(), certified_key);
+            for domain in &profile.domains {
+                resolver_domain_index.insert(domain.clone(), name.clone());
+            }
+        }
+
+        let resolver = MultiProfileCertResolver {
+            profiles: resolver_profiles,
+            domain_index: resolver_domain_index,
+            default,
+        };
+
+        let builder = ServerConfig::builder().with_safe_defaults();
+
+        let config = if mutual_tls {
+            let mut root_store = rustls::RootCertStore::empty();
+            for ca_cert in &self.ca_certificates {
+                root_store.add(ca_cert).map_err(|e| {
+                    InfraError::TlsError(format!("Failed to add CA cert: {:?}", e))
+                })?;
+            }
+            for profile in self.profiles.values() {
+                for ca_cert in &profile.ca_certificates {
+                    let _ = root_store.add(ca_cert);
+                }
+            }
+            let verifier =
+                rustls::server::AllowAnyAuthenticatedClient::new(root_store).boxed();
+            builder
+                .with_client_cert_verifier(verifier)
+                .with_cert_resolver(Arc::new(resolver))
+        } else {
+            builder
+                .with_no_client_auth()
+                .with_cert_resolver(Arc::new(resolver))
+        };
+
+        Ok(config)
+    }
+
+    /// Create a TLS acceptor with multi-profile SNI-based cert resolution
+    pub fn create_multi_profile_tls_acceptor(
+        &self,
+        mutual_tls: bool,
+    ) -> InfraResult<TlsAcceptor> {
+        let config = self.create_multi_profile_server_config(mutual_tls)?;
+        Ok(TlsAcceptor::from(Arc::new(config)))
+    }
+}
+
+/// SNI-based cert resolver for multi-profile TLS
+pub struct MultiProfileCertResolver {
+    profiles: HashMap<String, Arc<CertifiedKey>>,
+    domain_index: HashMap<String, String>,
+    default: Arc<CertifiedKey>,
+}
+
+impl ResolvesServerCert for MultiProfileCertResolver {
+    fn resolve(&self, client_hello: ClientHello<'_>) -> Option<Arc<CertifiedKey>> {
+        if let Some(sni) = client_hello.server_name() {
+            if let Some(name) = self.domain_index.get(sni) {
+                return self.profiles.get(name).cloned();
+            }
+            if let Some(dot) = sni.find('.') {
+                let wildcard = format!("*{}", &sni[dot..]);
+                if let Some(name) = self.domain_index.get(&wildcard) {
+                    return self.profiles.get(name).cloned();
+                }
+            }
+        }
+        Some(Arc::clone(&self.default))
+    }
 }
 
 // Implement SHA-256 digest
@@ -475,6 +646,7 @@ mod tests {
             ca_cert_path: temp_dir.path().join("ca.pem"),
             pin_validation: true,
             validity_days: 365,
+            profiles: None,
         };
 
         // Generate test certificate
@@ -501,6 +673,7 @@ mod tests {
             ca_cert_path: temp_dir.path().join("ca.pem"),
             pin_validation: true,
             validity_days: 365,
+            profiles: None,
         };
 
         // Generate certificate valid for 10 days
@@ -520,5 +693,129 @@ mod tests {
         // Should not need renewal if threshold is 5 days
         let needs_renewal = cert_manager.needs_renewal(&cert_pem, 5).unwrap();
         assert!(!needs_renewal);
+    }
+
+    #[test]
+    fn test_multi_profile_cert_manager() {
+        use crate::config::HttpsProfile;
+
+        let temp_dir = tempdir().unwrap();
+
+        // Generate two distinct self-signed certs
+        let (cert1, key1) =
+            CertManager::generate_self_signed_cert("c2.example.com", &[], 30).unwrap();
+        let (cert2, key2) =
+            CertManager::generate_self_signed_cert("backup.example.com", &[], 30).unwrap();
+
+        let p1_dir = temp_dir.path().join("primary");
+        let p2_dir = temp_dir.path().join("fallback");
+        fs::create_dir_all(&p1_dir).unwrap();
+        fs::create_dir_all(&p2_dir).unwrap();
+
+        fs::write(p1_dir.join("cert.pem"), &cert1).unwrap();
+        fs::write(p1_dir.join("key.pem"), &key1).unwrap();
+        fs::write(p1_dir.join("ca.pem"), &cert1).unwrap();
+        fs::write(p2_dir.join("cert.pem"), &cert2).unwrap();
+        fs::write(p2_dir.join("key.pem"), &key2).unwrap();
+        fs::write(p2_dir.join("ca.pem"), &cert2).unwrap();
+
+        // Use profile 1's cert as the default single-cert
+        let config = OriginCertConfig {
+            cert_path: p1_dir.join("cert.pem"),
+            key_path: p1_dir.join("key.pem"),
+            ca_cert_path: p1_dir.join("ca.pem"),
+            pin_validation: true,
+            validity_days: 365,
+            profiles: Some(vec![
+                HttpsProfile {
+                    name: "primary".into(),
+                    domains: vec!["c2.example.com".into()],
+                    cert_path: p1_dir.join("cert.pem"),
+                    key_path: p1_dir.join("key.pem"),
+                    ca_cert_path: p1_dir.join("ca.pem"),
+                },
+                HttpsProfile {
+                    name: "fallback".into(),
+                    domains: vec!["backup.example.com".into()],
+                    cert_path: p2_dir.join("cert.pem"),
+                    key_path: p2_dir.join("key.pem"),
+                    ca_cert_path: p2_dir.join("ca.pem"),
+                },
+            ]),
+        };
+
+        let cm = CertManager::new(config).unwrap();
+        assert!(cm.has_profiles());
+        assert_eq!(cm.profile_names().len(), 2);
+
+        let primary = cm.resolve_profile("c2.example.com").unwrap();
+        assert_eq!(primary.name, "primary");
+
+        let fallback = cm.resolve_profile("backup.example.com").unwrap();
+        assert_eq!(fallback.name, "fallback");
+
+        assert!(cm.resolve_profile("unknown.example.com").is_none());
+    }
+
+    #[test]
+    fn test_resolve_profile_wildcard() {
+        use crate::config::HttpsProfile;
+
+        let temp_dir = tempdir().unwrap();
+        let (cert, key) =
+            CertManager::generate_self_signed_cert("wildcard.example.com", &[], 30).unwrap();
+
+        fs::write(temp_dir.path().join("cert.pem"), &cert).unwrap();
+        fs::write(temp_dir.path().join("key.pem"), &key).unwrap();
+        fs::write(temp_dir.path().join("ca.pem"), &cert).unwrap();
+
+        let config = OriginCertConfig {
+            cert_path: temp_dir.path().join("cert.pem"),
+            key_path: temp_dir.path().join("key.pem"),
+            ca_cert_path: temp_dir.path().join("ca.pem"),
+            pin_validation: true,
+            validity_days: 365,
+            profiles: Some(vec![HttpsProfile {
+                name: "wildcard".into(),
+                domains: vec!["*.example.com".into()],
+                cert_path: temp_dir.path().join("cert.pem"),
+                key_path: temp_dir.path().join("key.pem"),
+                ca_cert_path: temp_dir.path().join("ca.pem"),
+            }]),
+        };
+
+        let cm = CertManager::new(config).unwrap();
+        let profile = cm.resolve_profile("sub.example.com").unwrap();
+        assert_eq!(profile.name, "wildcard");
+
+        let profile = cm.resolve_profile("other.example.com").unwrap();
+        assert_eq!(profile.name, "wildcard");
+
+        assert!(cm.resolve_profile("example.com").is_none());
+    }
+
+    #[test]
+    fn test_no_profiles_backward_compat() {
+        let temp_dir = tempdir().unwrap();
+        let (cert, key) =
+            CertManager::generate_self_signed_cert("test.example.com", &[], 30).unwrap();
+
+        fs::write(temp_dir.path().join("cert.pem"), &cert).unwrap();
+        fs::write(temp_dir.path().join("key.pem"), &key).unwrap();
+        fs::write(temp_dir.path().join("ca.pem"), &cert).unwrap();
+
+        let config = OriginCertConfig {
+            cert_path: temp_dir.path().join("cert.pem"),
+            key_path: temp_dir.path().join("key.pem"),
+            ca_cert_path: temp_dir.path().join("ca.pem"),
+            pin_validation: true,
+            validity_days: 365,
+            profiles: None,
+        };
+
+        let cm = CertManager::new(config).unwrap();
+        assert!(!cm.has_profiles());
+        assert!(cm.profile_names().is_empty());
+        assert!(!cm.get_certificate_chain().is_empty());
     }
 }

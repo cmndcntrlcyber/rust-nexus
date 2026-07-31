@@ -1,9 +1,14 @@
 //! Configuration management for Nexus infrastructure components
 
 use crate::{InfraError, InfraResult};
+use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+
+fn serialize_redacted<S: serde::Serializer>(_: &SecretString, s: S) -> Result<S::Ok, S::Error> {
+    s.serialize_str("[REDACTED]")
+}
 
 /// Main configuration structure for Nexus infrastructure
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -30,8 +35,9 @@ pub struct NexusConfig {
 /// Cloudflare API and DNS configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CloudflareConfig {
-    /// Cloudflare API token
-    pub api_token: String,
+    /// Cloudflare API token (zeroized on drop, redacted in Debug/Serialize)
+    #[serde(serialize_with = "serialize_redacted")]
+    pub api_token: SecretString,
 
     /// Zone ID for the domain
     pub zone_id: String,
@@ -85,16 +91,31 @@ pub enum ChallengeType {
     TlsAlpn01,
 }
 
+/// Named HTTPS profile with its own origin cert, key, and CA
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HttpsProfile {
+    /// Profile identifier (e.g. "primary", "fallback", "fronting")
+    pub name: String,
+    /// SNI domains this profile handles
+    pub domains: Vec<String>,
+    /// Path to origin certificate
+    pub cert_path: PathBuf,
+    /// Path to origin private key
+    pub key_path: PathBuf,
+    /// Path to CA certificate
+    pub ca_cert_path: PathBuf,
+}
+
 /// Origin certificate configuration for Cloudflare
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OriginCertConfig {
-    /// Path to origin certificate
+    /// Path to origin certificate (single-profile legacy)
     pub cert_path: PathBuf,
 
-    /// Path to origin private key
+    /// Path to origin private key (single-profile legacy)
     pub key_path: PathBuf,
 
-    /// Path to CA certificate
+    /// Path to CA certificate (single-profile legacy)
     pub ca_cert_path: PathBuf,
 
     /// Enable certificate pinning validation
@@ -102,6 +123,10 @@ pub struct OriginCertConfig {
 
     /// Certificate validity period in days
     pub validity_days: u32,
+
+    /// Named HTTPS profiles (overrides single-cert fields when present)
+    #[serde(default)]
+    pub profiles: Option<Vec<HttpsProfile>>,
 }
 
 /// gRPC server configuration
@@ -229,7 +254,7 @@ pub struct RateLimitConfig {
 impl Default for CloudflareConfig {
     fn default() -> Self {
         Self {
-            api_token: String::new(),
+            api_token: SecretString::new(String::new()),
             zone_id: String::new(),
             domain: String::new(),
             proxy_enabled: true,
@@ -261,6 +286,7 @@ impl Default for OriginCertConfig {
             ca_cert_path: PathBuf::from("./certs/origin_ca.crt"),
             pin_validation: true,
             validity_days: 365,
+            profiles: None,
         }
     }
 }
@@ -365,7 +391,7 @@ impl NexusConfig {
     /// Validate configuration settings
     pub fn validate(&self) -> InfraResult<()> {
         // Validate Cloudflare configuration
-        if self.cloudflare.api_token.is_empty() {
+        if self.cloudflare.api_token.expose_secret().is_empty() {
             return Err(InfraError::ConfigError(
                 "Cloudflare API token is required".to_string(),
             ));
@@ -428,6 +454,33 @@ impl NexusConfig {
             }
         }
 
+        // Validate HTTPS profiles (if present)
+        if let Some(profiles) = &self.origin_cert.profiles {
+            let mut seen_domains: HashMap<&str, &str> = HashMap::new();
+            for profile in profiles {
+                if profile.name.is_empty() {
+                    return Err(InfraError::ConfigError(
+                        "HTTPS profile name cannot be empty".to_string(),
+                    ));
+                }
+                if profile.domains.is_empty() {
+                    return Err(InfraError::ConfigError(format!(
+                        "HTTPS profile '{}' must have at least one domain",
+                        profile.name,
+                    )));
+                }
+                for domain in &profile.domains {
+                    if let Some(existing) = seen_domains.get(domain.as_str()) {
+                        return Err(InfraError::ConfigError(format!(
+                            "Domain '{}' appears in profiles '{}' and '{}'",
+                            domain, existing, profile.name,
+                        )));
+                    }
+                    seen_domains.insert(domain, &profile.name);
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -475,7 +528,7 @@ mod tests {
         assert!(config.validate().is_err());
 
         // Fill in required fields
-        config.cloudflare.api_token = "test_token".to_string();
+        config.cloudflare.api_token = SecretString::new("test_token".to_string());
         config.cloudflare.zone_id = "test_zone".to_string();
         config.cloudflare.domain = "example.com".to_string();
         config.letsencrypt.contact_email = "test@example.com".to_string();
@@ -510,5 +563,116 @@ mod tests {
                 duration_seconds: 300
             }
         );
+    }
+
+    #[test]
+    fn test_https_profiles_config() {
+        let toml_str = r#"
+            cert_path = "./certs/origin.crt"
+            key_path = "./certs/origin.key"
+            ca_cert_path = "./certs/origin_ca.crt"
+            pin_validation = true
+            validity_days = 365
+
+            [[profiles]]
+            name = "primary"
+            domains = ["c2.example.com"]
+            cert_path = "./certs/prod/server.crt.pem"
+            key_path = "./certs/prod/server.key.pem"
+            ca_cert_path = "./certs/prod/ca.crt.pem"
+
+            [[profiles]]
+            name = "fallback"
+            domains = ["backup.example.com", "cdn.example.com"]
+            cert_path = "./certs/fallback/server.crt.pem"
+            key_path = "./certs/fallback/server.key.pem"
+            ca_cert_path = "./certs/fallback/ca.crt.pem"
+        "#;
+
+        let config: OriginCertConfig = toml::from_str(toml_str).unwrap();
+        let profiles = config.profiles.unwrap();
+        assert_eq!(profiles.len(), 2);
+        assert_eq!(profiles[0].name, "primary");
+        assert_eq!(profiles[0].domains, vec!["c2.example.com"]);
+        assert_eq!(profiles[1].name, "fallback");
+        assert_eq!(profiles[1].domains, vec!["backup.example.com", "cdn.example.com"]);
+    }
+
+    #[test]
+    fn test_backward_compat_no_profiles() {
+        let toml_str = r#"
+            cert_path = "./certs/origin.crt"
+            key_path = "./certs/origin.key"
+            ca_cert_path = "./certs/origin_ca.crt"
+            pin_validation = true
+            validity_days = 365
+        "#;
+
+        let config: OriginCertConfig = toml::from_str(toml_str).unwrap();
+        assert!(config.profiles.is_none());
+    }
+
+    #[test]
+    fn test_duplicate_domain_rejected() {
+        let mut config = NexusConfig::default();
+        config.cloudflare.api_token = SecretString::new("test_token".to_string());
+        config.cloudflare.zone_id = "test_zone".to_string();
+        config.cloudflare.domain = "example.com".to_string();
+        config.letsencrypt.contact_email = "test@example.com".to_string();
+        config.domains.primary_domains = vec!["c2.example.com".to_string()];
+
+        config.origin_cert.profiles = Some(vec![
+            HttpsProfile {
+                name: "primary".to_string(),
+                domains: vec!["c2.example.com".to_string()],
+                cert_path: PathBuf::from("./certs/a.crt"),
+                key_path: PathBuf::from("./certs/a.key"),
+                ca_cert_path: PathBuf::from("./certs/a_ca.crt"),
+            },
+            HttpsProfile {
+                name: "fallback".to_string(),
+                domains: vec!["c2.example.com".to_string()],
+                cert_path: PathBuf::from("./certs/b.crt"),
+                key_path: PathBuf::from("./certs/b.key"),
+                ca_cert_path: PathBuf::from("./certs/b_ca.crt"),
+            },
+        ]);
+
+        let err = config.validate().unwrap_err();
+        let msg = format!("{}", err);
+        assert!(msg.contains("c2.example.com"));
+        assert!(msg.contains("primary"));
+        assert!(msg.contains("fallback"));
+    }
+
+    #[test]
+    fn test_toml_roundtrip_profiles() {
+        let mut config = NexusConfig::default();
+        config.origin_cert.profiles = Some(vec![
+            HttpsProfile {
+                name: "primary".to_string(),
+                domains: vec!["c2.example.com".to_string()],
+                cert_path: PathBuf::from("./certs/prod/server.crt.pem"),
+                key_path: PathBuf::from("./certs/prod/server.key.pem"),
+                ca_cert_path: PathBuf::from("./certs/prod/ca.crt.pem"),
+            },
+            HttpsProfile {
+                name: "fallback".to_string(),
+                domains: vec!["backup.example.com".to_string()],
+                cert_path: PathBuf::from("./certs/fallback/server.crt.pem"),
+                key_path: PathBuf::from("./certs/fallback/server.key.pem"),
+                ca_cert_path: PathBuf::from("./certs/fallback/ca.crt.pem"),
+            },
+        ]);
+
+        let toml_str = toml::to_string_pretty(&config).unwrap();
+        let roundtripped: NexusConfig = toml::from_str(&toml_str).unwrap();
+
+        let profiles = roundtripped.origin_cert.profiles.unwrap();
+        assert_eq!(profiles.len(), 2);
+        assert_eq!(profiles[0].name, "primary");
+        assert_eq!(profiles[0].domains, vec!["c2.example.com"]);
+        assert_eq!(profiles[1].name, "fallback");
+        assert_eq!(profiles[1].domains, vec!["backup.example.com"]);
     }
 }

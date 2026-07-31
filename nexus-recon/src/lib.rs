@@ -3,12 +3,10 @@
 //! Integrates the browser fingerprinting and reconnaissance capabilities from the catch system
 //! into the rust-nexus framework for comprehensive target profiling and information gathering.
 
-// v1.4 commit-prep: recon module ships as stub/overlay; the `config` fields on
-// NetworkRecon and SystemProfiler are populated but not yet wired to the send
-// path. Suppress at the crate level rather than chasing each unused field.
-#![allow(dead_code)]
+// v1.4: stub/overlay module — config fields are declared for future wiring.
+// Per-item #[allow(dead_code)] is used on specific unused items below.
 
-use log::info;
+use tracing::info;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

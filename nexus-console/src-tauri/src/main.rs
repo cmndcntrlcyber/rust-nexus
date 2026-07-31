@@ -14,6 +14,7 @@ fn main() {
     tauri::Builder::default()
         .manage(ConsoleState::new())
         .invoke_handler(tauri::generate_handler![
+            commands::get_startup_config,
             commands::connect_c2,
             commands::disconnect_c2,
             commands::connection_summary,

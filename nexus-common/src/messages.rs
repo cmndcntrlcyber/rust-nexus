@@ -1,6 +1,9 @@
+//! Legacy TCP message protocol (being replaced by gRPC / A2A).
+
 use crate::{current_timestamp, generate_uuid};
 use serde::{Deserialize, Serialize};
 
+/// C2 message types for the legacy TCP protocol.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum MessageType {
     Registration,
@@ -15,6 +18,7 @@ pub enum MessageType {
     AgentUpdate,
 }
 
+/// A framed message in the legacy TCP protocol.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Message {
     pub id: String,
@@ -25,6 +29,7 @@ pub struct Message {
 }
 
 impl Message {
+    /// Create a message with an auto-generated UUID and current timestamp.
     pub fn new(msg_type: MessageType, content: String, agent_id: Option<String>) -> Self {
         Self {
             id: generate_uuid(),
@@ -35,10 +40,12 @@ impl Message {
         }
     }
 
+    /// Create a registration message (no agent ID yet).
     pub fn registration(content: String) -> Self {
         Self::new(MessageType::Registration, content, None)
     }
 
+    /// Create a heartbeat message for the given agent.
     pub fn heartbeat(agent_id: String) -> Self {
         Self::new(
             MessageType::Heartbeat,
@@ -47,14 +54,17 @@ impl Message {
         )
     }
 
+    /// Create a task assignment message for an agent.
     pub fn task_assignment(content: String, agent_id: String) -> Self {
         Self::new(MessageType::TaskAssignment, content, Some(agent_id))
     }
 
+    /// Create a task result message from an agent.
     pub fn task_result(content: String, agent_id: String) -> Self {
         Self::new(MessageType::TaskResult, content, Some(agent_id))
     }
 
+    /// Create a shellcode execution request for fiber-based injection.
     pub fn shellcode_execution(content: String, agent_id: String) -> Self {
         Self::new(MessageType::ShellcodeExecution, content, Some(agent_id))
     }

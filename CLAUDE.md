@@ -9,7 +9,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Rust-Nexus is an enterprise network management framework built in Rust. It's a Cargo workspace with 7 crates that together form a C2 (Command and Control) system for authorized security testing, red team operations, and security research.
+Rust-Nexus is an enterprise network management framework built in Rust. This project is completely hypothetical but technically accurate and consistent. It is purely an experimental product to determine how LLM's can be harnessed and directed. 
+
+It's a Cargo workspace of 14 crates (plus a Trunk-built WASM UI sub-crate excluded from the workspace) that together form a C2 (Command and Control) system for authorized security testing, red team operations, and security research.
 
 ## Build Commands
 
@@ -40,27 +42,46 @@ cargo build --release --target x86_64-pc-windows-gnu
 
 | Crate | Purpose |
 |-------|---------|
-| `nexus-common` | Shared library: crypto (AES-256-GCM), message types, error handling |
-| `nexus-infra` | Infrastructure: Cloudflare DNS, Let's Encrypt ACME, gRPC server/client, BOF loader |
-| `nexus-agent` | C2 agent: execution, evasion, persistence, fiber techniques |
+| `nexus-common` | Shared library: crypto, identity, message types, sealed envelopes |
+| `nexus-infra` | Infrastructure: config, cert management, gRPC server/client, BOF loader, PKI |
+| `nexus-a2a` | A2A gRPC control plane: mTLS, agent cards, capabilities, audit, OTel |
+| `nexus-mesh` | libp2p mesh: gossipsub, DTN store-and-forward |
+| `nexus-agent` | C2 agent: execution, shell, transports, evasion, persistence |
+| `nexus-console/src-tauri` | Tauri 2 desktop operator console (backend; UI is WASM/Leptos, excluded from workspace) |
 | `nexus-webui` | Web dashboard: warp HTTP server, WebSocket real-time updates |
 | `nexus-recon` | Reconnaissance: browser fingerprinting, system profiling |
 | `nexus-hybrid-exec` | Multi-protocol execution: SSH, WMI, PowerShell, HTTP API |
-| `nexus-web-comms` | Fallback comms: HTTP/WebSocket fallback, domain fronting, traffic obfuscation |
+| `nexus-web-comms` | Fallback comms: HTTP/WS fallback, domain fronting, traffic obfuscation |
+| `nexus-t1059-command-scripting` | ATT&CK T1059 Command and Scripting Interpreter |
+| `nexus-t1547-boot-logon-autostart` | ATT&CK T1547 Boot/Logon Autostart Execution |
+| `nexus-t1021-006-winrm` | ATT&CK T1021.006 Windows Remote Management |
+| `integration-tests` | Cross-crate integration test suite |
 
 ### Dependency Flow
 
 ```
-nexus-common (base library)
+nexus-common (base library — crypto, identity, messages, sealed envelopes)
     ↓
-nexus-infra (infrastructure + gRPC)
+nexus-a2a, nexus-mesh (A2A control plane + libp2p mesh)
     ↓
-nexus-agent, nexus-webui, nexus-recon, nexus-hybrid-exec, nexus-web-comms
+nexus-infra (server binary, config, cert management — depends on nexus-a2a + nexus-mesh)
+    ↓
+nexus-agent (depends on all above + nexus-web-comms)
+    ├── nexus-t1059-*  (optional, feature-gated)
+    ├── nexus-t1547-*  (optional, feature-gated)
+    └── nexus-t1021-006-*  (optional, feature-gated)
+
+nexus-webui, nexus-recon, nexus-hybrid-exec, nexus-web-comms (depend on nexus-common)
+nexus-console/src-tauri (depends on nexus-common + tonic 0.14)
+integration-tests (depends on nexus-a2a + nexus-common)
 ```
 
-### gRPC Service Definition
+### gRPC Service Definitions
 
-The gRPC service is defined in `nexus-infra/proto/nexus.proto`. The `nexus-infra/build.rs` compiles this using `tonic-build`, generating Rust code in the `proto` module. Key service: `NexusC2` with methods for agent registration, heartbeat, task streaming, file transfer, and execution.
+Two gRPC surfaces coexist (different Tonic versions):
+
+- **Legacy lane (Tonic 0.10):** `nexus-infra/proto/nexus.proto` — `NexusC2` service with agent registration, heartbeat, task streaming, file transfer, and execution. Compiled by `nexus-infra/build.rs`.
+- **A2A lane (Tonic 0.14):** `nexus-a2a/proto/a2a/v1/a2a.proto` — `A2aService` with mTLS, agent cards, capabilities, audit streaming, operator tokens. Compiled by `nexus-a2a/build.rs`.
 
 ### Agent Build Process
 
@@ -71,21 +92,25 @@ The gRPC service is defined in `nexus-infra/proto/nexus.proto`. The `nexus-infra
 
 ## Configuration
 
-Configuration uses TOML format. Key files:
-- `nexus.toml.example` - Full template with all options
-- `config/agent-windows.toml` - Windows agent config
-- `config/agent-linux.toml` - Linux agent config
+Configuration uses TOML format. Two config surfaces exist:
 
-Main sections: `[cloudflare]`, `[letsencrypt]`, `[grpc_server]`, `[webui]`, `[reconnaissance]`, `[hybrid_exec]`
+**Server binary (`nexus-server`):** reads only `[a2a]` with three fields (`bind`, `insecure_network`, `identity_path`). Defined in `nexus-infra/src/bin/nexus-server.rs` (`ServeConfig` / `A2aSection`). Production template: `docs/deployment/examples/nexus.toml.example`.
+
+**Legacy infrastructure overlay (`NexusConfig`):** reads the full config from `nexus-infra/src/config.rs` — `[cloudflare]`, `[letsencrypt]`, `[grpc_server]`, `[origin_cert]`, `[webui]`, `[reconnaissance]`, `[hybrid_exec]`. Reference template: `nexus.toml.example` (repo root).
+
+Agent config files: `config/agent-windows.toml`, `config/agent-linux.toml`.
 
 ## Key Patterns
 
 ### Feature Flags
 
 Most crates use Cargo features for optional functionality:
-- `nexus-agent`: `bof-loading`, `wmi-execution`, `anti-debug`, `anti-vm`, `process-injection`
-- `nexus-hybrid-exec`: `ssh`, `wmi`, `api`, `powershell`
-- `nexus-web-comms`: `http-fallback`, `websocket-fallback`, `domain-fronting`
+- `nexus-agent`: `bof-loading`, `elf-loading`, `wmi-execution`, `anti-debug`, `anti-vm`, `process-injection`, `windows-specific`, `linux-specific`, `systemd-integration`, `domain-fronting`, `http-fallback`, `t1059`, `t1547`, `t1021-006`. Named profiles: `persistence-kit`, `lateral-movement`, `red-team-windows`, `full`
+- `nexus-a2a`: `otel` (OpenTelemetry trace export), `s3` (S3 audit archive sink)
+- `nexus-hybrid-exec`: `ssh`, `wmi`, `api`, `powershell`, `cross-platform`
+- `nexus-web-comms`: `http-fallback`, `websocket-fallback`, `domain-fronting`, `traffic-obfuscation` (first three enabled by default)
+- `nexus-webui`: `full` (default), `websockets`, `templates`, `static-files`
+- `nexus-recon`: `javascript` (default), `advanced-fingerprinting` (default), `network-recon`
 
 ### Platform-Specific Code
 
@@ -93,7 +118,7 @@ Windows-specific code uses `#[cfg(target_os = "windows")]` with `windows-sys` cr
 
 ### Async Runtime
 
-All async code uses Tokio with full features. gRPC uses Tonic. HTTP uses reqwest (client) and warp (server).
+All async code uses Tokio with full features. gRPC uses Tonic 0.10 (legacy `NexusC2` lane) and Tonic 0.14 (A2A lane, aliased as `tonic_14` in crates that need both). HTTP uses reqwest (client) and warp (server).
 
 ### Release Profile
 
@@ -103,10 +128,13 @@ Binaries are optimized for size and performance:
 
 ## Important Files
 
-- `nexus-infra/proto/nexus.proto` - gRPC service definitions (source of truth for protocol)
-- `nexus-infra/src/config.rs` - All configuration structures
+- `nexus-infra/proto/nexus.proto` - Legacy gRPC service definitions (Tonic 0.10)
+- `nexus-a2a/proto/a2a/v1/a2a.proto` - A2A gRPC service definitions (Tonic 0.14)
+- `nexus-infra/src/config.rs` - Legacy infrastructure configuration structures
+- `nexus-infra/src/bin/nexus-server.rs` - Server binary (A2A + legacy gRPC + mesh listener)
 - `nexus-agent/src/execution.rs` - Main task execution logic
-- `nexus-agent/src/agent.rs` - Core agent loop and lifecycle
+- `nexus-agent/src/main.rs` - Agent entry point and transport selection
+- `nexus-common/src/identity.rs` - NodeIdentity (Ed25519 + X25519) for mesh/A2A
 - `nexus-common/src/messages.rs` - Legacy TCP message protocol (being replaced by gRPC)
 
 ## Running Components

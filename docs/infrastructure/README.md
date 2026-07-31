@@ -9,7 +9,7 @@ locations:
 | Local dev quickstart | [`../deployment/local-dev.md`](../deployment/local-dev.md) |
 | Operator console distribution | [`../deployment/operator-console.md`](../deployment/operator-console.md) |
 | Day-2 operations / runbook | [`../deployment/operations.md`](../deployment/operations.md) |
-| Tauri codesigning (CI) | [`../v1.2/codesigning.md`](../v1.2/codesigning.md) |
+| Tauri codesigning (CI) | [`../enhancements/agent-swarm-mesh/v1.2/codesigning.md`](../enhancements/agent-swarm-mesh/v1.2/codesigning.md) |
 | Cert provisioning (v1.2) | [`../deployment/production.md#ca-strategy`](../deployment/production.md#ca-strategy) |
 | Cloudflare / ACME (v1.0 overlay) | [`../deployment/production.md#cloudflareacme-appendix`](../deployment/production.md#cloudflareacme-appendix) |
 

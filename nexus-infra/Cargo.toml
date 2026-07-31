@@ -56,20 +56,18 @@ rustls-pemfile = { workspace = true }
 x509-parser = { workspace = true }
 
 # DNS and networking
-hickory-dns = { workspace = true }
 hickory-resolver = { workspace = true }
 
 # HTTP client for APIs
 reqwest = { workspace = true }
 
-# Let's Encrypt ACME
-acme-lib = { workspace = true }
-# acme-lib transitively depends on openssl-sys. Force the `vendored` feature
-# so the build compiles OpenSSL from source statically — required for
-# cross-compiling to x86_64-pc-windows-gnu (where no system OpenSSL exists).
-openssl = { version = "0.10", features = ["vendored"] }
+# Let's Encrypt ACME (async, pure-Rust — replaces acme-lib 0.8)
+instant-acme = { workspace = true }
 rcgen = { workspace = true }
 pem = "3.0"
+
+# Secret management
+secrecy = { workspace = true }
 
 # Configuration
 config = { workspace = true }
@@ -82,10 +80,6 @@ chrono = { workspace = true }
 # rcgen 0.11 takes `time::OffsetDateTime` for cert validity bounds; we
 # bridge from chrono with `time::OffsetDateTime::from_unix_timestamp(...)`.
 time = "0.3"
-
-# Logging
-log = { workspace = true }
-env_logger = { workspace = true }
 
 # Windows PE/COFF parsing
 goblin = { workspace = true }

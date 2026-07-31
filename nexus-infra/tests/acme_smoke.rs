@@ -40,7 +40,7 @@ async fn staging_dns01_round_trip() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
     let cf_config = nexus_infra::config::CloudflareConfig {
-        api_token,
+        api_token: api_token.into(),
         zone_id,
         domain: domain.clone(),
         ..nexus_infra::config::CloudflareConfig::default()

@@ -26,6 +26,26 @@ pub fn ConnectDialog(
     let (status, set_status) = signal::<Option<String>>(None);
     let (busy, set_busy) = signal(false);
 
+    // Pre-fill address from NEXUS_SERVER_ADDR if the deploy script set it.
+    {
+        let set_addr = set_addr;
+        Effect::new(move |_| {
+            spawn_local(async move {
+                #[derive(serde::Deserialize)]
+                struct StartupConfig {
+                    server_addr: Option<String>,
+                }
+                if let Ok(cfg) =
+                    tauri_api::invoke::<_, StartupConfig>("get_startup_config", &()).await
+                {
+                    if let Some(a) = cfg.server_addr {
+                        set_addr.set(a);
+                    }
+                }
+            });
+        });
+    }
+
     let on_submit = move |_| {
         if busy.get() {
             return;

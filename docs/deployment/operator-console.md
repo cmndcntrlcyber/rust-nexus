@@ -1,159 +1,174 @@
-# Operator console distribution
+# Operator console
 
 The operator console is a Tauri 2 + Leptos desktop application that
-talks to the C2's A2A plane over mTLS. v1.2 ships codesigned bundles
-for macOS and Windows via CI; Linux ships unsigned.
-
-> Build / sign internals: [`../v1.2/codesigning.md`](../v1.2/codesigning.md).
-> First-run UX assumes a deployment configured per
-> [`production.md`](production.md).
+connects to the C2's A2A gRPC plane. The `deploy-operator-console.sh`
+script handles building, cert wiring, and launching.
 
 ---
 
-## Build matrix
+## Quick start
 
-| Platform | Bundle format | Signing | Notarization |
-|---|---|---|---|
-| macOS (universal) | `.app` / `.dmg` | Developer ID Application (`APPLE_*` secrets) | Yes — Apple Notary service |
-| Windows | `.msi` / `.exe` | Authenticode (`WINDOWS_*` secrets) | n/a |
-| Linux | `.AppImage` / `.deb` / `.rpm` | Unsigned | n/a |
+```bash
+# From the repo root on the operator workstation
+NEXUS_SERVER_ADDR=https://c2.example.com:50052 \
+  ./scripts/deploy-operator-console.sh
+```
 
-CI workflow:
-[`.github/workflows/tauri-build.yml`](../../.github/workflows/tauri-build.yml).
-Triggered on tag push (`v*`) or manual dispatch. Artifacts uploaded
-per-OS.
+The script:
+1. Checks / installs build deps (WebKitGTK, protobuf-compiler, trunk,
+   cargo-tauri, npm).
+2. Builds the Tauri release bundle (~3 min on first build, fast on
+   subsequent runs if nothing changed).
+3. Auto-detects `certs/prod/` (if it exists) and exports cert env vars.
+4. Launches the binary with `NEXUS_SERVER_ADDR` pre-set.
 
-## Where to download
+### Script flags
 
-| Source | Audience |
+| Flag | Effect |
 |---|---|
-| GitHub Actions artifacts on each tagged release | Operators with repo access |
-| Internal artifact registry (your team's distribution) | Production rollout |
-| `nexus-console/src-tauri/target/release/bundle/` after local `cargo tauri build` | Developers, evaluators |
+| *(none)* | Build + launch (release bundle) |
+| `--dev` | `cargo tauri dev` — hot-reload, no bundling |
+| `--no-build` | Skip build; launch previously-built binary |
+| `--build-only` | Build only; do not launch |
 
-## First-run setup
+### Env overrides
 
-### 1. Install the bundle
-
-- **macOS**: open the `.dmg`, drag `nexus-console.app` to `/Applications`.
-- **Windows**: run the `.msi`. Accept the UAC prompt.
-- **Linux**: `chmod +x nexus-console.AppImage && ./nexus-console.AppImage`
-  (or install the `.deb` via `apt`).
-
-### 2. Verify the signature
-
-Always verify on first install (and after any update):
-
-#### macOS
-
-```bash
-spctl --assess --type execute --verbose /Applications/nexus-console.app
-# Expected: "source=Notarized Developer ID"
-```
-
-If `spctl` rejects with `source=No matching credential` or similar,
-the bundle is **not** the signed CI artifact — stop and re-download
-from the canonical source.
-
-#### Windows
-
-```powershell
-signtool verify /v /pa "C:\Program Files\nexus-console\nexus-console.exe"
-# Expected: "Successfully verified" with the chain anchored at your CA.
-```
-
-#### Linux
-
-Unsigned by design. Verify the SHA-256 of the AppImage against the
-checksum published in the CI artifact:
-
-```bash
-sha256sum nexus-console.AppImage
-# Compare against the SHA-256 in the GitHub Actions artifact metadata.
-```
-
-### 3. First launch + Connect dialog
-
-Open the console. The **Connect** dialog asks for:
-
-| Field | Example | Notes |
+| Variable | Default | Notes |
 |---|---|---|
-| C2 endpoint URL | `https://c2.internal:50052` | Must be `https://` for mTLS |
-| CA cert path | `/etc/nexus-console/ca.crt.pem` | The CA that signed the server cert |
-| Client cert path | `/etc/nexus-console/operator.crt.pem` | Your operator client cert |
-| Client key path | `/etc/nexus-console/operator.key.pem` | Match the client cert; mode 0o600 |
-| Accept unsigned card | Off | Production: always off |
+| `NEXUS_SERVER_ADDR` | *(prompted)* | C2 URL, e.g. `https://c2.example.com:50052` |
+| `CERT_DIR` | `./certs/prod` if present, else `./certs/nexus-agent` | Directory with `ca.crt.pem`, `client.crt.pem`, `client.key.pem` |
 
-The console persists these as a named "connection profile" so you
-don't have to re-enter them each session.
+---
 
-### 4. Connection profile storage
+## Connect dialog
 
-The Tauri shell stores profiles in the platform-standard config dir:
+When the console opens, the **Connect** dialog appears:
 
-| OS | Path |
+| Field | Description |
 |---|---|
-| Linux | `$XDG_CONFIG_HOME/nexus-console/profiles.json` (defaults to `~/.config/nexus-console/profiles.json`) |
-| macOS | `~/Library/Application Support/nexus-console/profiles.json` |
-| Windows | `%APPDATA%\nexus-console\profiles.json` |
-
-Each profile holds the four cert / endpoint fields. The cert + key
-material itself stays on disk at the paths you supplied — the
-profile only stores the paths.
-
-### 5. Connect
+| C2 A2A address | Pre-filled from `NEXUS_SERVER_ADDR` if set |
+| Allow non-loopback address | Check when connecting to a remote C2 (non-localhost) |
 
 Click **Connect**. The console:
+1. Dials the C2 endpoint.
+2. Calls `GetAgentCard` to verify the server identity.
+3. Shows the agent list.
 
-1. Dials the C2 endpoint with the client cert + key as mTLS material.
-2. Calls `GetAgentCard` (verifies the Ed25519 signature if the
-   server is configured to sign).
-3. Calls `ListRegisteredAgents` and renders the agent list.
+If the connection succeeds, the dialog transitions to the main console view:
+the agent list on the left, terminal pane on the right, and status bar.
 
-If any step fails, the dialog reports the failure with a specific
-error (`UnknownIssuer`, `BadCertificate`, `PermissionDenied`,
-`UnimplementedReflection`, etc.). See
-[`local-dev.md`](local-dev.md#troubleshooting) for the troubleshooting
-matrix.
+### Connection errors
 
-### 6. Open a shell
+| Error | Likely cause |
+|---|---|
+| `timed out after 15 s` | nexus-server not running or port 50052 is blocked by firewall |
+| `connect: transport error` | gRPC not supported at that address/port — verify port 50052 is open |
+| `TLS handshake failed` | Cert mismatch — `NEXUS_CA_CERT` doesn't trust the server's cert |
+| `PermissionDenied` | Agent peer-id not in `capabilities.json` |
 
-Select an agent → **Open shell**. The console sends a `shell-open`
-control frame targeting the agent's peer-id (hex). The C2's
-`OperatorRouter` consults the capability matrix
-([`production.md`](production.md#capability-matrix)); if allowed, a
-new `ShellSession` opens on the agent and an xterm.js terminal
-appears in the console.
+---
 
-PTY input → C2 → agent. PTY output → C2 → console. Audit records
-land on the server (`shell_session_open`, `shell_session_close`).
+## Build output
 
-## Updating the console
+The console builds to:
 
-Bundles don't auto-update in v1.2. To upgrade:
+```
+target/release/nexus-console               # binary (run directly)
+target/release/bundle/deb/nexus-console_*.deb
+target/release/bundle/rpm/nexus-console_*.rpm
+target/release/bundle/appimage/nexus-console_*.AppImage
+```
 
-1. Quit the running console.
-2. Install the new bundle over the old one (overwrites in place).
-3. Re-verify the signature per step 2.
-4. Relaunch. Connection profiles persist.
+The deploy script runs the binary directly (`target/release/nexus-console`),
+not the bundle packages.
 
-For air-gapped operator stations, mirror the CI artifacts internally
-and distribute via your normal process.
+---
+
+## Manual build
+
+If you prefer to build without the deploy script:
+
+```bash
+cd nexus-console/src-tauri
+cargo tauri build
+# Binary at ../../target/release/nexus-console
+```
+
+Launch it manually with env vars:
+
+```bash
+NEXUS_SERVER_ADDR=https://c2.example.com:50052 \
+NEXUS_CA_CERT=./certs/prod/ca.crt.pem \
+NEXUS_CLIENT_CERT=./certs/prod/operator.crt.pem \
+NEXUS_CLIENT_KEY=./certs/prod/operator.key.pem \
+  ./target/release/nexus-console
+```
+
+> `NEXUS_CA_CERT` must point to the CA that signed the server's cert.
+> `NEXUS_CLIENT_CERT` / `NEXUS_CLIENT_KEY` are your operator mTLS identity.
+
+---
+
+## Using the console
+
+### Agent list
+
+The left panel lists all agents currently registered with the C2 server.
+Each row shows:
+- Tag (from `capabilities.json` label, if set)
+- OS
+- Version
+- Peer-id (truncated hex)
+- Last seen timestamp
+
+Click a row to select it.
+
+### Shell session
+
+With an agent selected, the terminal pane activates. Type commands; the
+shell runs on the agent host via the C2's PTY relay.
+
+The shell is OS-aware:
+- Linux agents: `/bin/bash` (or `/bin/sh` as fallback)
+- Windows agents: `powershell.exe` (or `cmd.exe` as fallback)
+
+### Status bar
+
+Shows: connected C2 URL, server name/version, active session id, agent count.
+
+---
 
 ## Headless operator (CI / scripted)
 
-For CI smoke tests or scripted operator flows, use the headless
-example binary instead of the Tauri shell:
+For CI smoke tests or scripted operator flows, use the headless example:
 
 ```bash
 cargo run --release -p nexus-a2a --example headless_operator -- \
-    --c2 https://c2.internal:50052 \
-    --ca /etc/nexus-console/ca.crt.pem \
-    --cert /etc/nexus-console/operator.crt.pem \
-    --key /etc/nexus-console/operator.key.pem
+    --c2 https://c2.example.com:50052
 ```
 
-It exercises the same A2A surface (`get_agent_card_verified`,
-`list_registered_agents`, `send_streaming_message` with a shell-open
-frame) without the GUI. The v1.1 demo gate (`./scripts/demo.sh`) uses
-the same plumbing.
+This exercises `get_agent_card`, `list_registered_agents`, and
+`send_streaming_message` without the GUI.
+
+---
+
+## Cert setup reference
+
+The deploy script reads from `CERT_DIR` (defaults to `./certs/prod` if
+present). The expected files are:
+
+```
+$CERT_DIR/ca.crt.pem          # CA cert — verifies the server's TLS cert
+$CERT_DIR/client.crt.pem      # Operator client cert (→ operator.crt.pem in prod)
+$CERT_DIR/client.key.pem      # Operator client key  (→ operator.key.pem in prod)
+```
+
+Generate with:
+```bash
+./scripts/gen-certs-prod.sh \
+  --domain c2.example.com \
+  --ip <public-ip> \
+  --out ./certs/prod
+# gen-certs-prod.sh creates client.crt.pem / client.key.pem as symlinks
+# automatically — no manual renaming needed.
+```

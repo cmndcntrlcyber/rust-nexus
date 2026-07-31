@@ -163,7 +163,7 @@ openssl s_client -connect abc12345.example.com:443
 ```toml
 [connection]
 primary_endpoints = ["https://abc12345.example.com:443"]
-backup_endpoints = ["https://c2.example.com:443"]
+backup_endpoints = ["https://c2.example.com:50052"]
 connection_timeout = 10
 retry_attempts = 3
 

@@ -56,14 +56,13 @@ x509-parser = "0.15"
 
 # DNS and networking
 trust-dns-resolver = "0.23"
-hickory-dns = "0.24"
 hickory-resolver = "0.24"
 
 # HTTP client for Cloudflare API
-reqwest = { version = "0.11", features = ["json", "rustls-tls"] }
+reqwest = { version = "0.11", features = ["json", "rustls-tls", "blocking"] }
 
-# Let's Encrypt ACME client
-acme-lib = "0.8"
+# Let's Encrypt ACME client (async, pure-Rust)
+instant-acme = "0.8"
 rcgen = "0.11"
 
 # Windows PE/COFF parsing
@@ -77,13 +76,13 @@ dirs = "5.0"
 # Date and time handling
 chrono = { version = "0.4", features = ["serde"] }
 
-# Logging
-log = "0.4"
-env_logger = "0.10"
 
 # ─── v1.1 integration additions (simple-mesh/v1.0 layer) ───
 # These deps support the additive A2A + libp2p mesh + Tauri console layer
 # (per ROADMAP D-V1.1-A "additive integration"). Existing deps above stay.
+
+# Secret management
+secrecy = { version = "0.8", features = ["serde"] }
 
 # Identity + sealed envelope primitives
 ed25519-dalek = { version = "2", features = ["rand_core"] }

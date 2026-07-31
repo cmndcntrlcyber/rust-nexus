@@ -1,42 +1,21 @@
 //! Let's Encrypt ACME client with Cloudflare DNS-01 challenge support.
 //!
-//! v1.4.1 (Phase 1.4.1 / D-V1.4-A): the ACME order workflow has been
-//! re-ported against acme-lib 0.8's current API. Production deployments
-//! can opt into automatic cert provisioning by setting `[acme]` in
-//! `nexus.toml` (consumed by `nexus_infra::serve::run_a2a` at startup).
-//!
-//! The flow follows acme-lib 0.8's documented happy path:
-//!
-//! 1. `FilePersist::new(<cert_storage_dir>)` for account / key persistence.
-//! 2. `Directory::from_url(persist, DirectoryUrl::LetsEncryptStaging|LetsEncrypt)`.
-//! 3. `directory.account(contact_email)` — creates or loads the ACME account.
-//! 4. `account.new_order(primary_domain, &san_domains)` → `NewOrder<P>`.
-//! 5. For each `Auth` in `order.authorizations()`:
-//!    - `auth.dns_challenge()` → `Challenge<P, Dns>`
-//!    - `challenge.dns_proof()` → TXT record value
-//!    - Publish via [`CloudflareManager::create_acme_challenge`]
-//!    - Wait for DNS propagation
-//!    - `challenge.validate(5000)` confirms upstream's check
-//! 6. Poll `order.confirm_validations()` until it returns `Some(CsrOrder)`.
-//! 7. `csr_order.finalize_pkey(p256_key, &domains, 5000)` → `CertOrder`.
-//! 8. `cert_order.download_and_save_cert()` → `Certificate`.
-//! 9. Save certificate + private key to disk (mode 0o600 for the key).
-//!
-//! Since acme-lib 0.8 is synchronous (blocks via `ureq`), the entire
-//! flow runs inside `tokio::task::spawn_blocking`. The Cloudflare DNS
-//! publish step bridges back into async land via the captured
-//! `tokio::runtime::Handle`.
+//! v1.5 — migrated from `acme-lib` 0.8 (unmaintained since 2021) to
+//! `instant-acme` 0.8 (async, pure-Rust, actively maintained). The
+//! synchronous `spawn_blocking` bridge is no longer needed.
 
-#![allow(dead_code)]
+// ACME flow is opt-in; some methods are only called when [acme] config is present.
 
 use crate::{CloudflareManager, InfraError, InfraResult, LetsEncryptConfig};
-use acme_lib::persist::FilePersist;
-use acme_lib::{create_p256_key, Directory, DirectoryUrl};
 use chrono::{DateTime, Duration, Utc};
-use log::{debug, info};
+use instant_acme::{
+    Account, AuthorizationStatus, ChallengeType, Identifier, LetsEncrypt, NewAccount, NewOrder,
+    OrderStatus, RetryPolicy,
+};
 use std::collections::HashMap;
 use std::fs;
 use std::sync::Arc;
+use tracing::{debug, info};
 
 /// Certificate information structure
 #[derive(Debug, Clone)]
@@ -69,16 +48,11 @@ pub enum RenewalStatus {
 }
 
 /// Let's Encrypt certificate manager.
-///
-/// v1.2 stub: the acme-lib 0.8 API requires a `Persist` impl and a different
-/// order workflow than this code targeted. The fields that held an
-/// `Account<AccountCredentials>` are replaced with a simple `initialized`
-/// flag; production cert provisioning in v1.2 goes through operator-supplied
-/// certs via `scripts/gen-certs.sh`. Re-introducing real ACME is v1.3 scope.
 pub struct CertificateManager {
     config: LetsEncryptConfig,
     cloudflare: CloudflareManager,
     initialized: bool,
+    #[allow(dead_code)] // populated during ACME flow, read during cleanup
     active_challenges: HashMap<String, ChallengeInfo>,
 }
 
@@ -93,12 +67,10 @@ impl CertificateManager {
         }
     }
 
-    /// Initialize ACME account (v1.2 stub — defers to v1.3 ACME re-port).
+    /// Initialize ACME account.
     pub async fn initialize(&mut self) -> InfraResult<()> {
-        info!("Initializing Let's Encrypt ACME account (v1.2 stub)");
+        info!("Initializing Let's Encrypt ACME account");
 
-        // Still create the cert storage directory so save_certificate and
-        // list_certificates work for operator-supplied certs.
         fs::create_dir_all(&self.config.cert_storage_dir).map_err(|e| {
             InfraError::LetsEncryptError(format!("Failed to create cert directory: {}", e))
         })?;
@@ -107,10 +79,7 @@ impl CertificateManager {
         Ok(())
     }
 
-    /// Request a certificate via ACME DNS-01 (re-ported v1.4.1).
-    ///
-    /// Runs the synchronous acme-lib 0.8 flow inside `spawn_blocking`,
-    /// bridging back to async land for the Cloudflare DNS publish step.
+    /// Request a certificate via ACME DNS-01.
     pub async fn request_certificate(
         &mut self,
         primary_domain: &str,
@@ -122,54 +91,105 @@ impl CertificateManager {
         );
 
         let staging = self.config.acme_directory_url.contains("staging");
-        let storage_dir = self.config.cert_storage_dir.clone();
-        let contact = self.config.contact_email.clone();
-        let primary = primary_domain.to_string();
-        let sans = san_domains.to_vec();
-        let cloudflare = self.cloudflare.clone();
+        let server_url = if staging {
+            LetsEncrypt::Staging.url()
+        } else {
+            LetsEncrypt::Production.url()
+        };
 
-        // Capture the current Tokio runtime handle so the blocking
-        // task can publish/delete TXT records via Cloudflare while the
-        // outer caller awaits.
-        let handle = tokio::runtime::Handle::current();
-
-        let cert_bundle = tokio::task::spawn_blocking(move || {
-            run_acme_flow(
-                staging,
-                storage_dir,
-                contact,
-                primary,
-                sans,
-                cloudflare,
-                handle,
+        let contact = format!("mailto:{}", self.config.contact_email);
+        let (account, _credentials) = Account::builder()
+            .map_err(|e| InfraError::LetsEncryptError(format!("Account::builder: {e}")))?
+            .create(
+                &NewAccount {
+                    contact: &[&contact],
+                    terms_of_service_agreed: true,
+                    only_return_existing: false,
+                },
+                server_url.to_owned(),
+                None,
             )
-        })
-        .await
-        .map_err(|e| InfraError::LetsEncryptError(format!("acme task join: {e}")))??;
+            .await
+            .map_err(|e| InfraError::LetsEncryptError(format!("Account::create: {e}")))?;
 
-        // `cert_bundle.cert_pem` includes the full chain; the
-        // `save_certificate` helper persists + parses expiry.
-        self.save_certificate(
-            primary_domain,
-            &cert_bundle.cert_pem,
-            &cert_bundle.key_pem,
-            san_domains,
-        )
-        .await
-    }
+        let mut identifiers = vec![Identifier::Dns(primary_domain.to_string())];
+        for san in san_domains {
+            identifiers.push(Identifier::Dns(san.clone()));
+        }
 
-    async fn wait_for_dns_propagation(
-        &self,
-        challenge_name: &str,
-        _challenge_value: &str,
-    ) -> InfraResult<()> {
-        // Best-effort: wait a fixed budget for DNS propagation. The
-        // `Challenge::validate(delay_millis)` step adds its own
-        // server-side poll budget so we only need to hedge against
-        // upstream cache latency here.
-        debug!("ACME: waiting 5s for DNS propagation of {challenge_name}");
-        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-        Ok(())
+        let mut order = account
+            .new_order(&NewOrder::new(&identifiers))
+            .await
+            .map_err(|e| InfraError::LetsEncryptError(format!("new_order: {e}")))?;
+
+        let cloudflare = Arc::new(self.cloudflare.clone());
+        let mut published: Vec<String> = Vec::new();
+
+        let mut authorizations = order.authorizations();
+        while let Some(result) = authorizations.next().await {
+            let mut authz = result
+                .map_err(|e| InfraError::LetsEncryptError(format!("authorization: {e}")))?;
+
+            if matches!(authz.status, AuthorizationStatus::Valid) {
+                continue;
+            }
+
+            let mut challenge = authz
+                .challenge(ChallengeType::Dns01)
+                .ok_or_else(|| {
+                    InfraError::LetsEncryptError("no DNS-01 challenge found".to_string())
+                })?;
+
+            let proof = challenge.key_authorization().dns_value();
+            let ident = challenge.identifier().to_string();
+            let txt_name = format!("_acme-challenge.{ident}");
+
+            info!("ACME: publishing DNS-01 TXT {txt_name}");
+            cloudflare
+                .create_acme_challenge(&txt_name, &proof)
+                .await
+                .map_err(|e| {
+                    InfraError::LetsEncryptError(format!("publish TXT {txt_name}: {e}"))
+                })?;
+            published.push(txt_name.clone());
+
+            debug!("ACME: waiting 5s for DNS propagation of {txt_name}");
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
+            challenge
+                .set_ready()
+                .await
+                .map_err(|e| InfraError::LetsEncryptError(format!("set_ready: {e}")))?;
+        }
+
+        let status = order
+            .poll_ready(&RetryPolicy::default())
+            .await
+            .map_err(|e| InfraError::LetsEncryptError(format!("poll_ready: {e}")))?;
+
+        if status != OrderStatus::Ready {
+            return Err(InfraError::LetsEncryptError(format!(
+                "unexpected order status: {status:?}"
+            )));
+        }
+
+        let private_key_pem = order
+            .finalize()
+            .await
+            .map_err(|e| InfraError::LetsEncryptError(format!("finalize: {e}")))?;
+
+        let cert_chain_pem = order
+            .poll_certificate(&RetryPolicy::default())
+            .await
+            .map_err(|e| InfraError::LetsEncryptError(format!("poll_certificate: {e}")))?;
+
+        // Clean up DNS challenge records (best-effort).
+        for txt_name in published {
+            let _ = cloudflare.delete_acme_challenge(&txt_name).await;
+        }
+
+        self.save_certificate(primary_domain, &cert_chain_pem, &private_key_pem, san_domains)
+            .await
     }
 
     async fn save_certificate(
@@ -193,7 +213,6 @@ impl CertificateManager {
             .cert_storage_dir
             .join(format!("{}-chain.crt", domain_safe));
 
-        // Parse certificate to get expiration date
         let cert_pem_data = certificate_chain
             .lines()
             .skip_while(|line| !line.starts_with("-----BEGIN CERTIFICATE-----"))
@@ -204,7 +223,6 @@ impl CertificateManager {
 
         let expires_at = self.parse_certificate_expiry(&cert_pem_data)?;
 
-        // Write certificate files
         fs::write(&cert_path, certificate_chain).map_err(|e| {
             InfraError::LetsEncryptError(format!("Failed to write certificate: {}", e))
         })?;
@@ -234,8 +252,6 @@ impl CertificateManager {
     fn parse_certificate_expiry(&self, cert_pem: &str) -> InfraResult<DateTime<Utc>> {
         use x509_parser::prelude::*;
 
-        // Pull the first CERTIFICATE block via rustls_pemfile (avoids the pem
-        // crate's 3.0 API shift) and decode the DER with x509-parser.
         let mut reader = std::io::Cursor::new(cert_pem.as_bytes());
         let mut der_chain = rustls_pemfile::certs(&mut reader)
             .map_err(|e| InfraError::CertificateError(format!("Failed to parse PEM: {}", e)))?;
@@ -343,7 +359,6 @@ impl CertificateManager {
 
         let expires_at = self.parse_certificate_expiry(&cert_pem)?;
 
-        // TODO: Parse SAN domains from certificate
         let san_domains = Vec::new();
 
         Ok(CertificateInfo {
@@ -397,7 +412,6 @@ mod tests {
         let cf_manager = CloudflareManager::new(cf_config).unwrap();
         let cert_manager = CertificateManager::new(config, cf_manager);
 
-        // Certificate expiring in 20 days (needs renewal)
         let cert_info_needs_renewal = CertificateInfo {
             domain: "example.com".to_string(),
             cert_path: std::path::PathBuf::from("/tmp/example.com.crt"),
@@ -407,7 +421,6 @@ mod tests {
             san_domains: Vec::new(),
         };
 
-        // Certificate expiring in 60 days (doesn't need renewal)
         let cert_info_no_renewal = CertificateInfo {
             domain: "test.com".to_string(),
             cert_path: std::path::PathBuf::from("/tmp/test.com.crt"),
@@ -426,129 +439,4 @@ mod tests {
             RenewalStatus::NotNeeded
         );
     }
-}
-
-// ---------------------------------------------------------------------------
-// v1.4.1 ACME flow internals (blocking — bridged via spawn_blocking).
-// ---------------------------------------------------------------------------
-
-/// Output of [`run_acme_flow`]. Both fields are PEM-encoded strings.
-struct CertBundle {
-    /// Full certificate chain (leaf first, then intermediates).
-    cert_pem: String,
-    /// Private key matching the leaf certificate.
-    key_pem: String,
-}
-
-/// Synchronous ACME flow against `acme-lib` 0.8. Drives the entire
-/// pipeline from account creation through cert download, bridging
-/// back to async land via the captured `tokio::runtime::Handle` for
-/// the Cloudflare TXT record publish/delete + the DNS propagation
-/// wait.
-fn run_acme_flow(
-    staging: bool,
-    storage_dir: std::path::PathBuf,
-    contact_email: String,
-    primary_domain: String,
-    san_domains: Vec<String>,
-    cloudflare: CloudflareManager,
-    handle: tokio::runtime::Handle,
-) -> InfraResult<CertBundle> {
-    // Ensure the persist directory exists.
-    fs::create_dir_all(&storage_dir)
-        .map_err(|e| InfraError::LetsEncryptError(format!("create storage dir: {e}")))?;
-
-    let persist = FilePersist::new(&storage_dir);
-
-    let url = if staging {
-        DirectoryUrl::LetsEncryptStaging
-    } else {
-        DirectoryUrl::LetsEncrypt
-    };
-    let directory = Directory::from_url(persist, url)
-        .map_err(|e| InfraError::LetsEncryptError(format!("Directory::from_url: {e}")))?;
-
-    let account = directory
-        .account(&contact_email)
-        .map_err(|e| InfraError::LetsEncryptError(format!("account: {e}")))?;
-
-    let alt_refs: Vec<&str> = san_domains.iter().map(String::as_str).collect();
-    let mut order = account
-        .new_order(&primary_domain, &alt_refs)
-        .map_err(|e| InfraError::LetsEncryptError(format!("new_order: {e}")))?;
-
-    // -- Authorize each domain via DNS-01.
-    let auths = order
-        .authorizations()
-        .map_err(|e| InfraError::LetsEncryptError(format!("authorizations: {e}")))?;
-
-    let cloudflare = Arc::new(cloudflare);
-    let mut published: Vec<String> = Vec::new();
-    for auth in &auths {
-        let domain = auth.domain_name();
-        let challenge = auth.dns_challenge();
-        let proof = challenge.dns_proof();
-        let txt_name = format!("_acme-challenge.{domain}");
-
-        info!("ACME: publishing DNS-01 TXT {txt_name}");
-        let cf = Arc::clone(&cloudflare);
-        let txt_name_clone = txt_name.clone();
-        let proof_clone = proof.clone();
-        let publish_result: InfraResult<()> = handle.block_on(async move {
-            cf.create_acme_challenge(&txt_name_clone, &proof_clone)
-                .await
-                .map(|_| ())
-        });
-        publish_result?;
-        published.push(txt_name);
-
-        // Hedge against upstream DNS cache latency before asking
-        // Let's Encrypt to validate.
-        std::thread::sleep(std::time::Duration::from_secs(5));
-
-        challenge
-            .validate(5000)
-            .map_err(|e| InfraError::LetsEncryptError(format!("challenge.validate: {e}")))?;
-    }
-
-    // -- Poll until ACME confirms the authorizations.
-    let csr_order = {
-        let mut attempts = 0;
-        loop {
-            if let Some(csr) = order.confirm_validations() {
-                break csr;
-            }
-            attempts += 1;
-            if attempts > 30 {
-                return Err(InfraError::LetsEncryptError(
-                    "ACME order did not reach ready state within 60s".to_string(),
-                ));
-            }
-            std::thread::sleep(std::time::Duration::from_secs(2));
-            order
-                .refresh()
-                .map_err(|e| InfraError::LetsEncryptError(format!("order refresh: {e}")))?;
-        }
-    };
-
-    // -- Finalize with a fresh P-256 key.
-    let pkey = create_p256_key();
-    let cert_order = csr_order
-        .finalize_pkey(pkey, 5000)
-        .map_err(|e| InfraError::LetsEncryptError(format!("finalize_pkey: {e}")))?;
-
-    let cert = cert_order
-        .download_and_save_cert()
-        .map_err(|e| InfraError::LetsEncryptError(format!("download_and_save_cert: {e}")))?;
-
-    // -- Clean up DNS challenge records (best-effort).
-    for txt_name in published {
-        let cf = Arc::clone(&cloudflare);
-        let _ = handle.block_on(async move { cf.delete_acme_challenge(&txt_name).await });
-    }
-
-    Ok(CertBundle {
-        cert_pem: cert.certificate().to_string(),
-        key_pem: cert.private_key().to_string(),
-    })
 }

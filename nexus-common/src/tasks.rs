@@ -1,6 +1,9 @@
+//! Task definitions, scheduling, and result types for the C2 agent.
+
 use crate::{current_timestamp, generate_uuid};
 use serde::{Deserialize, Serialize};
 
+/// A scheduled task to be executed by an agent.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Task {
     pub id: String,
@@ -16,6 +19,7 @@ pub struct Task {
     pub result: Option<TaskResult>,
 }
 
+/// Categories of tasks the agent can execute.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum TaskType {
     ShellCommand,
@@ -61,6 +65,7 @@ pub enum TaskType {
     ArtifactRemoval,
 }
 
+/// Lifecycle state of a task.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum TaskStatus {
     Pending,
@@ -71,6 +76,7 @@ pub enum TaskStatus {
     Cancelled,
 }
 
+/// Outcome of a completed or failed task execution.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TaskResult {
     pub task_id: String,
@@ -84,6 +90,7 @@ pub struct TaskResult {
     pub artifacts: Vec<TaskArtifact>,
 }
 
+/// A file or data blob collected during task execution.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TaskArtifact {
     pub artifact_type: ArtifactType,
@@ -92,6 +99,7 @@ pub struct TaskArtifact {
     pub metadata: std::collections::HashMap<String, String>,
 }
 
+/// Classification of collected artifacts.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum ArtifactType {
     Screenshot,
@@ -107,6 +115,7 @@ pub enum ArtifactType {
 }
 
 impl Task {
+    /// Create a new task with default priority, no timeout, and `Pending` status.
     pub fn new(task_type: TaskType) -> Self {
         Self {
             id: generate_uuid(),
@@ -286,7 +295,7 @@ impl TaskArtifact {
     }
 }
 
-// Task builder patterns for common task types
+/// Factory methods for constructing common task types.
 pub struct TaskBuilder;
 
 impl TaskBuilder {

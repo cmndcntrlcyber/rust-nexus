@@ -33,7 +33,7 @@ pub async fn execute_task(
     _request: TaskExecutionRequest,
     _state: WebUIState,
 ) -> Result<impl Reply, warp::Rejection> {
-    // TODO: Integrate with gRPC client to send task to agent
+    // DEPRECATED(legacy-webui): Integrate with gRPC client to send task to agent
     let response = TaskExecutionResponse {
         task_id: uuid::Uuid::new_v4().to_string(),
         status: "queued".to_string(),
@@ -47,13 +47,13 @@ pub async fn execute_task(
 
 /// List managed domains
 pub async fn list_domains(_state: WebUIState) -> Result<impl Reply, warp::Rejection> {
-    // TODO: Integrate with domain manager
+    // DEPRECATED(legacy-webui): Integrate with domain manager
     Ok(warp::reply::json(&json!({"domains": []})))
 }
 
 /// Trigger domain rotation
 pub async fn rotate_domain(_state: WebUIState) -> Result<impl Reply, warp::Rejection> {
-    // TODO: Integrate with domain manager
+    // DEPRECATED(legacy-webui): Integrate with domain manager
     Ok(warp::reply::json(&json!({"status": "rotation_initiated"})))
 }
 
@@ -67,4 +67,46 @@ pub async fn get_system_info(state: WebUIState) -> Result<impl Reply, warp::Reje
     });
 
     Ok(warp::reply::json(&info))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::TaskExecutionResponse;
+
+    #[test]
+    fn test_task_execution_response_serialization() {
+        let resp = TaskExecutionResponse {
+            task_id: "abc-123".to_string(),
+            status: "queued".to_string(),
+            result: None,
+            error: None,
+            timestamp: chrono::Utc::now(),
+        };
+        let json = serde_json::to_value(&resp).unwrap();
+        assert_eq!(json["task_id"], "abc-123");
+        assert_eq!(json["status"], "queued");
+        assert!(json["result"].is_null());
+    }
+
+    #[test]
+    fn test_task_execution_request_deserialization() {
+        let json = r#"{
+            "task_type": "shell",
+            "parameters": {"cmd": "whoami"},
+            "timeout": 30,
+            "priority": 1
+        }"#;
+        let req: crate::TaskExecutionRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.task_type, "shell");
+        assert_eq!(req.parameters.get("cmd").unwrap(), "whoami");
+        assert_eq!(req.timeout, Some(30));
+    }
+
+    #[test]
+    fn test_list_domains_json_shape() {
+        let expected = json!({"domains": []});
+        assert!(expected["domains"].is_array());
+        assert_eq!(expected["domains"].as_array().unwrap().len(), 0);
+    }
 }

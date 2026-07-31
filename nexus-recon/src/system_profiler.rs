@@ -2,6 +2,7 @@
 
 use crate::*;
 
+#[allow(dead_code)] // config read in upcoming profiler wiring
 pub struct SystemProfiler {
     config: ReconConfig,
 }

@@ -7,6 +7,38 @@
 
 use crate::*;
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ssh_executor_construction() {
+        let config = HybridExecConfig::default();
+        let executor = SshExecutor::new(config);
+        assert!(executor.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_ssh_execute_without_feature_returns_error() {
+        let config = HybridExecConfig::default();
+        let executor = SshExecutor::new(config).unwrap();
+        let request = ExecutionRequest {
+            target_endpoint: "127.0.0.1".to_string(),
+            execution_method: ExecutionProtocol::Ssh,
+            command: "whoami".to_string(),
+            parameters: std::collections::HashMap::new(),
+            timeout: None,
+            credentials: None,
+            fallback_methods: vec![],
+        };
+        #[cfg(not(feature = "ssh"))]
+        {
+            let result = executor.execute(&request).await;
+            assert!(result.is_err());
+        }
+    }
+}
+
 pub struct SshExecutor {
     config: HybridExecConfig,
 }

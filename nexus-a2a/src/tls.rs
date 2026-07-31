@@ -15,6 +15,51 @@ use std::path::Path;
 
 use tonic::transport::{Certificate, ClientTlsConfig, Identity, ServerTlsConfig};
 
+/// Verify that a PEM cert and PEM key correspond to the same key pair.
+///
+/// Uses rustls `ServerConfig::builder().with_single_cert()` which performs a
+/// cryptographic check — returning an error if they don't match. Call this
+/// before handing the material to tonic so a mismatch produces a clear
+/// diagnostic instead of a cryptic handshake failure at the first connection.
+fn assert_cert_key_match(cert_pem: &[u8], key_pem: &[u8]) -> Result<(), TlsError> {
+    use rustls::{Certificate as RCert, PrivateKey, ServerConfig};
+    use rustls_pemfile::{certs, pkcs8_private_keys};
+
+    let chain: Vec<RCert> = certs(&mut std::io::Cursor::new(cert_pem))
+        .unwrap_or_default()
+        .into_iter()
+        .map(RCert)
+        .collect();
+
+    let mut keys = pkcs8_private_keys(&mut std::io::Cursor::new(key_pem)).unwrap_or_default();
+    // Fall back to EC keys when no PKCS#8 block found (rcgen uses PKCS#8 by
+    // default, but handle raw EC for certs generated outside this toolchain).
+    if keys.is_empty() {
+        keys = rustls_pemfile::ec_private_keys(&mut std::io::Cursor::new(key_pem))
+            .unwrap_or_default();
+    }
+
+    if chain.is_empty() || keys.is_empty() {
+        // Can't validate without both halves; let tonic surface the error.
+        return Ok(());
+    }
+
+    ServerConfig::builder()
+        .with_safe_defaults()
+        .with_no_client_auth()
+        .with_single_cert(chain, PrivateKey(keys.remove(0)))
+        .map(|_| ())
+        .map_err(|_| TlsError::CertKeyMismatch)
+}
+
+/// Cert and key were loaded but do not correspond to the same key pair.
+#[allow(dead_code)]
+const _CERT_KEY_MISMATCH_HINT: &str = concat!(
+    "Private key does not match certificate. ",
+    "Re-run `nexus-server pki init` to regenerate all certs from a single CA, ",
+    "or verify NEXUS_SERVER_CERT / NEXUS_SERVER_KEY point to the same bundle."
+);
+
 /// Env var carrying the CA bundle (PEM, path or inline).
 pub const ENV_CA_CERT: &str = "NEXUS_CA_CERT";
 /// Env var carrying the server certificate (PEM, path or inline).
@@ -40,6 +85,12 @@ pub enum TlsError {
         /// Inner io error.
         err: std::io::Error,
     },
+    /// Certificate and private key do not correspond to the same key pair.
+    #[error(
+        "private key does not match certificate — re-run `nexus-server pki init` \
+         or verify NEXUS_SERVER_CERT/NEXUS_SERVER_KEY point to the same bundle"
+    )]
+    CertKeyMismatch,
 }
 
 /// Materialize the contents of an env var. If the value contains
@@ -60,9 +111,16 @@ fn load_pem(var: &'static str) -> Result<Vec<u8>, TlsError> {
 /// Build a [`ServerTlsConfig`] for the A2A gRPC server from the reserved
 /// env vars. Requires `NEXUS_SERVER_CERT`, `NEXUS_SERVER_KEY`; if
 /// `NEXUS_CA_CERT` is also set, enforces client-cert verification (mTLS).
+///
+/// Performs an early key↔cert match check before returning so a mismatch
+/// surfaces as a clear [`TlsError::CertKeyMismatch`] rather than a cryptic
+/// handshake failure on the first incoming connection.
 pub fn load_server_config_from_env() -> Result<ServerTlsConfig, TlsError> {
     let cert = load_pem(ENV_SERVER_CERT)?;
     let key = load_pem(ENV_SERVER_KEY)?;
+
+    assert_cert_key_match(&cert, &key)?;
+
     let identity = Identity::from_pem(&cert, &key);
 
     let mut config = ServerTlsConfig::new().identity(identity);
@@ -76,12 +134,17 @@ pub fn load_server_config_from_env() -> Result<ServerTlsConfig, TlsError> {
 /// Build a [`ClientTlsConfig`] for the A2A gRPC client from the reserved
 /// env vars. Requires `NEXUS_CA_CERT`; if `NEXUS_CLIENT_CERT` and
 /// `NEXUS_CLIENT_KEY` are also set, presents a client identity (mTLS).
+///
+/// Performs an early key↔cert match check on the client identity before
+/// returning so a mismatch surfaces as [`TlsError::CertKeyMismatch`] rather
+/// than a cryptic handshake failure when connecting to the server.
 pub fn load_client_config_from_env() -> Result<ClientTlsConfig, TlsError> {
     let ca = load_pem(ENV_CA_CERT)?;
     let mut config = ClientTlsConfig::new().ca_certificate(Certificate::from_pem(ca));
     let cert = load_pem(ENV_CLIENT_CERT).ok();
     let key = load_pem(ENV_CLIENT_KEY).ok();
     if let (Some(c), Some(k)) = (cert, key) {
+        assert_cert_key_match(&c, &k)?;
         config = config.identity(Identity::from_pem(&c, &k));
     }
     Ok(config)

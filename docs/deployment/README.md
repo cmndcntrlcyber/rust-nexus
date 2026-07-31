@@ -11,7 +11,7 @@ locally for development or as a production service.
 - **Developers** onboarding to the codebase or evaluating the project.
   See [`local-dev.md`](local-dev.md).
 - **Security reviewers** auditing the deployment surface. See
-  [`../v1.2/security-overview.md`](../v1.2/security-overview.md) for
+  [`../enhancements/agent-swarm-mesh/v1.2/security-overview.md`](../enhancements/agent-swarm-mesh/v1.2/security-overview.md) for
   the defense matrix.
 
 ## Deployment modes
@@ -26,42 +26,44 @@ locally for development or as a production service.
 ## Architecture at a glance
 
 ```
-+--------------------+        operator-A2A         +--------------------+
-|  nexus-console     | <─── mTLS + signed card ──► |  nexus-infra       |
-|  Tauri + Leptos    |   :50052 (Tonic 0.14)       |  C2 server         |
-|  + xterm.js        |                             |  (NodeIdentity,    |
++--------------------+        mTLS :50052          +--------------------+
+|  nexus-console     | <─── signed card ─────────► |  nexus-infra       |
+|  Tauri + Leptos    |   (NEXUS_CA_CERT +           |  C2 server         |
+|  + xterm.js        |    NEXUS_CLIENT_CERT/KEY)    |  (NodeIdentity,    |
 +--------------------+                             |   AgentChannels,   |
                                                    |   capability       |
 +--------------------+      v1.2 agent-mode        |   matrix, audit    |
 |  nexus-agent       | <─ mTLS + AgentRegister ─►  |   sink, rate       |
-|  (PTY shell,       |    :50052 first frame       |   limiter)         |
-|   OS-aware shell   |    + per-session task_id    |                    |
-|   select)          |                             +────┬───────────────+
-+--------------------+                                  │
-                                                        │ (Tonic 0.10 lane
-+--------------------+     legacy task-pull             │  unchanged)
+|  (PTY shell,       |    :50052                   |   limiter)         |
+|   OS-aware shell   |                             +────┬───────────────+
+|   select)          |                                  │
++--------------------+                                  │ (Tonic 0.10 lane
+                                                        │  unchanged)
++--------------------+     legacy task-pull             │
 |  overlay agents    | <────────────────────────────────┘
-|  (Cloudflare DNS,  |   :50051
-|   BOF, fiber...)   |
+|  (v1.0 era)        |   :50051
 +--------------------+
 ```
 
-Two gRPC services run on the same `nexus-infra` server process but on
-separate ports:
+All clients connect **directly** to the C2 server on port **50052** over
+mTLS using a custom CA. Two gRPC services run on the same `nexus-infra`
+server process:
 
 - `:50052` — A2A plane (Tonic 0.14, v1.2 mTLS, signed AgentCards,
   capability matrix, audit log, agent-mode bidi).
 - `:50051` — Legacy NexusC2 plane (Tonic 0.10). Overlay agents from the
-  v1.0 era register here and pull tasks. This lane is untouched by v1.2.
+  v1.0 era register here.
 
 ## Where to find more
 
-- **Wire reference**: [`../v1.0/shell-session-protocol.md`](../v1.0/shell-session-protocol.md)
+- **Wire reference**: [`../enhancements/agent-swarm-mesh/v1.0/shell-session-protocol.md`](../enhancements/agent-swarm-mesh/v1.0/shell-session-protocol.md)
   — the `shell-session` skill framing (also updated for v1.2's
   `agent-register` control frame).
-- **API additions in v1.2**: [`../v1.2/migration-from-v1.1.md`](../v1.2/migration-from-v1.1.md).
-- **Defense matrix + threat model**: [`../v1.2/security-overview.md`](../v1.2/security-overview.md).
-- **Tauri codesigning (CI)**: [`../v1.2/codesigning.md`](../v1.2/codesigning.md).
+- **API additions in v1.2**: [`../enhancements/agent-swarm-mesh/v1.2/migration-from-v1.1.md`](../enhancements/agent-swarm-mesh/v1.2/migration-from-v1.1.md).
+- **Defense matrix + threat model**: [`../enhancements/agent-swarm-mesh/v1.2/security-overview.md`](../enhancements/agent-swarm-mesh/v1.2/security-overview.md).
+- **Tauri codesigning (CI)**: [`../enhancements/agent-swarm-mesh/v1.2/codesigning.md`](../enhancements/agent-swarm-mesh/v1.2/codesigning.md).
+- **All-in-one server deployment**: [`../../scripts/deploy-server-prod.sh`](../../scripts/deploy-server-prod.sh)
+  — single-script alternative to the multi-step `transfer-prep.sh` + `remote-host-prep.sh` workflow.
 - **Current status + version**: [`../../STATUS.md`](../../STATUS.md),
   [`../../ROADMAP.md`](../../ROADMAP.md).
 

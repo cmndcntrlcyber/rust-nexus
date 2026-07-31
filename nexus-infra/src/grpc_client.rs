@@ -1,7 +1,7 @@
 //! gRPC client with enhanced TLS and domain fronting support
 
 use crate::{proto::*, CertManager, DomainManager, InfraError, InfraResult};
-use log::{debug, info, warn};
+use tracing::{debug, info, warn};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
@@ -451,6 +451,7 @@ mod tests {
             ca_cert_path: temp_dir.path().join("ca.pem"),
             pin_validation: true,
             validity_days: 365,
+            profiles: None,
         };
 
         // Generate test certificates

@@ -2,7 +2,7 @@
 
 use crate::{InfraError, InfraResult};
 use goblin::pe::Coff;
-use log::{debug, info, warn};
+use tracing::{debug, info, warn};
 use std::collections::HashMap;
 use std::ptr;
 

@@ -12,6 +12,7 @@ pub mod domain_manager;
 pub mod grpc_client;
 pub mod grpc_server;
 pub mod letsencrypt;
+pub mod pki;
 
 // v1.1 integration additions (simple-mesh A2A bridge).
 pub mod a2a_lister;
@@ -35,10 +36,11 @@ pub use bof_loader::BOFLoader;
 pub use cert_manager::CertManager;
 pub use cloudflare::CloudflareManager;
 pub use config::{
-    ChallengeType, CloudflareConfig, DomainConfig, GrpcServerConfig, LetsEncryptConfig,
-    NexusConfig, OriginCertConfig, SubdomainPattern,
+    ChallengeType, CloudflareConfig, DomainConfig, GrpcServerConfig, HttpsProfile,
+    LetsEncryptConfig, NexusConfig, OriginCertConfig, SubdomainPattern,
 };
 pub use domain_manager::DomainManager;
+pub use pki::{AgentBundle, PkiBundle, PkiManager};
 pub use grpc_client::GrpcClient;
 pub use grpc_server::GrpcServer;
 pub use letsencrypt::CertificateManager;
@@ -84,8 +86,11 @@ pub type InfraResult<T> = std::result::Result<T, InfraError>;
 
 /// Initialize logging for the infrastructure components
 pub fn init_logging() {
-    env_logger::Builder::from_default_env()
-        .filter_level(log::LevelFilter::Info)
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::from_default_env()
+                .add_directive(tracing::Level::INFO.into()),
+        )
         .init();
 }
 

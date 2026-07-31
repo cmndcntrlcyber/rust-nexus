@@ -1,7 +1,8 @@
 //! Cloudflare API client for DNS management and domain fronting
 
 use crate::{CloudflareConfig, InfraError, InfraResult};
-use log::{debug, info, warn};
+use secrecy::ExposeSecret;
+use tracing::{debug, info, warn};
 use reqwest::{
     header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE},
     Client,
@@ -120,7 +121,7 @@ impl CloudflareManager {
         let mut headers = HeaderMap::new();
         headers.insert(
             AUTHORIZATION,
-            HeaderValue::from_str(&format!("Bearer {}", config.api_token))
+            HeaderValue::from_str(&format!("Bearer {}", config.api_token.expose_secret()))
                 .map_err(|e| InfraError::CloudflareError(format!("Invalid API token: {}", e)))?,
         );
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));

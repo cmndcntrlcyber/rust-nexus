@@ -3,36 +3,41 @@
 #
 # Builds the nexus-agent binary for the requested OS, mints N Ed25519 client
 # certs against the existing prod CA (without touching or re-generating the
-# CA), and emits per-host dist bundles under dist/agents/<CN>/ containing the
-# binary, CA cert, per-host client cert/key, and an OS-appropriate install
-# script.
+# CA), and emits per-host dist bundles under dist/agents/ as individual zip
+# archives (<CN>.zip), each containing the binary, CA cert, per-host client
+# cert/key, and an OS-appropriate install script.
 #
 # Usage:
-#   ./scripts/build-agent-bundles.sh --os win --count 3
-#   ./scripts/build-agent-bundles.sh --os lin --count 2 --start-index 4
-#   ./scripts/build-agent-bundles.sh --os win --count 3 --no-build --force
+#   ./scripts/build-agent-bundles.sh --os win --count 3 --prod
+#   ./scripts/build-agent-bundles.sh --os lin --count 2 --prod --start-index 4
+#   ./scripts/build-agent-bundles.sh --os win --count 3 --certs-dir ./certs/dev
+#   ./scripts/build-agent-bundles.sh --os win --count 3 --prod --no-build --force
 #
 # Required:
 #   --os lin|win         target OS (lin = Linux x86-64, win = Windows x86-64)
 #   --count N            number of per-host bundles to produce
+#   --prod OR --certs-dir PATH   exactly one cert source must be provided
 #
 # Optional:
+#   --prod               use ./certs/prod as the CA source (shorthand for
+#                        --certs-dir ./certs/prod); mutually exclusive with
+#                        --certs-dir
 #   --start-index N      start numbering at N (default 1); use to add more
 #                        agents without colliding with existing CNs
 #   --prefix NAME        override the CN prefix (default: agent-lin or
 #                        agent-win depending on --os)
-#   --certs-dir PATH     directory containing ca.crt.pem + ca.key.pem
-#                        (default: ./certs/prod)
+#   --certs-dir PATH     directory containing ca.crt.pem + ca.key.pem;
+#                        mutually exclusive with --prod
 #   --out PATH           bundle output root (default: ./dist/agents)
 #   --server-addr URL    C2 address written into per-bundle env/config
-#                        (default: https://c2.onoiroi.us:50052)
+#                        (default: $NEXUS_C2_ADDR or https://c2.example.com:50052)
 #   --days N             client cert validity in days (default: 365)
 #   --no-build           skip cargo build; fail if artifact is missing
-#   --force              overwrite existing bundle dirs (mints fresh certs,
+#   --force              overwrite existing zip files (mints fresh certs,
 #                        invalidating previous ones for that host)
 #   -h | --help          print this help and exit
 #
-# Requires: openssl >= 1.1.1, cargo (unless --no-build),
+# Requires: openssl >= 1.1.1, zip, cargo (unless --no-build),
 #           x86_64-w64-mingw32-gcc (win target only, unless --no-build)
 
 set -euo pipefail
@@ -42,9 +47,10 @@ OS=""
 COUNT=""
 START_INDEX=1
 PREFIX=""
-CERTS_DIR="./certs/prod"
+CERTS_DIR=""
+PROD=0
 OUT_DIR="./dist/agents"
-SERVER_ADDR="https://c2.onoiroi.us:50052"
+SERVER_ADDR="${NEXUS_C2_ADDR:-https://c2.example.com:50052}"
 DAYS=365
 NO_BUILD=0
 FORCE=0
@@ -64,6 +70,7 @@ while [[ $# -gt 0 ]]; do
         --count)        COUNT="$2"; shift 2 ;;
         --start-index)  START_INDEX="$2"; shift 2 ;;
         --prefix)       PREFIX="$2"; shift 2 ;;
+        --prod)         PROD=1; shift ;;
         --certs-dir)    CERTS_DIR="$2"; shift 2 ;;
         --out)          OUT_DIR="$2"; shift 2 ;;
         --server-addr)  SERVER_ADDR="$2"; shift 2 ;;
@@ -85,7 +92,17 @@ done
 [[ "$START_INDEX" =~ ^[1-9][0-9]*$ ]] || die "--start-index must be a positive integer, got: $START_INDEX"
 [[ "$DAYS" =~ ^[1-9][0-9]*$ ]]        || die "--days must be a positive integer, got: $DAYS"
 
+# Resolve cert source: --prod and --certs-dir are mutually exclusive
+if [[ $PROD -eq 1 && -n "$CERTS_DIR" ]]; then
+    die "--prod and --certs-dir are mutually exclusive"
+elif [[ $PROD -eq 1 ]]; then
+    CERTS_DIR="./certs/prod"
+elif [[ -z "$CERTS_DIR" ]]; then
+    CERTS_DIR="./certs/nexus-agent"  # default
+fi
+
 command -v openssl >/dev/null 2>&1 || die "openssl not found on PATH"
+command -v zip     >/dev/null 2>&1 || die "zip not found on PATH (install with: sudo apt-get install zip)"
 if [[ $NO_BUILD -eq 0 ]]; then
     command -v cargo >/dev/null 2>&1 || die "cargo not found on PATH (install rustup or pass --no-build)"
 fi
@@ -161,16 +178,21 @@ log "minting $COUNT client cert(s) from $CA_CRT"
 for i in $(seq "$START_INDEX" "$END_INDEX"); do
     CN="$(printf "${PREFIX}${PAD}" "$i")"
     log "  minting $CN"
-    openssl genpkey -algorithm ED25519 -out "${TMPDIR_CERTS}/${CN}.key.pem" 2>/dev/null
-    openssl req -new -key "${TMPDIR_CERTS}/${CN}.key.pem" \
+    openssl genpkey -algorithm ED25519 \
+        -out "${TMPDIR_CERTS}/${CN}.key.pem" \
+        || die "keygen failed for ${CN}"
+    openssl req -new \
+        -key "${TMPDIR_CERTS}/${CN}.key.pem" \
         -out "${TMPDIR_CERTS}/${CN}.csr.pem" \
-        -subj "/C=US/O=rust-nexus/OU=v1.2-prod-certs/CN=${CN}" 2>/dev/null
+        -subj "/C=US/O=rust-nexus/OU=v1.2-prod-certs/CN=${CN}" \
+        || die "CSR creation failed for ${CN}"
     openssl x509 -req \
         -in "${TMPDIR_CERTS}/${CN}.csr.pem" \
         -CA "$CA_CRT" -CAkey "$CA_KEY" -CAcreateserial \
         -days "$DAYS" \
         -out "${TMPDIR_CERTS}/${CN}.crt.pem" \
-        -extfile "${TMPDIR_CERTS}/client.ext.cnf" 2>/dev/null
+        -extfile "${TMPDIR_CERTS}/client.ext.cnf" \
+        || die "cert signing failed for ${CN} — check that ${CA_CRT} is a CA cert (CA:TRUE)"
     rm -f "${TMPDIR_CERTS}/${CN}.csr.pem"
     chmod 600 "${TMPDIR_CERTS}/${CN}.key.pem"
     chmod 644 "${TMPDIR_CERTS}/${CN}.crt.pem"
@@ -187,13 +209,17 @@ for i in $(seq "$START_INDEX" "$END_INDEX"); do
     CN="$(printf "${PREFIX}${PAD}" "$i")"
     BUNDLE="${OUT_DIR}/${CN}"
 
-    if [[ -d "$BUNDLE" ]]; then
+    ZIP_OUT="${OUT_DIR}/${CN}.zip"
+
+    if [[ -f "$ZIP_OUT" ]]; then
         if [[ $FORCE -eq 0 ]]; then
-            die "bundle dir already exists: $BUNDLE  (use --force to overwrite; this mints fresh certs)"
+            die "bundle zip already exists: $ZIP_OUT  (use --force to overwrite; this mints fresh certs)"
         fi
-        log "  overwriting existing bundle: $BUNDLE (--force)"
-        rm -rf "$BUNDLE"
+        log "  overwriting existing bundle zip: $ZIP_OUT (--force)"
+        rm -f "$ZIP_OUT"
     fi
+    # Clean up any leftover staging dir from a prior interrupted run
+    [[ -d "$BUNDLE" ]] && rm -rf "$BUNDLE"
 
     mkdir -p "$BUNDLE"
 
@@ -273,7 +299,8 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable --now "$SVC_NAME"
+systemctl enable "$SVC_NAME"
+systemctl restart "$SVC_NAME"
 echo "[install] done. Tailing journal (ctrl-c to stop):"
 journalctl -u "$SVC_NAME" -f
 SCRIPT_EOF
@@ -353,7 +380,11 @@ ${BOF_NOTE}}
 ============================================================
 EOF
 
-    log "  bundle ready: $BUNDLE"
+    # ---------- zip + clean up staging dir ----------
+    (cd "$OUT_DIR" && zip -qr "${CN}.zip" "${CN}")
+    rm -rf "$BUNDLE"
+
+    log "  bundle ready: $ZIP_OUT"
 done
 
 # ---------- summary ----------
@@ -366,19 +397,20 @@ EOF
 
 for i in $(seq "$START_INDEX" "$END_INDEX"); do
     CN="$(printf "${PREFIX}${PAD}" "$i")"
-    BUNDLE="${OUT_DIR}/${CN}"
+    ZIP_OUT="${OUT_DIR}/${CN}.zip"
     if [[ "$OS" == "win" ]]; then
-        echo "  ${CN}  →  ${BUNDLE}  (deploy: run install-windows.ps1 as Administrator)"
+        echo "  ${CN}.zip  →  ${ZIP_OUT}  (extract + run install.bat as Administrator)"
     else
-        echo "  ${CN}  →  ${BUNDLE}  (deploy: sudo bash install-linux.sh)"
+        echo "  ${CN}.zip  →  ${ZIP_OUT}  (extract + sudo bash install-linux.sh)"
     fi
 done
 
+FIRST_CN="$(printf "${PREFIX}${PAD}" "$START_INDEX")"
 cat <<EOF
 
-Verify a cert:
-  openssl x509 -in ${OUT_DIR}/$(printf "${PREFIX}${PAD}" "$START_INDEX")/client.crt.pem \\
-               -noout -subject -issuer
+Verify a cert (extract first):
+  unzip -p ${OUT_DIR}/${FIRST_CN}.zip ${FIRST_CN}/client.crt.pem | \\
+    openssl x509 -noout -subject -issuer
 
 After each agent registers, add its peer_id to /etc/nexus/capabilities.json
 on the C2 server and restart nexus-server.
