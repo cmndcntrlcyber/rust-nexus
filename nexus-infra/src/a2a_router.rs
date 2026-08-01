@@ -23,9 +23,7 @@ use nexus_a2a::handler::{
 };
 use nexus_a2a::pb as a2a_pb;
 use tokio::sync::{mpsc, RwLock};
-// `tonic_14` is the package-renamed Tonic 0.14 (see Cargo.toml). nexus-a2a's
-// trait surface uses these types; we must match them exactly.
-use tonic_14::{Status, Streaming};
+use tonic::{Status, Streaming};
 use tracing::{debug, info, warn};
 
 use crate::sessions::{SessionRecord, SessionRegistry};
@@ -395,6 +393,6 @@ mod tests {
     #[test]
     fn parse_hex_peer_id_rejects_short() {
         let err = parse_hex_peer_id("ab").expect_err("must fail");
-        assert_eq!(err.code(), tonic_14::Code::InvalidArgument);
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
     }
 }

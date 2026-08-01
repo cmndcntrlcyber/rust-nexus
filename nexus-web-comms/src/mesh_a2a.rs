@@ -23,7 +23,8 @@
 //! * [`select_transport`] — picks the highest-priority transport kind
 //!   that is available (i.e., its binary exists / port is reachable).
 
-use crate::transport::TransportKind;
+use crate::transport::{TransportContext, TransportKind};
+use async_trait::async_trait;
 
 /// Ordered transport preference for a v1.5 agent.
 ///
@@ -66,12 +67,62 @@ impl MeshA2aBridge {
         }
     }
 
-    /// Returns the `TransportKind` that should be used first.
-    ///
-    /// In v1.5 this always returns `Grpc`; when Phase 5 lands the
-    /// implementation will probe both and return based on reachability.
     pub fn preferred_kind(&self) -> TransportKind {
         TransportKind::Grpc
+    }
+
+    /// Probe connectivity and return which transports are reachable.
+    pub async fn probe_availability(&self) -> Vec<TransportKind> {
+        let mut available = Vec::new();
+        if tokio::net::TcpStream::connect(&self.grpc_addr).await.is_ok() {
+            available.push(TransportKind::Grpc);
+        }
+        if self.mesh_multiaddr.parse::<libp2p::Multiaddr>().is_ok() {
+            available.push(TransportKind::Mesh);
+        }
+        available
+    }
+}
+
+#[async_trait]
+impl crate::transport::Transport for MeshA2aBridge {
+    fn kind(&self) -> TransportKind {
+        TransportKind::Mesh
+    }
+
+    async fn run(
+        self: Box<Self>,
+        ctx: TransportContext,
+        shutdown: crate::transport::ShutdownFuture,
+    ) -> anyhow::Result<()> {
+        let listen_addr: libp2p::Multiaddr = self.mesh_multiaddr.parse()?;
+        let handle = nexus_mesh::MeshNode::spawn(&ctx.identity, listen_addr)?;
+
+        let peer_id = ctx.identity.peer_id();
+        handle
+            .subscribe_role(nexus_mesh::topics::Role::Harness, &peer_id)
+            .await?;
+
+        tracing::info!(
+            mesh_addr = %self.mesh_multiaddr,
+            grpc_addr = %self.grpc_addr,
+            "mesh-a2a bridge running"
+        );
+
+        tokio::select! {
+            _ = shutdown => {
+                tracing::info!("mesh-a2a bridge: shutdown");
+            }
+            _ = async {
+                while let Some(event) = handle.next_event().await {
+                    tracing::debug!(?event, "mesh bridge event");
+                }
+            } => {
+                tracing::info!("mesh-a2a bridge: event stream ended");
+            }
+        }
+
+        Ok(())
     }
 }
 

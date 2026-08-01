@@ -42,7 +42,7 @@ const SESSION_CMD_CAPACITY: usize = 64;
 
 /// Load mTLS config from env vars. Returns `None` if NEXUS_CA_CERT is unset
 /// (falls back to system trust store via the `https://` URI scheme).
-fn client_tls() -> Option<tonic_14::transport::ClientTlsConfig> {
+fn client_tls() -> Option<tonic::transport::ClientTlsConfig> {
     tls::load_client_config_from_env().ok()
 }
 

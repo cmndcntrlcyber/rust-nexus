@@ -118,7 +118,7 @@ Windows-specific code uses `#[cfg(target_os = "windows")]` with `windows-sys` cr
 
 ### Async Runtime
 
-All async code uses Tokio with full features. gRPC uses Tonic 0.10 (legacy `NexusC2` lane) and Tonic 0.14 (A2A lane, aliased as `tonic_14` in crates that need both). HTTP uses reqwest (client) and warp (server).
+All async code uses Tokio with full features. gRPC uses Tonic 0.14 workspace-wide (unified in v3.5 WS2.1). HTTP uses reqwest 0.12 (client) and warp (server).
 
 ### Release Profile
 

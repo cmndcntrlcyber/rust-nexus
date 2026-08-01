@@ -18,7 +18,7 @@ pub struct SessionRecord {
     /// 32-byte peer id of the target agent (BLAKE3(uuid)).
     pub agent_peer_id: [u8; 32],
     /// Channel back to the operator's outbound A2A stream.
-    pub operator_tx: mpsc::Sender<Result<a2a_pb::StreamResponse, tonic_14::Status>>,
+    pub operator_tx: mpsc::Sender<Result<a2a_pb::StreamResponse, tonic::Status>>,
 }
 
 /// Concurrent-access wrapper around `HashMap<u64, SessionRecord>`.

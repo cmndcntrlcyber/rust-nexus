@@ -4,7 +4,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use futures::StreamExt;
-use tokio::sync::mpsc;
+use tokio::sync::{broadcast, mpsc};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::server::TcpIncoming;
 use tonic::transport::Server;
@@ -28,15 +28,10 @@ pub struct A2aServer<H: ShellHandler> {
     handler: Arc<H>,
     lister: Arc<dyn AgentLister>,
     agent_registration: Arc<dyn AgentRegistrationHandler>,
-    /// v1.4.3 — optional broadcast tap on the audit sink. When set,
-    /// `StreamAuditRecords` RPC delivers live records to gRPC subscribers.
     broadcast_audit: Option<Arc<crate::audit::BroadcastSink>>,
-    /// v1.4.7 — server identity used to sign operator tokens (separate
-    /// from the AgentCard signing identity by convention, though they
-    /// can be the same `NodeIdentity`).
     server_identity: Option<Arc<nexus_common::NodeIdentity>>,
-    /// v1.4.7 — max lifetime cap for operator tokens (default 24h).
     max_token_lifetime_seconds: u64,
+    task_registry: Arc<crate::task_registry::TaskRegistry>,
 }
 
 impl<H: ShellHandler> A2aServer<H> {
@@ -50,7 +45,13 @@ impl<H: ShellHandler> A2aServer<H> {
             broadcast_audit: None,
             server_identity: None,
             max_token_lifetime_seconds: crate::tokens::DEFAULT_LIFETIME_SECONDS,
+            task_registry: Arc::new(crate::task_registry::TaskRegistry::new()),
         }
+    }
+
+    /// Access the task registry (for external wiring).
+    pub fn task_registry(&self) -> &Arc<crate::task_registry::TaskRegistry> {
+        &self.task_registry
     }
 
     /// v1.4.3 — attach a [`BroadcastSink`] so `StreamAuditRecords`
@@ -213,59 +214,107 @@ impl<H: ShellHandler> A2aService for A2aServer<H> {
         Ok(Response::new(pb::RegisteredAgents { agents }))
     }
 
-    // ---------------------------------------------------------------
-    // v1.3 — Unimplemented stubs for upstream A2A v0.3 RPC surface
-    // (D-V1.3-A). Returning `Unimplemented` rather than failing
-    // method-not-found because the proto file *does* declare these
-    // methods; the server is honest about the v1.3 implementation
-    // gap.
-    // ---------------------------------------------------------------
-
     async fn get_task(
         &self,
-        _request: Request<pb::GetTaskRequest>,
+        request: Request<pb::GetTaskRequest>,
     ) -> Result<Response<pb::Task>, Status> {
-        Err(Status::unimplemented(
-            "GetTask: full upstream A2A task surface lands in v1.4",
-        ))
+        let req = request.into_inner();
+        let record = self
+            .task_registry
+            .get_task(&req.task_id)
+            .ok_or_else(|| Status::not_found(format!("task {} not found", req.task_id)))?;
+        Ok(Response::new(record.task))
     }
 
     async fn cancel_task(
         &self,
-        _request: Request<pb::CancelTaskRequest>,
+        request: Request<pb::CancelTaskRequest>,
     ) -> Result<Response<pb::Task>, Status> {
-        Err(Status::unimplemented(
-            "CancelTask: full upstream A2A task surface lands in v1.4",
-        ))
+        let req = request.into_inner();
+        let task = self.task_registry.transition_state(
+            &req.task_id,
+            pb::TaskState::TaskStateCanceled as i32,
+        )?;
+        if let Some(ref sink) = self.broadcast_audit {
+            let record = crate::audit::make_record(
+                "system",
+                "cancel_task",
+                &req.task_id,
+            );
+            sink.append(record).await;
+        }
+        Ok(Response::new(task))
     }
 
     type TaskSubscriptionStream = ReceiverStream<Result<pb::StreamResponse, Status>>;
 
     async fn task_subscription(
         &self,
-        _request: Request<pb::TaskSubscriptionRequest>,
+        request: Request<pb::TaskSubscriptionRequest>,
     ) -> Result<Response<Self::TaskSubscriptionStream>, Status> {
-        Err(Status::unimplemented(
-            "TaskSubscription: full upstream A2A task surface lands in v1.4",
-        ))
+        let req = request.into_inner();
+        let mut rx = self.task_registry.subscribe(&req.task_id)?;
+        let (tx, out_rx) = mpsc::channel::<Result<pb::StreamResponse, Status>>(64);
+        tokio::spawn(async move {
+            loop {
+                match rx.recv().await {
+                    Ok(response) => {
+                        if tx.send(Ok(response)).await.is_err() {
+                            break;
+                        }
+                    }
+                    Err(broadcast::error::RecvError::Lagged(n)) => {
+                        let _ = tx
+                            .send(Err(Status::data_loss(format!("lagged {n} events"))))
+                            .await;
+                        break;
+                    }
+                    Err(broadcast::error::RecvError::Closed) => break,
+                }
+            }
+        });
+        Ok(Response::new(ReceiverStream::new(out_rx)))
     }
 
     async fn create_task_push_notification_config(
         &self,
-        _request: Request<pb::CreateTaskPushNotificationConfigRequest>,
+        request: Request<pb::CreateTaskPushNotificationConfigRequest>,
     ) -> Result<Response<pb::PushNotificationConfig>, Status> {
-        Err(Status::unimplemented(
-            "CreateTaskPushNotificationConfig: full upstream A2A task surface lands in v1.4",
-        ))
+        let req = request.into_inner();
+        let config = req
+            .config
+            .ok_or_else(|| Status::invalid_argument("config is required"))?;
+        let stored = self
+            .task_registry
+            .set_push_config(&config.task_id, config)?;
+        Ok(Response::new(stored))
     }
 
     async fn list_task(
         &self,
-        _request: Request<pb::ListTaskRequest>,
+        request: Request<pb::ListTaskRequest>,
     ) -> Result<Response<pb::ListTaskResponse>, Status> {
-        Err(Status::unimplemented(
-            "ListTask: full upstream A2A task surface lands in v1.4",
-        ))
+        let req = request.into_inner();
+        let context_filter = if req.context_id.is_empty() {
+            None
+        } else {
+            Some(req.context_id.as_str())
+        };
+        let state_filter = if req.state_filter == 0 {
+            None
+        } else {
+            Some(req.state_filter)
+        };
+        let (tasks, next_page_token) = self.task_registry.list_tasks(
+            context_filter,
+            state_filter,
+            req.page_size,
+            &req.page_token,
+        );
+        Ok(Response::new(pb::ListTaskResponse {
+            tasks,
+            next_page_token,
+        }))
     }
 
     async fn get_authenticated_extended_agent_card(

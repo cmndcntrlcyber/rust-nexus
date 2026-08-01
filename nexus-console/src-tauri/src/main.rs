@@ -4,6 +4,8 @@
 
 //! `nexus-console` — Tauri v2 operator console entry point.
 
+mod tray;
+
 use nexus_console::commands;
 use nexus_console::state::ConsoleState;
 use tracing_subscriber::EnvFilter;
@@ -12,6 +14,7 @@ fn main() {
     init_tracing();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_tray_icon::init())
         .manage(ConsoleState::new())
         .invoke_handler(tauri::generate_handler![
             commands::get_startup_config,
@@ -27,7 +30,13 @@ fn main() {
             commands::audit_log_tail,
             commands::audit_log_filter,
             commands::audit_log_verify,
+            // WS2.4 — tab management.
+            commands::switch_tab,
         ])
+        .setup(|app| {
+            tray::setup_tray(app)?;
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

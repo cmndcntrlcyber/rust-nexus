@@ -37,21 +37,22 @@ windows-sys = { version = "0.52", features = [
     "Win32_System_LibraryLoader",
     "Win32_Security"
 ] }
-thiserror = "1.0"
+thiserror = "2"
 async-trait = "0.1"
 hostname = "0.3"
 local-ip-address = "0.5"
 
-# gRPC and Protocol Buffers
-tonic = "0.10"
-prost = "0.12"
-tonic-build = "0.10"
+# gRPC and Protocol Buffers (unified on tonic 0.14 workspace-wide, v3.5 WS2.1)
+tonic = { version = "0.14", default-features = false, features = ["transport", "codegen", "router", "server", "channel"] }
+prost = "0.14"
+prost-types = "0.14"
+tonic-build = "0.14"
 
-# TLS and certificates
-rustls = "0.21"
-tokio-rustls = "0.24"
-webpki-roots = "0.25"
-rustls-pemfile = "1.0"
+# TLS and certificates (upgraded to rustls 0.23, v3.5 WS2.1)
+rustls = "0.23"
+tokio-rustls = "0.26"
+webpki-roots = "0.26"
+rustls-pemfile = "2"
 x509-parser = "0.15"
 
 # DNS and networking
@@ -59,7 +60,7 @@ trust-dns-resolver = "0.23"
 hickory-resolver = "0.24"
 
 # HTTP client for Cloudflare API
-reqwest = { version = "0.11", features = ["json", "rustls-tls", "blocking"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls", "blocking"] }
 
 # Let's Encrypt ACME client (async, pure-Rust)
 instant-acme = "0.8"
@@ -112,9 +113,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"]
 # Axum (for /healthz)
 axum = "0.8"
 
-# A2A gRPC uses Tonic 0.14 + tonic-prost; declared directly in nexus-a2a's
-# Cargo.toml (Cargo allows mixed versions in a workspace — nexus-infra stays
-# on the workspace-pinned Tonic 0.10).
+# A2A gRPC prost integration (shared workspace-wide alongside tonic 0.14)
 tonic-prost = "0.14"
 tonic-prost-build = "0.14"
 protoc-bin-vendored = "3"

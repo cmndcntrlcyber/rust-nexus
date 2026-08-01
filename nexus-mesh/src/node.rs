@@ -81,6 +81,16 @@ pub enum MeshEvent {
         /// Remote peer.
         peer: PeerId,
     },
+    /// A harness task message arrived.
+    HarnessTask {
+        from: Option<PeerId>,
+        data: Vec<u8>,
+    },
+    /// A harness result message arrived.
+    HarnessResult {
+        from: Option<PeerId>,
+        data: Vec<u8>,
+    },
 }
 
 /// Commands sent from the public-facing [`MeshHandle`] to the swarm task.
@@ -201,6 +211,18 @@ impl MeshHandle {
     /// Receive the next event.
     pub async fn next_event(&self) -> Option<MeshEvent> {
         self.event_rx.lock().await.recv().await
+    }
+
+    /// Subscribe to all topics appropriate for `role`.
+    pub async fn subscribe_role(
+        &self,
+        role: crate::topics::Role,
+        local_peer_id: &[u8; 32],
+    ) -> Result<()> {
+        for topic in role.subscriptions(local_peer_id) {
+            self.subscribe(&topic).await?;
+        }
+        Ok(())
     }
 }
 
@@ -377,13 +399,27 @@ async fn handle_swarm_event(
             message,
             ..
         })) => {
-            let _ = event_tx
-                .send(MeshEvent::GossipMessage {
+            let topic_str = message.topic.as_str();
+            let event = if topic_str == "nexus/harness/results" {
+                MeshEvent::HarnessResult {
+                    from: Some(propagation_source),
+                    data: message.data,
+                }
+            } else if topic_str.starts_with("nexus/harness/")
+                && topic_str.ends_with("/task")
+            {
+                MeshEvent::HarnessTask {
+                    from: Some(propagation_source),
+                    data: message.data,
+                }
+            } else {
+                MeshEvent::GossipMessage {
                     from: Some(propagation_source),
                     topic: message.topic,
                     data: message.data,
-                })
-                .await;
+                }
+            };
+            let _ = event_tx.send(event).await;
         }
         SwarmEvent::Behaviour(MeshBehaviourEvent::Ping(ping::Event {
             peer,

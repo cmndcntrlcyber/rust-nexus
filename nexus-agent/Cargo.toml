@@ -13,7 +13,6 @@ path = "src/main.rs"
 
 [dependencies]
 nexus-common = { workspace = true }
-# Not in workspace.dependencies — intentional (mixed Tonic versions)
 nexus-infra = { path = "../nexus-infra" }
 async-trait = { workspace = true }
 
@@ -28,8 +27,8 @@ futures = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 anyhow = { workspace = true }
-# Tonic 0.14 alongside the overlay's 0.10 (Cargo allows mixed versions).
-tonic_14 = { package = "tonic", version = "0.14", default-features = false, features = ["transport", "codegen", "router", "channel"] }
+# gRPC (tonic 0.14 workspace-wide, v3.5 WS2.1)
+tonic = { workspace = true }
 
 # ATT&CK technique crates (optional, feature-gated)
 nexus-t1059-command-scripting = { path = "../nexus-t1059-command-scripting", optional = true }

@@ -32,6 +32,7 @@ anyhow = { workspace = true }
 thiserror = { workspace = true }
 # Tonic 0.14 directly (independent of the overlay's 0.10).
 tonic = { version = "0.14", default-features = false, features = ["transport", "channel"] }
+tauri-plugin-tray-icon = "2"
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]

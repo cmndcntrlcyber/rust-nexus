@@ -7,10 +7,10 @@ use tracing::info;
 use rcgen::{
     Certificate, CertificateParams, DistinguishedName, DnType, KeyPair, PKCS_ECDSA_P256_SHA256,
 };
+use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls::server::{ClientHello, ResolvesServerCert};
-use rustls::sign::{any_supported_type, CertifiedKey};
-use rustls::{Certificate as RustlsCert, ClientConfig, PrivateKey, ServerConfig};
-use rustls_pemfile::{certs, ec_private_keys, pkcs8_private_keys, rsa_private_keys};
+use rustls::sign::CertifiedKey;
+use rustls::{ClientConfig, ServerConfig};
 use std::fs;
 use std::io::BufReader;
 use std::path::Path;
@@ -45,9 +45,9 @@ pub struct CertInfo {
 pub struct CertProfile {
     pub name: String,
     pub domains: Vec<String>,
-    pub cert_chain: Vec<RustlsCert>,
-    pub private_key: PrivateKey,
-    pub ca_certificates: Vec<RustlsCert>,
+    pub cert_chain: Vec<CertificateDer<'static>>,
+    pub private_key: PrivateKeyDer<'static>,
+    pub ca_certificates: Vec<CertificateDer<'static>>,
 }
 
 /// TLS configuration holder
@@ -59,12 +59,10 @@ pub struct TlsConfig {
 /// Certificate manager for origin certificates and TLS operations
 pub struct CertManager {
     config: OriginCertConfig,
-    server_cert_chain: Vec<RustlsCert>,
-    server_private_key: PrivateKey,
-    ca_certificates: Vec<RustlsCert>,
-    /// Named profiles keyed by profile name
+    server_cert_chain: Vec<CertificateDer<'static>>,
+    server_private_key: PrivateKeyDer<'static>,
+    ca_certificates: Vec<CertificateDer<'static>>,
     profiles: HashMap<String, CertProfile>,
-    /// SNI domain -> profile name index for O(1) lookup
     domain_index: HashMap<String, String>,
 }
 
@@ -119,8 +117,7 @@ impl CertManager {
         })
     }
 
-    /// Load certificate chain from PEM file
-    fn load_certificate_chain(path: &Path) -> InfraResult<Vec<RustlsCert>> {
+    fn load_certificate_chain(path: &Path) -> InfraResult<Vec<CertificateDer<'static>>> {
         if !path.exists() {
             return Err(InfraError::CertificateError(format!(
                 "Certificate file not found: {:?}",
@@ -133,19 +130,16 @@ impl CertManager {
         })?;
 
         let mut reader = BufReader::new(cert_file);
-        let cert_chain = certs(&mut reader)
+        let cert_chain: Vec<CertificateDer<'static>> = rustls_pemfile::certs(&mut reader)
+            .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
                 InfraError::CertificateError(format!("Failed to parse certificates: {}", e))
-            })?
-            .into_iter()
-            .map(RustlsCert)
-            .collect();
+            })?;
 
         Ok(cert_chain)
     }
 
-    /// Load private key from PEM file. Tries PKCS8, then RSA, then EC formats.
-    fn load_private_key(path: &Path) -> InfraResult<PrivateKey> {
+    fn load_private_key(path: &Path) -> InfraResult<PrivateKeyDer<'static>> {
         if !path.exists() {
             return Err(InfraError::CertificateError(format!(
                 "Private key file not found: {:?}",
@@ -157,16 +151,25 @@ impl CertManager {
             InfraError::CertificateError(format!("Failed to read private key file: {}", e))
         })?;
 
-        for parser in [
-            pkcs8_private_keys as fn(&mut dyn std::io::BufRead) -> std::io::Result<Vec<Vec<u8>>>,
-            rsa_private_keys,
-            ec_private_keys,
-        ] {
+        // Try PKCS8
+        {
             let mut reader = std::io::Cursor::new(&pem_bytes);
-            if let Ok(keys) = parser(&mut reader) {
-                if let Some(key) = keys.into_iter().next() {
-                    return Ok(PrivateKey(key));
-                }
+            if let Some(Ok(key)) = rustls_pemfile::pkcs8_private_keys(&mut reader).next() {
+                return Ok(PrivateKeyDer::Pkcs8(key));
+            }
+        }
+        // Try RSA
+        {
+            let mut reader = std::io::Cursor::new(&pem_bytes);
+            if let Some(Ok(key)) = rustls_pemfile::rsa_private_keys(&mut reader).next() {
+                return Ok(PrivateKeyDer::Pkcs1(key));
+            }
+        }
+        // Try EC
+        {
+            let mut reader = std::io::Cursor::new(&pem_bytes);
+            if let Some(Ok(key)) = rustls_pemfile::ec_private_keys(&mut reader).next() {
+                return Ok(PrivateKeyDer::Sec1(key));
             }
         }
 
@@ -175,51 +178,40 @@ impl CertManager {
         ))
     }
 
-    /// Create server TLS configuration
     pub fn create_server_config(&self) -> InfraResult<Arc<ServerConfig>> {
         let config = ServerConfig::builder()
-            .with_safe_defaults()
             .with_no_client_auth()
             .with_single_cert(
                 self.server_cert_chain.clone(),
-                self.server_private_key.clone(),
+                self.server_private_key.clone_key(),
             )
             .map_err(|e| InfraError::TlsError(format!("Failed to create server config: {}", e)))?;
 
         Ok(Arc::new(config))
     }
 
-    /// Create client TLS configuration with certificate pinning
     pub fn create_client_config(&self, verify_hostname: bool) -> InfraResult<Arc<ClientConfig>> {
         use rustls::RootCertStore;
 
         let mut root_store = RootCertStore::empty();
 
-        // Add CA certificates to root store
         for ca_cert in &self.ca_certificates {
-            root_store.add(ca_cert).map_err(|e| {
+            root_store.add(ca_cert.clone()).map_err(|e| {
                 InfraError::TlsError(format!("Failed to add CA certificate: {:?}", e))
             })?;
         }
 
-        // Add system CA certificates as fallback
-        root_store.add_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.iter().map(|ta| {
-            rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
-                ta.subject,
-                ta.spki,
-                ta.name_constraints,
-            )
-        }));
-
-        let config_builder = ClientConfig::builder()
-            .with_safe_defaults()
-            .with_root_certificates(root_store);
+        root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
 
         let config = if verify_hostname {
-            config_builder.with_no_client_auth()
+            ClientConfig::builder()
+                .with_root_certificates(root_store)
+                .with_no_client_auth()
         } else {
-            // Create config with no hostname verification (for domain fronting)
-            use rustls::{client::*, ServerName};
+            use rustls::client::danger::{
+                HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier,
+            };
+            use rustls::pki_types::{ServerName, UnixTime};
             use std::sync::Arc;
 
             #[derive(Debug)]
@@ -228,19 +220,42 @@ impl CertManager {
             impl ServerCertVerifier for NoHostnameVerifier {
                 fn verify_server_cert(
                     &self,
-                    _end_entity: &rustls::Certificate,
-                    _intermediates: &[rustls::Certificate],
-                    _server_name: &ServerName,
-                    _scts: &mut dyn Iterator<Item = &[u8]>,
+                    _end_entity: &CertificateDer<'_>,
+                    _intermediates: &[CertificateDer<'_>],
+                    _server_name: &ServerName<'_>,
                     _ocsp_response: &[u8],
-                    _now: std::time::SystemTime,
-                ) -> Result<rustls::client::ServerCertVerified, rustls::Error> {
+                    _now: UnixTime,
+                ) -> Result<ServerCertVerified, rustls::Error> {
                     Ok(ServerCertVerified::assertion())
+                }
+
+                fn verify_tls12_signature(
+                    &self,
+                    _message: &[u8],
+                    _cert: &CertificateDer<'_>,
+                    _dss: &rustls::DigitallySignedStruct,
+                ) -> Result<HandshakeSignatureValid, rustls::Error> {
+                    Ok(HandshakeSignatureValid::assertion())
+                }
+
+                fn verify_tls13_signature(
+                    &self,
+                    _message: &[u8],
+                    _cert: &CertificateDer<'_>,
+                    _dss: &rustls::DigitallySignedStruct,
+                ) -> Result<HandshakeSignatureValid, rustls::Error> {
+                    Ok(HandshakeSignatureValid::assertion())
+                }
+
+                fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+                    rustls::crypto::ring::default_provider()
+                        .signature_verification_algorithms
+                        .supported_schemes()
                 }
             }
 
             ClientConfig::builder()
-                .with_safe_defaults()
+                .dangerous()
                 .with_custom_certificate_verifier(Arc::new(NoHostnameVerifier))
                 .with_no_client_auth()
         };
@@ -318,18 +333,16 @@ impl CertManager {
         Ok((cert_pem.into_bytes(), key_pem.into_bytes()))
     }
 
-    /// Parse certificate information. Accepts PEM bytes; pulls the first
-    /// CERTIFICATE block via rustls_pemfile and decodes the DER with x509-parser.
     pub fn parse_certificate_info(&self, cert_pem: &[u8]) -> InfraResult<CertInfo> {
         let mut reader = std::io::Cursor::new(cert_pem);
-        let mut der_chain = certs(&mut reader)
+        let der_chain: Vec<CertificateDer<'static>> = rustls_pemfile::certs(&mut reader)
+            .collect::<Result<Vec<_>, _>>()
             .map_err(|e| InfraError::CertificateError(format!("Failed to parse PEM: {}", e)))?;
         let cert_der = der_chain
-            .drain(..)
-            .next()
+            .first()
             .ok_or_else(|| InfraError::CertificateError("No certificate in PEM".to_string()))?;
 
-        let (_, cert) = X509Certificate::from_der(&cert_der).map_err(|e| {
+        let (_, cert) = X509Certificate::from_der(cert_der.as_ref()).map_err(|e| {
             InfraError::CertificateError(format!("Failed to parse certificate: {}", e))
         })?;
 
@@ -347,8 +360,7 @@ impl CertManager {
             InfraError::CertificateError("Invalid not_after timestamp".to_string())
         })?;
 
-        // SHA-256 fingerprint of the DER bytes, hex-encoded.
-        let digest = sha2::Sha256::digest(&cert_der);
+        let digest = sha2::Sha256::digest(cert_der.as_ref());
         let fingerprint: String = digest.iter().map(|b| format!("{:02x}", b)).collect();
 
         // SAN parsing deferred — the x509-parser 0.15 BasicExtension access
@@ -445,18 +457,15 @@ impl CertManager {
         Ok(())
     }
 
-    /// Get certificate chain
-    pub fn get_certificate_chain(&self) -> &[RustlsCert] {
+    pub fn get_certificate_chain(&self) -> &[CertificateDer<'static>] {
         &self.server_cert_chain
     }
 
-    /// Get private key
-    pub fn get_private_key(&self) -> &PrivateKey {
+    pub fn get_private_key(&self) -> &PrivateKeyDer<'static> {
         &self.server_private_key
     }
 
-    /// Get CA certificates
-    pub fn get_ca_certificates(&self) -> &[RustlsCert] {
+    pub fn get_ca_certificates(&self) -> &[CertificateDer<'static>] {
         &self.ca_certificates
     }
 
@@ -494,14 +503,18 @@ impl CertManager {
         self.profiles.keys().map(|s| s.as_str()).collect()
     }
 
-    /// Create a multi-profile server TLS config with SNI-based cert resolution
     pub fn create_multi_profile_server_config(
         &self,
         mutual_tls: bool,
     ) -> InfraResult<ServerConfig> {
-        let default_signing_key = any_supported_type(&self.server_private_key).map_err(|_| {
-            InfraError::TlsError("Unsupported private key type for default cert".into())
-        })?;
+        let provider = rustls::crypto::ring::default_provider();
+
+        let default_signing_key = provider
+            .key_provider
+            .load_private_key(self.server_private_key.clone_key())
+            .map_err(|_| {
+                InfraError::TlsError("Unsupported private key type for default cert".into())
+            })?;
         let default = Arc::new(CertifiedKey::new(
             self.server_cert_chain.clone(),
             default_signing_key,
@@ -510,12 +523,15 @@ impl CertManager {
         let mut resolver_profiles = HashMap::new();
         let mut resolver_domain_index = HashMap::new();
         for (name, profile) in &self.profiles {
-            let signing_key = any_supported_type(&profile.private_key).map_err(|_| {
-                InfraError::TlsError(format!(
-                    "Unsupported private key type for profile '{}'",
-                    name
-                ))
-            })?;
+            let signing_key = provider
+                .key_provider
+                .load_private_key(profile.private_key.clone_key())
+                .map_err(|_| {
+                    InfraError::TlsError(format!(
+                        "Unsupported private key type for profile '{}'",
+                        name
+                    ))
+                })?;
             let certified_key = Arc::new(CertifiedKey::new(
                 profile.cert_chain.clone(),
                 signing_key,
@@ -532,22 +548,23 @@ impl CertManager {
             default,
         };
 
-        let builder = ServerConfig::builder().with_safe_defaults();
+        let builder = ServerConfig::builder();
 
         let config = if mutual_tls {
             let mut root_store = rustls::RootCertStore::empty();
             for ca_cert in &self.ca_certificates {
-                root_store.add(ca_cert).map_err(|e| {
+                root_store.add(ca_cert.clone()).map_err(|e| {
                     InfraError::TlsError(format!("Failed to add CA cert: {:?}", e))
                 })?;
             }
             for profile in self.profiles.values() {
                 for ca_cert in &profile.ca_certificates {
-                    let _ = root_store.add(ca_cert);
+                    let _ = root_store.add(ca_cert.clone());
                 }
             }
-            let verifier =
-                rustls::server::AllowAnyAuthenticatedClient::new(root_store).boxed();
+            let verifier = rustls::server::WebPkiClientVerifier::builder(Arc::new(root_store))
+                .build()
+                .map_err(|e| InfraError::TlsError(format!("Failed to build verifier: {}", e)))?;
             builder
                 .with_client_cert_verifier(verifier)
                 .with_cert_resolver(Arc::new(resolver))

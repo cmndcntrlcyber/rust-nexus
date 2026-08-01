@@ -121,6 +121,8 @@ message Task {
     string task_id = 1;
     string context_id = 2;
     TaskState state = 3;
+    uint64 created_at_unix = 4;
+    uint64 updated_at_unix = 5;
 }
 
 message GetTaskRequest {
@@ -149,6 +151,22 @@ message ListTaskRequest {
     string context_id = 1;
     uint32 page_size = 2;
     string page_token = 3;
+    TaskState state_filter = 4;
+}
+
+message HarnessTask {
+    string task_id = 1;
+    string context_id = 2;
+    string prompt = 3;
+    repeated string tool_names = 4;
+    bytes payload = 5;
+}
+
+message HarnessToolResult {
+    string task_id = 1;
+    bool success = 2;
+    bytes output = 3;
+    string error = 4;
 }
 
 message ListTaskResponse {

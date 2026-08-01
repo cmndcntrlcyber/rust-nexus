@@ -20,6 +20,7 @@ pub mod metrics;
 pub mod mock;
 pub mod otel;
 pub mod server;
+pub mod task_registry;
 pub mod tls;
 pub mod tokens;
 
