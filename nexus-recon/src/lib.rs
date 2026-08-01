@@ -13,8 +13,6 @@ use std::collections::HashMap;
 
 pub mod browser_fingerprint;
 pub mod javascript_engine;
-pub mod network_recon;
-pub mod system_profiler;
 
 use nexus_common::*;
 
@@ -408,24 +406,6 @@ impl ReconEngine {
             fingerprint_hash: self.calculate_fingerprint_hash(&headers).await,
             collection_timestamp: chrono::Utc::now(),
         })
-    }
-
-    /// Perform network reconnaissance on a target
-    pub async fn network_reconnaissance(&self, target: &str) -> Result<NetworkReconResult> {
-        info!("Starting network reconnaissance for target: {}", target);
-
-        use crate::network_recon::NetworkScanner;
-        let scanner = NetworkScanner::new(self.config.clone());
-        scanner.scan_target(target).await
-    }
-
-    /// Generate comprehensive system profile
-    pub async fn system_profiling(&self, targets: &[String]) -> Result<Vec<SystemProfile>> {
-        info!("Starting system profiling for {} targets", targets.len());
-
-        use crate::system_profiler::SystemProfiler;
-        let profiler = SystemProfiler::new(self.config.clone());
-        profiler.profile_systems(targets).await
     }
 
     /// Calculate fingerprint hash from collected data

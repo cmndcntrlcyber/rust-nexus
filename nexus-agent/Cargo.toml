@@ -31,10 +31,6 @@ anyhow = { workspace = true }
 # Tonic 0.14 alongside the overlay's 0.10 (Cargo allows mixed versions).
 tonic_14 = { package = "tonic", version = "0.14", default-features = false, features = ["transport", "codegen", "router", "channel"] }
 
-# ATT&CK technique crates (optional, feature-gated)
-nexus-t1059-command-scripting = { path = "../nexus-t1059-command-scripting", optional = true }
-nexus-t1547-boot-logon-autostart = { path = "../nexus-t1547-boot-logon-autostart", optional = true }
-nexus-t1021-006-winrm = { path = "../nexus-t1021-006-winrm", optional = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -81,16 +77,7 @@ anti-debug = []
 anti-vm = []
 process-injection = []
 
-# ATT&CK technique crates
-t1059 = ["dep:nexus-t1059-command-scripting"]
-t1547 = ["dep:nexus-t1547-boot-logon-autostart"]
-t1021-006 = ["dep:nexus-t1021-006-winrm"]
-
-# Named engagement profiles
-persistence-kit  = ["t1547"]
-lateral-movement = ["t1021-006"]
-red-team-windows = ["t1059", "t1547", "t1021-006"]
-full             = ["t1059", "t1547", "t1021-006"]
+# ATT&CK techniques are now built-in via src/techniques/ (v3.8 WS4)
 
 [dev-dependencies]
 tempfile = "3"

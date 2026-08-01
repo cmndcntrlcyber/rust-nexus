@@ -3,56 +3,46 @@ use nexus_common::{
 };
 use std::collections::HashMap;
 
-/// Registry of ATT&CK techniques, populated at build time via feature flags.
+/// Registry of ATT&CK techniques, populated from in-tree technique modules.
 ///
 /// Replaces the monolithic match block in execution.rs with trait-object dispatch.
+/// v3.8 WS4: techniques are now always built-in (consolidated from standalone crates).
 pub struct TechniqueRegistry {
     /// Maps task_type string -> technique implementation
     techniques: HashMap<String, Box<dyn AttackTechnique>>,
 }
 
 impl TechniqueRegistry {
-    /// Build the registry from all feature-gated technique crates.
+    /// Build the registry from all in-tree technique modules.
     ///
-    /// Each technique crate's `register()` returns one Box per technique.
+    /// Each technique module's `register()` returns one Box per technique.
     /// Each technique maps to its primary task_type for dispatch.
     pub fn build() -> Self {
         let mut techniques: HashMap<String, Box<dyn AttackTechnique>> = HashMap::new();
 
-        #[cfg(feature = "t1059")]
-        {
-            for tech in nexus_t1059_command_scripting::register() {
-                // Each technique handles one primary task_type
-                let task_types = tech.task_types();
-                if let Some(primary) = task_types.into_iter().next() {
-                    techniques.insert(primary, tech);
-                }
+        // T1059 - Command and Scripting Interpreter (always available)
+        for tech in nexus_agent::techniques::t1059::register() {
+            let task_types = tech.task_types();
+            if let Some(primary) = task_types.into_iter().next() {
+                techniques.insert(primary, tech);
             }
         }
 
-        #[cfg(feature = "t1547")]
-        {
-            for tech in nexus_t1547_boot_logon_autostart::register() {
-                let task_types = tech.task_types();
-                if let Some(primary) = task_types.into_iter().next() {
-                    techniques.insert(primary, tech);
-                }
+        // T1547 - Boot/Logon Autostart (platform-gated internally)
+        for tech in nexus_agent::techniques::t1547::register() {
+            let task_types = tech.task_types();
+            if let Some(primary) = task_types.into_iter().next() {
+                techniques.insert(primary, tech);
             }
         }
 
-        #[cfg(feature = "t1021-006")]
-        {
-            for tech in nexus_t1021_006_winrm::register() {
-                let task_types = tech.task_types();
-                if let Some(primary) = task_types.into_iter().next() {
-                    techniques.insert(primary, tech);
-                }
+        // T1021.006 - WinRM (platform-gated internally)
+        for tech in nexus_agent::techniques::t1021_006::register() {
+            let task_types = tech.task_types();
+            if let Some(primary) = task_types.into_iter().next() {
+                techniques.insert(primary, tech);
             }
         }
-
-        // Future technique crates register here:
-        // #[cfg(feature = "t1055")]
-        // for tech in nexus_t1055_process_injection::register() { ... }
 
         Self { techniques }
     }
@@ -115,14 +105,12 @@ mod tests {
     #[test]
     fn test_registry_build() {
         let registry = TechniqueRegistry::build();
-        #[cfg(feature = "t1059")]
-        {
-            assert!(registry.has_technique("shell"));
-            assert!(!registry.is_empty());
-        }
-        #[cfg(not(feature = "t1059"))]
-        {
-            assert!(registry.is_empty());
-        }
+        // T1059 shell interpreter is always registered (cross-platform)
+        assert!(registry.has_technique("shell"));
+        assert!(!registry.is_empty());
+
+        // On Linux, systemd persistence should also be registered
+        #[cfg(target_os = "linux")]
+        assert!(registry.has_technique("systemd_persistence"));
     }
 }

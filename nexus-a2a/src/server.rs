@@ -11,6 +11,7 @@ use tonic::transport::Server;
 use tonic::{Request, Response, Status, Streaming};
 use tracing::{info, warn};
 
+use crate::ferry_handler::{HarnessFerryHandler, NullFerryHandler};
 use crate::framing::ShellControl;
 use crate::handler::{
     AgentLister, AgentRegisterParams, AgentRegistrationHandler, NullAgentRegistration, NullLister,
@@ -19,6 +20,8 @@ use crate::handler::{
 use crate::insecure;
 use crate::pb;
 use crate::pb::a2a_service_server::{A2aService, A2aServiceServer};
+use crate::situational_awareness::SituationalAwareness;
+use crate::swarm_coordinator::SwarmCoordinator;
 
 const STREAM_CHANNEL_CAPACITY: usize = 64;
 
@@ -37,6 +40,12 @@ pub struct A2aServer<H: ShellHandler> {
     server_identity: Option<Arc<nexus_common::NodeIdentity>>,
     /// v1.4.7 — max lifetime cap for operator tokens (default 24h).
     max_token_lifetime_seconds: u64,
+    /// v1.5 — ferry handler for nexus-harness tool invocations.
+    ferry_handler: Arc<dyn HarnessFerryHandler>,
+    /// v3.8 WS1 — swarm coordinator for `BroadcastSwarmState` bidi streaming.
+    swarm_coordinator: Arc<SwarmCoordinator>,
+    /// v3.8 WS1 — situational awareness for live agent/task tracking.
+    situational_awareness: Arc<SituationalAwareness>,
 }
 
 impl<H: ShellHandler> A2aServer<H> {
@@ -50,6 +59,9 @@ impl<H: ShellHandler> A2aServer<H> {
             broadcast_audit: None,
             server_identity: None,
             max_token_lifetime_seconds: crate::tokens::DEFAULT_LIFETIME_SECONDS,
+            ferry_handler: Arc::new(NullFerryHandler),
+            swarm_coordinator: Arc::new(SwarmCoordinator::default()),
+            situational_awareness: Arc::new(SituationalAwareness::new()),
         }
     }
 
@@ -74,6 +86,27 @@ impl<H: ShellHandler> A2aServer<H> {
     #[must_use]
     pub fn with_max_token_lifetime(mut self, seconds: u64) -> Self {
         self.max_token_lifetime_seconds = seconds;
+        self
+    }
+
+    /// v1.5 — attach a [`HarnessFerryHandler`] for `SubmitHarnessTask` RPCs.
+    #[must_use]
+    pub fn with_ferry_handler<F: HarnessFerryHandler>(mut self, handler: F) -> Self {
+        self.ferry_handler = Arc::new(handler);
+        self
+    }
+
+    /// v3.8 WS1 — attach a [`SwarmCoordinator`] for `BroadcastSwarmState` RPCs.
+    #[must_use]
+    pub fn with_swarm_coordinator(mut self, coordinator: Arc<SwarmCoordinator>) -> Self {
+        self.swarm_coordinator = coordinator;
+        self
+    }
+
+    /// v3.8 WS1 — attach a [`SituationalAwareness`] instance for live agent/task tracking.
+    #[must_use]
+    pub fn with_situational_awareness(mut self, sa: Arc<SituationalAwareness>) -> Self {
+        self.situational_awareness = sa;
         self
     }
 
@@ -386,6 +419,107 @@ impl<H: ShellHandler> A2aService for A2aServer<H> {
             issued_unix: token.issued_unix,
             expires_unix: token.expires_unix,
         }))
+    }
+
+    // ---------------------------------------------------------------
+    // v1.5 — nexus-harness ferry protocol + swarm coordination
+    // (v3.7 WS1 Phase 1a). Stubs return Unimplemented; full ferry
+    // implementation lands in WS1 Phase 1b (harness_ferry.rs).
+    // ---------------------------------------------------------------
+
+    async fn submit_harness_task(
+        &self,
+        request: Request<pb::HarnessTask>,
+    ) -> Result<Response<pb::HarnessTaskResult>, Status> {
+        let task = request.into_inner();
+        let agent_id = task.target_agent_id.clone();
+
+        // v3.8 WS1 — track task lifecycle in situational awareness.
+        self.situational_awareness.task_started(&agent_id).await;
+
+        let result = self.ferry_handler.handle_task(task).await;
+
+        match &result {
+            Ok(_) => {
+                self.situational_awareness
+                    .task_finished(&agent_id, false)
+                    .await;
+            }
+            Err(_) => {
+                self.situational_awareness
+                    .task_finished(&agent_id, true)
+                    .await;
+            }
+        }
+
+        Ok(Response::new(result?))
+    }
+
+    type StreamHarnessTaskStream = ReceiverStream<Result<pb::HarnessTaskResult, Status>>;
+
+    async fn stream_harness_task(
+        &self,
+        _request: Request<Streaming<pb::HarnessTask>>,
+    ) -> Result<Response<Self::StreamHarnessTaskStream>, Status> {
+        Err(Status::unimplemented(
+            "StreamHarnessTask: v1.5 ferry implementation lands in WS1 Phase 1b",
+        ))
+    }
+
+    type BroadcastSwarmStateStream = ReceiverStream<Result<pb::SwarmCoordinate, Status>>;
+
+    async fn broadcast_swarm_state(
+        &self,
+        request: Request<Streaming<pb::SwarmCoordinate>>,
+    ) -> Result<Response<Self::BroadcastSwarmStateStream>, Status> {
+        let mut incoming = request.into_inner();
+        let (tx, rx) = mpsc::channel::<Result<pb::SwarmCoordinate, Status>>(STREAM_CHANNEL_CAPACITY);
+        let coordinator = Arc::clone(&self.swarm_coordinator);
+
+        // Subscribe to broadcast channel before processing incoming votes
+        // so we don't miss any that arrive concurrently.
+        let mut broadcast_rx = coordinator.subscribe();
+
+        // Spawn task to forward incoming votes to the coordinator.
+        let coord_for_ingest = Arc::clone(&coordinator);
+        tokio::spawn(async move {
+            while let Some(result) = incoming.next().await {
+                match result {
+                    Ok(coord) => {
+                        coord_for_ingest.record_vote(coord).await;
+                    }
+                    Err(e) => {
+                        warn!(error = %e, "swarm ingest stream error");
+                        break;
+                    }
+                }
+            }
+        });
+
+        // Spawn task to forward broadcast messages back to the client.
+        tokio::spawn(async move {
+            loop {
+                match broadcast_rx.recv().await {
+                    Ok(coord) => {
+                        if tx.send(Ok(coord)).await.is_err() {
+                            // Client disconnected.
+                            break;
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
+                        let _ = tx
+                            .send(Err(Status::data_loss(format!(
+                                "swarm broadcast lagged {skipped} messages"
+                            ))))
+                            .await;
+                        break;
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                }
+            }
+        });
+
+        Ok(Response::new(ReceiverStream::new(rx)))
     }
 }
 

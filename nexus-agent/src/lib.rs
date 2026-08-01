@@ -18,6 +18,9 @@
 
 pub mod a2a_client;
 pub mod audit;
+pub mod harness_bridge;
+pub mod sandbox;
 pub mod shell;
 pub mod smoke;
+pub mod techniques;
 pub mod transports;
