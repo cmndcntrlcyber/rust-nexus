@@ -1,7 +1,11 @@
 use base64::{engine::general_purpose, Engine as _};
 use tracing::{debug, error, info, warn};
 use nexus_common::*;
+use nexus_common::kernel_context::{ObservationLevel, SandboxConfig};
 use std::process::Command;
+use std::sync::Arc as StdArc;
+
+use crate::sandbox::{ExecutionSandbox, create_sandbox};
 
 #[cfg(target_os = "windows")]
 use crate::fiber_execution::FiberExecutor;
@@ -46,6 +50,8 @@ pub struct TaskExecutor {
     fiber_executor: FiberExecutor,
     #[cfg(target_os = "windows")]
     keylogger_state: Arc<Mutex<KeyloggerState>>,
+    /// v1.6 WS1.5 — optional sandbox for containment and observation.
+    sandbox: Option<StdArc<dyn ExecutionSandbox>>,
 }
 
 impl TaskExecutor {
@@ -55,10 +61,85 @@ impl TaskExecutor {
             fiber_executor: FiberExecutor::new(),
             #[cfg(target_os = "windows")]
             keylogger_state: Arc::new(Mutex::new(KeyloggerState::new())),
+            sandbox: None,
         }
     }
 
+    /// v1.6 WS1.5 — attach a sandbox for containment and observation.
+    pub fn with_sandbox(mut self, sandbox: StdArc<dyn ExecutionSandbox>) -> Self {
+        self.sandbox = Some(sandbox);
+        self
+    }
+
     pub async fn execute_task(&self, task_data: TaskData) -> Result<String> {
+        // v1.6 WS1.5 — check if sandbox should wrap this task.
+        let sandbox_cfg = SandboxConfig::for_task_type(&task_data.task_type);
+        let use_sandbox = sandbox_cfg.observation_level != ObservationLevel::None
+            && self.sandbox.is_some();
+
+        if use_sandbox {
+            let sandbox = self.sandbox.as_ref().unwrap();
+            match sandbox.create_boundary(&sandbox_cfg).await {
+                Ok(boundary) => {
+                    let task_type = task_data.task_type.clone();
+                    // Execute the task first, then pass the result through
+                    // the sandbox boundary for observation. The boundary
+                    // wraps the execution future for kernel-level observation.
+                    let dispatch_result = self.dispatch_task(task_data.clone()).await;
+
+                    // Wrap the already-computed result in a ready future so the
+                    // boundary's observation window captures timing metadata.
+                    let result = boundary
+                        .execute(
+                            &task_type,
+                            Box::pin(async move { dispatch_result }),
+                        )
+                        .await;
+
+                    match result {
+                        Ok((task_result, kernel_ctx)) => {
+                            if let Some(ctx) = kernel_ctx {
+                                debug!(
+                                    syscalls = ctx.syscall_count,
+                                    files = ctx.files_touched,
+                                    procs = ctx.processes_spawned,
+                                    verdict = ?ctx.sandbox_verdict,
+                                    "sandbox context captured"
+                                );
+                                // Append kernel context summary to output.
+                                match task_result {
+                                    Ok(mut output) => {
+                                        output.push_str(&format!(
+                                            "\n[sandbox: syscalls={}, files={}, procs={}, verdict={:?}]",
+                                            ctx.syscall_count,
+                                            ctx.files_touched,
+                                            ctx.processes_spawned,
+                                            ctx.sandbox_verdict,
+                                        ));
+                                        return Ok(output);
+                                    }
+                                    Err(e) => return Err(e),
+                                }
+                            }
+                            return task_result;
+                        }
+                        Err(sandbox_err) => {
+                            warn!(error = %sandbox_err, "sandbox boundary failed, falling through to unsandboxed execution");
+                        }
+                    }
+                }
+                Err(e) => {
+                    warn!(error = %e, "sandbox boundary creation failed, proceeding without sandbox");
+                }
+            }
+        }
+
+        // Unsandboxed dispatch (graceful degradation).
+        self.dispatch_task(task_data).await
+    }
+
+    /// Internal dispatch — routes task_data to the appropriate handler.
+    async fn dispatch_task(&self, task_data: TaskData) -> Result<String> {
         match task_data.task_type.as_str() {
             "shell" => self.execute_shell_command(&task_data).await,
             "powershell" => self.execute_powershell_command(&task_data).await,

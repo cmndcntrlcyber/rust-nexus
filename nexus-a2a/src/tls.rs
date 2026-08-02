@@ -22,39 +22,32 @@ use tonic::transport::{Certificate, ClientTlsConfig, Identity, ServerTlsConfig};
 /// before handing the material to tonic so a mismatch produces a clear
 /// diagnostic instead of a cryptic handshake failure at the first connection.
 fn assert_cert_key_match(cert_pem: &[u8], key_pem: &[u8]) -> Result<(), TlsError> {
-    use rustls::pki_types::PrivateKeyDer;
-    use rustls::ServerConfig;
+    use rustls::{Certificate as RCert, PrivateKey, ServerConfig};
+    use rustls_pemfile::{certs, pkcs8_private_keys};
 
-    let chain: Vec<_> = rustls_pemfile::certs(&mut std::io::Cursor::new(cert_pem))
-        .filter_map(|c| c.ok())
+    let chain: Vec<RCert> = certs(&mut std::io::Cursor::new(cert_pem))
+        .unwrap_or_default()
+        .into_iter()
+        .map(RCert)
         .collect();
 
-    let mut key: Option<PrivateKeyDer<'static>> = None;
-    for k in rustls_pemfile::pkcs8_private_keys(&mut std::io::Cursor::new(key_pem)) {
-        if let Ok(k) = k {
-            key = Some(PrivateKeyDer::Pkcs8(k));
-            break;
-        }
-    }
-    if key.is_none() {
-        for k in rustls_pemfile::ec_private_keys(&mut std::io::Cursor::new(key_pem)) {
-            if let Ok(k) = k {
-                key = Some(PrivateKeyDer::Sec1(k));
-                break;
-            }
-        }
+    let mut keys = pkcs8_private_keys(&mut std::io::Cursor::new(key_pem)).unwrap_or_default();
+    // Fall back to EC keys when no PKCS#8 block found (rcgen uses PKCS#8 by
+    // default, but handle raw EC for certs generated outside this toolchain).
+    if keys.is_empty() {
+        keys = rustls_pemfile::ec_private_keys(&mut std::io::Cursor::new(key_pem))
+            .unwrap_or_default();
     }
 
-    let Some(key) = key else {
-        return Ok(());
-    };
-    if chain.is_empty() {
+    if chain.is_empty() || keys.is_empty() {
+        // Can't validate without both halves; let tonic surface the error.
         return Ok(());
     }
 
     ServerConfig::builder()
+        .with_safe_defaults()
         .with_no_client_auth()
-        .with_single_cert(chain, key)
+        .with_single_cert(chain, PrivateKey(keys.remove(0)))
         .map(|_| ())
         .map_err(|_| TlsError::CertKeyMismatch)
 }

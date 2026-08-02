@@ -15,6 +15,7 @@
 pub mod discovery;
 pub mod dtn;
 pub mod node;
+pub mod telemetry;
 pub mod topics;
 
 pub use node::{MeshEvent, MeshHandle, MeshNode};

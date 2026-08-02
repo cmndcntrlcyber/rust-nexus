@@ -23,8 +23,11 @@ mod agent;
 mod communication;
 mod evasion;
 mod execution;
+mod harness_ferry;
+mod op_mode;
 mod persistence;
 mod registry;
+mod sandbox;
 mod shell;
 mod system;
 
@@ -111,7 +114,14 @@ async fn run_agent(args: Vec<String>) -> Result<()> {
     // In production, set NEXUS_CA_CERT instead; that satisfies the gate via TLS.
     let insecure_network = std::env::var("NEXUS_INSECURE_NETWORK").is_ok();
 
-    let cfg = a2a_client::A2aClientConfig { c2_addr, tag, insecure_network };
+    // Parse operational mode from NEXUS_OP_MODE (lab|field); default to Lab.
+    let op_mode = match std::env::var("NEXUS_OP_MODE").as_deref() {
+        Ok("field") => op_mode::OpMode::Field,
+        _ => op_mode::OpMode::Lab,
+    };
+    tracing::info!(%op_mode, "operational mode");
+
+    let cfg = a2a_client::A2aClientConfig { c2_addr, tag, insecure_network, op_mode };
 
     let identity_path = std::env::var("NEXUS_IDENTITY_PATH")
         .unwrap_or_else(|_| "/var/lib/nexus-agent/identity.bin".to_string());

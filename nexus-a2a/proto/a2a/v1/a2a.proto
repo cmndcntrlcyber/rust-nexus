@@ -1,5 +1,9 @@
 // A2A proto subset for rust-nexus.
 //
+// v1.5 (this file): adds nexus-harness ferry protocol (HarnessTask,
+// HarnessTaskResult, KernelContextProto), distributed swarm coordination
+// (SwarmCoordinate, BroadcastSwarmState), and 3 new RPCs for v3.7 WS1.
+//
 // v1.3 (this file): partial vendoring of upstream `a2aproject/A2A` v0.3.x.
 // v1.3.1 adds the v0.3 RPC surface as Unimplemented stubs:
 //
@@ -121,8 +125,6 @@ message Task {
     string task_id = 1;
     string context_id = 2;
     TaskState state = 3;
-    uint64 created_at_unix = 4;
-    uint64 updated_at_unix = 5;
 }
 
 message GetTaskRequest {
@@ -151,22 +153,6 @@ message ListTaskRequest {
     string context_id = 1;
     uint32 page_size = 2;
     string page_token = 3;
-    TaskState state_filter = 4;
-}
-
-message HarnessTask {
-    string task_id = 1;
-    string context_id = 2;
-    string prompt = 3;
-    repeated string tool_names = 4;
-    bytes payload = 5;
-}
-
-message HarnessToolResult {
-    string task_id = 1;
-    bool success = 2;
-    bytes output = 3;
-    string error = 4;
 }
 
 message ListTaskResponse {
@@ -211,6 +197,140 @@ message OperatorTokenReply {
     uint64 expires_unix = 3;
 }
 
+// ---------------------------------------------------------------
+// v1.5 additions — nexus-harness ferry protocol, kernel context
+// observation, and distributed swarm coordination (v3.7 WS1).
+//
+// Ferry protocol: nexus-harness submits tool/skill invocations to
+// remote nexus-agents via SubmitHarnessTask (unary) or
+// StreamHarnessTask (bidi streaming). The agent executes locally
+// and returns HarnessTaskResult with optional KernelContextProto
+// telemetry from the sandboxed execution environment (WS1.5).
+//
+// Swarm coordination: multiple nexus-harness instances exchange
+// consensus signals via BroadcastSwarmState (bidi streaming)
+// through the nexus-a2a control plane.
+// ---------------------------------------------------------------
+
+enum SandboxVerdict {
+    SANDBOX_VERDICT_UNSPECIFIED = 0;
+    SANDBOX_VERDICT_NOMINAL = 1;
+    SANDBOX_VERDICT_RESOURCE_EXCEEDED = 2;
+    SANDBOX_VERDICT_TIMEOUT = 3;
+    SANDBOX_VERDICT_CONTAINMENT_BREACH = 4;
+}
+
+message ProcessEvent {
+    uint32 pid = 1;
+    uint32 parent_pid = 2;
+    string image_name = 3;
+    uint64 timestamp_unix = 4;
+    // create, terminate, thread_create, suspend, resume
+    string event_type = 5;
+}
+
+message FileEvent {
+    string path = 1;
+    // create, read, write, delete, rename
+    string operation = 2;
+    uint64 bytes_affected = 3;
+    uint64 timestamp_unix = 4;
+}
+
+message NetworkEvent {
+    string src_addr = 1;
+    string dst_addr = 2;
+    uint32 dst_port = 3;
+    // tcp, udp
+    string protocol = 4;
+    // inbound, outbound
+    string direction = 5;
+    uint64 timestamp_unix = 6;
+}
+
+message KernelContextProto {
+    uint64 execution_duration_ns = 1;
+    uint64 syscall_count = 2;
+    uint64 memory_allocated_bytes = 3;
+    uint32 processes_spawned = 4;
+    uint32 files_touched = 5;
+    uint32 network_connections = 6;
+    uint32 threads_created = 7;
+    SandboxVerdict sandbox_verdict = 8;
+    repeated ProcessEvent process_events = 9;
+    repeated FileEvent file_events = 10;
+    repeated NetworkEvent network_events = 11;
+}
+
+message HarnessTask {
+    string task_id = 1;
+    string tool_name = 2;
+    string json_arguments = 3;
+    string session_id = 4;
+    bytes engagement_scope_hash = 5;
+    bytes operator_signature = 6;
+    string target_agent_id = 7;
+}
+
+message HarnessTaskResult {
+    string task_id = 1;
+    string output = 2;
+    bool is_error = 3;
+    uint64 execution_duration_ms = 4;
+    uint64 bytes_sent = 5;
+    uint64 bytes_recv = 6;
+    uint32 commands_run = 7;
+    KernelContextProto kernel_context = 8;
+}
+
+message SwarmCoordinate {
+    string round_id = 1;
+    string triad_id = 2;
+    bytes vote_payload = 3;
+    string grammar_constraint = 4;
+    bytes source_peer_id = 5;
+}
+
+// ---------------------------------------------------------------
+// v1.6 — GML telemetry (WS2).
+// ---------------------------------------------------------------
+
+message TelemetrySnapshotProto {
+    uint64 window_start = 1;
+    uint64 window_end = 2;
+    map<string, NodeFeaturesProto> node_features = 3;
+}
+
+message NodeFeaturesProto {
+    string peer_id = 1;
+    uint64 message_count = 2;
+    uint64 bytes_sent = 3;
+    uint64 bytes_recv = 4;
+    uint64 task_count = 5;
+    double error_rate = 6;
+    uint64 total_syscalls = 7;
+    uint64 total_memory_allocated = 8;
+    uint64 total_processes_spawned = 9;
+    uint64 total_files_touched = 10;
+    uint64 total_network_connections = 11;
+    uint64 sandbox_violations = 12;
+}
+
+message AnomalyScoreResponse {
+    double barometer = 1;
+    map<string, double> agent_attributions = 2;
+    bool throttling_active = 3;
+}
+
+message RateAdjustmentRequest {
+    string agent_id = 1;
+}
+
+message RateAdjustmentResponse {
+    string agent_id = 1;
+    double multiplier = 2;
+}
+
 service A2aService {
     // v1.0 / v1.2 surface (load-bearing for shell-session).
     rpc SendMessage(Message) returns (Message);
@@ -231,4 +351,14 @@ service A2aService {
     // v1.4 — audit-log streaming + operator tokens (D-V1.4-D + Phase 1.4.3).
     rpc StreamAuditRecords(StreamAuditRecordsRequest) returns (stream AuditRecordEvent);
     rpc IssueOperatorToken(IssueOperatorTokenRequest) returns (OperatorTokenReply);
+
+    // v1.5 — nexus-harness ferry protocol + swarm coordination (v3.7 WS1).
+    rpc SubmitHarnessTask(HarnessTask) returns (HarnessTaskResult);
+    rpc StreamHarnessTask(stream HarnessTask) returns (stream HarnessTaskResult);
+    rpc BroadcastSwarmState(stream SwarmCoordinate) returns (stream SwarmCoordinate);
+
+    // v1.6 — GML telemetry RPCs (WS2).
+    rpc SubmitTelemetrySnapshot(TelemetrySnapshotProto) returns (Empty);
+    rpc QueryAnomalyScore(Empty) returns (AnomalyScoreResponse);
+    rpc AdjustAgentRate(RateAdjustmentRequest) returns (RateAdjustmentResponse);
 }

@@ -24,6 +24,7 @@ use nexus_common::{NodeIdentity, OsKind};
 use tokio::sync::{mpsc, Mutex};
 use tracing::{debug, info, warn};
 
+use crate::op_mode::OpMode;
 use crate::shell::{ShellSelect, ShellSession};
 
 /// Configuration for the agent-side A2A bidi client.
@@ -36,13 +37,16 @@ pub struct A2aClientConfig {
     /// Allow non-loopback dials without TLS (dev/test only). In production
     /// NEXUS_CA_CERT supplies TLS config which satisfies the loopback gate.
     pub insecure_network: bool,
+    /// Operational mode — controls evasion, logging, and heartbeat cadence.
+    /// Defaults to [`OpMode::Lab`] when unset.
+    pub op_mode: OpMode,
 }
 
 const SESSION_CMD_CAPACITY: usize = 64;
 
 /// Load mTLS config from env vars. Returns `None` if NEXUS_CA_CERT is unset
 /// (falls back to system trust store via the `https://` URI scheme).
-fn client_tls() -> Option<tonic::transport::ClientTlsConfig> {
+fn client_tls() -> Option<tonic_14::transport::ClientTlsConfig> {
     tls::load_client_config_from_env().ok()
 }
 

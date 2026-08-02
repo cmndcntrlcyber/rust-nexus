@@ -50,6 +50,7 @@ impl Transport for GrpcTransport {
             c2_addr: self.c2_addr.clone(),
             tag: ctx.tag,
             insecure_network: self.insecure_network,
+            op_mode: crate::op_mode::OpMode::default(),
         };
         match probe_c2(&cfg).await {
             Ok(name) => info!(server = %name, "A2A liveness probe OK"),

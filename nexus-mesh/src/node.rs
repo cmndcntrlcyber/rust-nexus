@@ -22,6 +22,7 @@ use tokio::sync::{mpsc, oneshot, Mutex};
 use tracing::{debug, info, warn};
 
 use crate::discovery::{build_kad, build_mdns};
+use crate::telemetry::{TelemetryAggregator, Direction};
 
 const GOSSIPSUB_HEARTBEAT_INTERVAL: Duration = Duration::from_millis(1000);
 const CMD_CHANNEL_CAPACITY: usize = 64;
@@ -80,16 +81,6 @@ pub enum MeshEvent {
     ConnectionEstablished {
         /// Remote peer.
         peer: PeerId,
-    },
-    /// A harness task message arrived.
-    HarnessTask {
-        from: Option<PeerId>,
-        data: Vec<u8>,
-    },
-    /// A harness result message arrived.
-    HarnessResult {
-        from: Option<PeerId>,
-        data: Vec<u8>,
     },
 }
 
@@ -212,18 +203,6 @@ impl MeshHandle {
     pub async fn next_event(&self) -> Option<MeshEvent> {
         self.event_rx.lock().await.recv().await
     }
-
-    /// Subscribe to all topics appropriate for `role`.
-    pub async fn subscribe_role(
-        &self,
-        role: crate::topics::Role,
-        local_peer_id: &[u8; 32],
-    ) -> Result<()> {
-        for topic in role.subscriptions(local_peer_id) {
-            self.subscribe(&topic).await?;
-        }
-        Ok(())
-    }
 }
 
 impl MeshNode {
@@ -317,14 +296,42 @@ async fn run_swarm(
     mut cmd_rx: mpsc::Receiver<MeshCmd>,
     event_tx: mpsc::Sender<MeshEvent>,
 ) {
+    // v1.6 WS2 — telemetry aggregator with 1-hour window.
+    let mut telemetry = TelemetryAggregator::new(Duration::from_secs(3600));
+
     loop {
         tokio::select! {
             cmd = cmd_rx.recv() => {
                 let Some(cmd) = cmd else { break };
+                // v1.6 — record outgoing publishes for telemetry.
+                if let MeshCmd::Publish { ref data, .. } = cmd {
+                    telemetry.record_message("local", data.len() as u64, Direction::Sent);
+                }
                 handle_cmd(&mut swarm, cmd).await;
             }
             event = swarm.select_next_some() => {
+                // v1.6 — record incoming gossipsub messages for telemetry.
+                if let SwarmEvent::Behaviour(MeshBehaviourEvent::Gossipsub(
+                    gossipsub::Event::Message { ref propagation_source, ref message, .. }
+                )) = event {
+                    let peer_str = propagation_source.to_string();
+                    telemetry.record_message(&peer_str, message.data.len() as u64, Direction::Received);
+                }
                 handle_swarm_event(&mut swarm, event, &event_tx).await;
+            }
+        }
+
+        // v1.6 WS2 — flush telemetry snapshot when the window expires.
+        if telemetry.should_flush() {
+            let snapshot = telemetry.flush();
+            // Serialize and publish the snapshot to the telemetry topic.
+            if let Ok(data) = serde_json::to_vec(&snapshot) {
+                let topic = crate::topics::telemetry_snapshot_topic();
+                let _ = swarm
+                    .behaviour_mut()
+                    .gossipsub
+                    .publish(topic, data);
+                debug!("mesh: telemetry snapshot flushed ({} peers)", snapshot.node_features.len());
             }
         }
     }
@@ -399,27 +406,13 @@ async fn handle_swarm_event(
             message,
             ..
         })) => {
-            let topic_str = message.topic.as_str();
-            let event = if topic_str == "nexus/harness/results" {
-                MeshEvent::HarnessResult {
-                    from: Some(propagation_source),
-                    data: message.data,
-                }
-            } else if topic_str.starts_with("nexus/harness/")
-                && topic_str.ends_with("/task")
-            {
-                MeshEvent::HarnessTask {
-                    from: Some(propagation_source),
-                    data: message.data,
-                }
-            } else {
-                MeshEvent::GossipMessage {
+            let _ = event_tx
+                .send(MeshEvent::GossipMessage {
                     from: Some(propagation_source),
                     topic: message.topic,
                     data: message.data,
-                }
-            };
-            let _ = event_tx.send(event).await;
+                })
+                .await;
         }
         SwarmEvent::Behaviour(MeshBehaviourEvent::Ping(ping::Event {
             peer,

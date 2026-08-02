@@ -1,16 +1,17 @@
 //! `A2aServer` — Tonic service host parameterized over a [`ShellHandler`].
 
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use futures::StreamExt;
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::server::TcpIncoming;
 use tonic::transport::Server;
 use tonic::{Request, Response, Status, Streaming};
 use tracing::{info, warn};
 
+use crate::ferry_handler::{HarnessFerryHandler, NullFerryHandler};
 use crate::framing::ShellControl;
 use crate::handler::{
     AgentLister, AgentRegisterParams, AgentRegistrationHandler, NullAgentRegistration, NullLister,
@@ -19,6 +20,8 @@ use crate::handler::{
 use crate::insecure;
 use crate::pb;
 use crate::pb::a2a_service_server::{A2aService, A2aServiceServer};
+use crate::situational_awareness::SituationalAwareness;
+use crate::swarm_coordinator::SwarmCoordinator;
 
 const STREAM_CHANNEL_CAPACITY: usize = 64;
 
@@ -28,10 +31,23 @@ pub struct A2aServer<H: ShellHandler> {
     handler: Arc<H>,
     lister: Arc<dyn AgentLister>,
     agent_registration: Arc<dyn AgentRegistrationHandler>,
+    /// v1.4.3 — optional broadcast tap on the audit sink. When set,
+    /// `StreamAuditRecords` RPC delivers live records to gRPC subscribers.
     broadcast_audit: Option<Arc<crate::audit::BroadcastSink>>,
+    /// v1.4.7 — server identity used to sign operator tokens (separate
+    /// from the AgentCard signing identity by convention, though they
+    /// can be the same `NodeIdentity`).
     server_identity: Option<Arc<nexus_common::NodeIdentity>>,
+    /// v1.4.7 — max lifetime cap for operator tokens (default 24h).
     max_token_lifetime_seconds: u64,
-    task_registry: Arc<crate::task_registry::TaskRegistry>,
+    /// v1.5 — ferry handler for nexus-harness tool invocations.
+    ferry_handler: Arc<dyn HarnessFerryHandler>,
+    /// v3.8 WS1 — swarm coordinator for `BroadcastSwarmState` bidi streaming.
+    swarm_coordinator: Arc<SwarmCoordinator>,
+    /// v3.8 WS1 — situational awareness for live agent/task tracking.
+    situational_awareness: Arc<SituationalAwareness>,
+    /// v3.8 WS2 — GML adjustment layer for telemetry RPCs.
+    gml: Arc<Mutex<crate::gml::GmlAdjustmentLayer>>,
 }
 
 impl<H: ShellHandler> A2aServer<H> {
@@ -45,13 +61,11 @@ impl<H: ShellHandler> A2aServer<H> {
             broadcast_audit: None,
             server_identity: None,
             max_token_lifetime_seconds: crate::tokens::DEFAULT_LIFETIME_SECONDS,
-            task_registry: Arc::new(crate::task_registry::TaskRegistry::new()),
+            ferry_handler: Arc::new(NullFerryHandler),
+            swarm_coordinator: Arc::new(SwarmCoordinator::default()),
+            situational_awareness: Arc::new(SituationalAwareness::new()),
+            gml: Arc::new(Mutex::new(crate::gml::GmlAdjustmentLayer::new())),
         }
-    }
-
-    /// Access the task registry (for external wiring).
-    pub fn task_registry(&self) -> &Arc<crate::task_registry::TaskRegistry> {
-        &self.task_registry
     }
 
     /// v1.4.3 — attach a [`BroadcastSink`] so `StreamAuditRecords`
@@ -75,6 +89,35 @@ impl<H: ShellHandler> A2aServer<H> {
     #[must_use]
     pub fn with_max_token_lifetime(mut self, seconds: u64) -> Self {
         self.max_token_lifetime_seconds = seconds;
+        self
+    }
+
+    /// v1.5 — attach a [`HarnessFerryHandler`] for `SubmitHarnessTask` RPCs.
+    #[must_use]
+    pub fn with_ferry_handler<F: HarnessFerryHandler>(mut self, handler: F) -> Self {
+        self.ferry_handler = Arc::new(handler);
+        self
+    }
+
+    /// v3.8 WS1 — attach a [`SwarmCoordinator`] for `BroadcastSwarmState` RPCs.
+    #[must_use]
+    pub fn with_swarm_coordinator(mut self, coordinator: Arc<SwarmCoordinator>) -> Self {
+        self.swarm_coordinator = coordinator;
+        self
+    }
+
+    /// v3.8 WS1 — attach a [`SituationalAwareness`] instance for live agent/task tracking.
+    #[must_use]
+    pub fn with_situational_awareness(mut self, sa: Arc<SituationalAwareness>) -> Self {
+        self.situational_awareness = sa;
+        self
+    }
+
+    /// v3.8 WS2 — attach a pre-configured [`GmlAdjustmentLayer`] for
+    /// the telemetry RPCs.
+    #[must_use]
+    pub fn with_gml(mut self, gml: Arc<Mutex<crate::gml::GmlAdjustmentLayer>>) -> Self {
+        self.gml = gml;
         self
     }
 
@@ -214,107 +257,59 @@ impl<H: ShellHandler> A2aService for A2aServer<H> {
         Ok(Response::new(pb::RegisteredAgents { agents }))
     }
 
+    // ---------------------------------------------------------------
+    // v1.3 — Unimplemented stubs for upstream A2A v0.3 RPC surface
+    // (D-V1.3-A). Returning `Unimplemented` rather than failing
+    // method-not-found because the proto file *does* declare these
+    // methods; the server is honest about the v1.3 implementation
+    // gap.
+    // ---------------------------------------------------------------
+
     async fn get_task(
         &self,
-        request: Request<pb::GetTaskRequest>,
+        _request: Request<pb::GetTaskRequest>,
     ) -> Result<Response<pb::Task>, Status> {
-        let req = request.into_inner();
-        let record = self
-            .task_registry
-            .get_task(&req.task_id)
-            .ok_or_else(|| Status::not_found(format!("task {} not found", req.task_id)))?;
-        Ok(Response::new(record.task))
+        Err(Status::unimplemented(
+            "GetTask: full upstream A2A task surface lands in v1.4",
+        ))
     }
 
     async fn cancel_task(
         &self,
-        request: Request<pb::CancelTaskRequest>,
+        _request: Request<pb::CancelTaskRequest>,
     ) -> Result<Response<pb::Task>, Status> {
-        let req = request.into_inner();
-        let task = self.task_registry.transition_state(
-            &req.task_id,
-            pb::TaskState::TaskStateCanceled as i32,
-        )?;
-        if let Some(ref sink) = self.broadcast_audit {
-            let record = crate::audit::make_record(
-                "system",
-                "cancel_task",
-                &req.task_id,
-            );
-            sink.append(record).await;
-        }
-        Ok(Response::new(task))
+        Err(Status::unimplemented(
+            "CancelTask: full upstream A2A task surface lands in v1.4",
+        ))
     }
 
     type TaskSubscriptionStream = ReceiverStream<Result<pb::StreamResponse, Status>>;
 
     async fn task_subscription(
         &self,
-        request: Request<pb::TaskSubscriptionRequest>,
+        _request: Request<pb::TaskSubscriptionRequest>,
     ) -> Result<Response<Self::TaskSubscriptionStream>, Status> {
-        let req = request.into_inner();
-        let mut rx = self.task_registry.subscribe(&req.task_id)?;
-        let (tx, out_rx) = mpsc::channel::<Result<pb::StreamResponse, Status>>(64);
-        tokio::spawn(async move {
-            loop {
-                match rx.recv().await {
-                    Ok(response) => {
-                        if tx.send(Ok(response)).await.is_err() {
-                            break;
-                        }
-                    }
-                    Err(broadcast::error::RecvError::Lagged(n)) => {
-                        let _ = tx
-                            .send(Err(Status::data_loss(format!("lagged {n} events"))))
-                            .await;
-                        break;
-                    }
-                    Err(broadcast::error::RecvError::Closed) => break,
-                }
-            }
-        });
-        Ok(Response::new(ReceiverStream::new(out_rx)))
+        Err(Status::unimplemented(
+            "TaskSubscription: full upstream A2A task surface lands in v1.4",
+        ))
     }
 
     async fn create_task_push_notification_config(
         &self,
-        request: Request<pb::CreateTaskPushNotificationConfigRequest>,
+        _request: Request<pb::CreateTaskPushNotificationConfigRequest>,
     ) -> Result<Response<pb::PushNotificationConfig>, Status> {
-        let req = request.into_inner();
-        let config = req
-            .config
-            .ok_or_else(|| Status::invalid_argument("config is required"))?;
-        let stored = self
-            .task_registry
-            .set_push_config(&config.task_id, config)?;
-        Ok(Response::new(stored))
+        Err(Status::unimplemented(
+            "CreateTaskPushNotificationConfig: full upstream A2A task surface lands in v1.4",
+        ))
     }
 
     async fn list_task(
         &self,
-        request: Request<pb::ListTaskRequest>,
+        _request: Request<pb::ListTaskRequest>,
     ) -> Result<Response<pb::ListTaskResponse>, Status> {
-        let req = request.into_inner();
-        let context_filter = if req.context_id.is_empty() {
-            None
-        } else {
-            Some(req.context_id.as_str())
-        };
-        let state_filter = if req.state_filter == 0 {
-            None
-        } else {
-            Some(req.state_filter)
-        };
-        let (tasks, next_page_token) = self.task_registry.list_tasks(
-            context_filter,
-            state_filter,
-            req.page_size,
-            &req.page_token,
-        );
-        Ok(Response::new(pb::ListTaskResponse {
-            tasks,
-            next_page_token,
-        }))
+        Err(Status::unimplemented(
+            "ListTask: full upstream A2A task surface lands in v1.4",
+        ))
     }
 
     async fn get_authenticated_extended_agent_card(
@@ -434,6 +429,229 @@ impl<H: ShellHandler> A2aService for A2aServer<H> {
             token: bytes.to_vec(),
             issued_unix: token.issued_unix,
             expires_unix: token.expires_unix,
+        }))
+    }
+
+    // ---------------------------------------------------------------
+    // v1.5 — nexus-harness ferry protocol + swarm coordination
+    // (v3.7 WS1 Phase 1a). Stubs return Unimplemented; full ferry
+    // implementation lands in WS1 Phase 1b (harness_ferry.rs).
+    // ---------------------------------------------------------------
+
+    async fn submit_harness_task(
+        &self,
+        request: Request<pb::HarnessTask>,
+    ) -> Result<Response<pb::HarnessTaskResult>, Status> {
+        let task = request.into_inner();
+        let agent_id = task.target_agent_id.clone();
+
+        // v3.8 WS1 — track task lifecycle in situational awareness.
+        self.situational_awareness.task_started(&agent_id).await;
+
+        let result = self.ferry_handler.handle_task(task).await;
+
+        match &result {
+            Ok(_) => {
+                self.situational_awareness
+                    .task_finished(&agent_id, false)
+                    .await;
+            }
+            Err(_) => {
+                self.situational_awareness
+                    .task_finished(&agent_id, true)
+                    .await;
+            }
+        }
+
+        Ok(Response::new(result?))
+    }
+
+    type StreamHarnessTaskStream = ReceiverStream<Result<pb::HarnessTaskResult, Status>>;
+
+    async fn stream_harness_task(
+        &self,
+        request: Request<Streaming<pb::HarnessTask>>,
+    ) -> Result<Response<Self::StreamHarnessTaskStream>, Status> {
+        let mut incoming = request.into_inner();
+        let (tx, rx) = mpsc::channel::<Result<pb::HarnessTaskResult, Status>>(STREAM_CHANNEL_CAPACITY);
+        let ferry_handler = Arc::clone(&self.ferry_handler);
+        let sa = Arc::clone(&self.situational_awareness);
+
+        tokio::spawn(async move {
+            while let Some(task_result) = incoming.next().await {
+                match task_result {
+                    Ok(task) => {
+                        let agent_id = task.target_agent_id.clone();
+                        sa.task_started(&agent_id).await;
+
+                        let result = ferry_handler.handle_task(task).await;
+                        match &result {
+                            Ok(r) => {
+                                sa.task_finished(&agent_id, r.is_error).await;
+                                if tx.send(Ok(r.clone())).await.is_err() {
+                                    break;
+                                }
+                            }
+                            Err(e) => {
+                                sa.task_finished(&agent_id, true).await;
+                                let _ = tx.send(Err(Status::internal(e.to_string()))).await;
+                                break;
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        warn!(error = %e, "stream_harness_task: ingest stream error");
+                        let _ = tx.send(Err(e)).await;
+                        break;
+                    }
+                }
+            }
+        });
+
+        Ok(Response::new(ReceiverStream::new(rx)))
+    }
+
+    type BroadcastSwarmStateStream = ReceiverStream<Result<pb::SwarmCoordinate, Status>>;
+
+    async fn broadcast_swarm_state(
+        &self,
+        request: Request<Streaming<pb::SwarmCoordinate>>,
+    ) -> Result<Response<Self::BroadcastSwarmStateStream>, Status> {
+        let mut incoming = request.into_inner();
+        let (tx, rx) = mpsc::channel::<Result<pb::SwarmCoordinate, Status>>(STREAM_CHANNEL_CAPACITY);
+        let coordinator = Arc::clone(&self.swarm_coordinator);
+
+        // Subscribe to broadcast channel before processing incoming votes
+        // so we don't miss any that arrive concurrently.
+        let mut broadcast_rx = coordinator.subscribe();
+
+        // Spawn task to forward incoming votes to the coordinator.
+        let coord_for_ingest = Arc::clone(&coordinator);
+        tokio::spawn(async move {
+            while let Some(result) = incoming.next().await {
+                match result {
+                    Ok(coord) => {
+                        coord_for_ingest.record_vote(coord).await;
+                    }
+                    Err(e) => {
+                        warn!(error = %e, "swarm ingest stream error");
+                        break;
+                    }
+                }
+            }
+        });
+
+        // Spawn task to forward broadcast messages back to the client.
+        tokio::spawn(async move {
+            loop {
+                match broadcast_rx.recv().await {
+                    Ok(coord) => {
+                        if tx.send(Ok(coord)).await.is_err() {
+                            // Client disconnected.
+                            break;
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
+                        let _ = tx
+                            .send(Err(Status::data_loss(format!(
+                                "swarm broadcast lagged {skipped} messages"
+                            ))))
+                            .await;
+                        break;
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                }
+            }
+        });
+
+        Ok(Response::new(ReceiverStream::new(rx)))
+    }
+
+    // ---------------------------------------------------------------
+    // v1.6 — GML telemetry RPCs (WS2).
+    // ---------------------------------------------------------------
+
+    async fn submit_telemetry_snapshot(
+        &self,
+        request: Request<pb::TelemetrySnapshotProto>,
+    ) -> Result<Response<pb::Empty>, Status> {
+        let proto = request.into_inner();
+
+        // Convert proto types to domain types.
+        let mut node_features = std::collections::HashMap::new();
+        for (k, v) in proto.node_features {
+            node_features.insert(
+                k,
+                nexus_mesh::telemetry::NodeFeatures {
+                    peer_id: v.peer_id,
+                    message_count: v.message_count,
+                    bytes_sent: v.bytes_sent,
+                    bytes_recv: v.bytes_recv,
+                    task_count: v.task_count,
+                    error_rate: v.error_rate,
+                    total_syscalls: v.total_syscalls,
+                    total_memory_allocated: v.total_memory_allocated,
+                    total_processes_spawned: v.total_processes_spawned,
+                    total_files_touched: v.total_files_touched,
+                    total_network_connections: v.total_network_connections,
+                    sandbox_violations: v.sandbox_violations,
+                },
+            );
+        }
+
+        let snapshot = nexus_mesh::telemetry::TelemetrySnapshot {
+            window_start: proto.window_start,
+            window_end: proto.window_end,
+            node_features,
+            edge_features: vec![],
+        };
+
+        let mut gml = self
+            .gml
+            .lock()
+            .map_err(|e| Status::internal(format!("GML lock poisoned: {e}")))?;
+        gml.ingest_snapshot(&snapshot);
+
+        Ok(Response::new(pb::Empty {}))
+    }
+
+    async fn query_anomaly_score(
+        &self,
+        _request: Request<pb::Empty>,
+    ) -> Result<Response<pb::AnomalyScoreResponse>, Status> {
+        let gml = self
+            .gml
+            .lock()
+            .map_err(|e| Status::internal(format!("GML lock poisoned: {e}")))?;
+
+        // Collect agent attributions from the internal HashMap.
+        let mut attributions = std::collections::HashMap::new();
+        for (peer_id, score) in gml.agent_attributions_iter() {
+            attributions.insert(peer_id.clone(), *score);
+        }
+
+        Ok(Response::new(pb::AnomalyScoreResponse {
+            barometer: gml.barometer(),
+            agent_attributions: attributions,
+            throttling_active: gml.should_throttle(),
+        }))
+    }
+
+    async fn adjust_agent_rate(
+        &self,
+        request: Request<pb::RateAdjustmentRequest>,
+    ) -> Result<Response<pb::RateAdjustmentResponse>, Status> {
+        let req = request.into_inner();
+        let gml = self
+            .gml
+            .lock()
+            .map_err(|e| Status::internal(format!("GML lock poisoned: {e}")))?;
+
+        let multiplier = gml.rate_adjustment(&req.agent_id);
+
+        Ok(Response::new(pb::RateAdjustmentResponse {
+            agent_id: req.agent_id,
+            multiplier,
         }))
     }
 }
