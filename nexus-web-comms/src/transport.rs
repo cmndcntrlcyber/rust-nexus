@@ -10,6 +10,7 @@
 //! code; not a replacement. Per D-V1.1-A "additive integration".
 
 use std::future::Future;
+use std::path::PathBuf;
 use std::pin::Pin;
 
 use async_trait::async_trait;
@@ -31,11 +32,11 @@ where
 
 /// Identity material + metadata handed to the transport on `run`.
 pub struct TransportContext {
-    /// Agent's persistent cryptographic identity (Ed25519 + X25519 from
-    /// `nexus_common::identity::NodeIdentity`).
     pub identity: NodeIdentity,
-    /// Operator-supplied human-friendly tag.
     pub tag: String,
+    pub engagement: Option<String>,
+    pub session_id: Option<String>,
+    pub results_dir: Option<PathBuf>,
 }
 
 /// The agent ↔ C2 transport contract.

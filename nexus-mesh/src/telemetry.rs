@@ -4,11 +4,12 @@
 //! flushes them as [`TelemetrySnapshot`]s for downstream consumption
 //! by the GML adjustment layer in `nexus-a2a`.
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 /// Per-window counters for gossipsub activity.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TelemetrySnapshot {
     /// Unix timestamp of the window start.
     pub window_start: u64,
@@ -21,7 +22,7 @@ pub struct TelemetrySnapshot {
 }
 
 /// Aggregate feature vector for a single peer within one telemetry window.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeFeatures {
     /// Peer identity (libp2p PeerId string).
     pub peer_id: String,
@@ -71,7 +72,7 @@ impl NodeFeatures {
 }
 
 /// Edge feature between two peers in one telemetry window.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EdgeFeature {
     /// Source peer ID.
     pub source: String,

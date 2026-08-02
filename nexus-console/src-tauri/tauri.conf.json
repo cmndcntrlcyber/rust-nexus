@@ -10,6 +10,10 @@
     "frontendDist": "../ui/dist"
   },
   "app": {
+    "trayIcon": {
+      "iconPath": "icons/32x32.png",
+      "iconAsTemplate": true
+    },
     "windows": [
       {
         "title": "nexus-console",
@@ -22,7 +26,7 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'"
     }
   },
   "bundle": {

@@ -1,7 +1,7 @@
 //! `A2aServer` — Tonic service host parameterized over a [`ShellHandler`].
 
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use futures::StreamExt;
 use tokio::sync::mpsc;
@@ -46,6 +46,8 @@ pub struct A2aServer<H: ShellHandler> {
     swarm_coordinator: Arc<SwarmCoordinator>,
     /// v3.8 WS1 — situational awareness for live agent/task tracking.
     situational_awareness: Arc<SituationalAwareness>,
+    /// v3.8 WS2 — GML adjustment layer for telemetry RPCs.
+    gml: Arc<Mutex<crate::gml::GmlAdjustmentLayer>>,
 }
 
 impl<H: ShellHandler> A2aServer<H> {
@@ -62,6 +64,7 @@ impl<H: ShellHandler> A2aServer<H> {
             ferry_handler: Arc::new(NullFerryHandler),
             swarm_coordinator: Arc::new(SwarmCoordinator::default()),
             situational_awareness: Arc::new(SituationalAwareness::new()),
+            gml: Arc::new(Mutex::new(crate::gml::GmlAdjustmentLayer::new())),
         }
     }
 
@@ -107,6 +110,14 @@ impl<H: ShellHandler> A2aServer<H> {
     #[must_use]
     pub fn with_situational_awareness(mut self, sa: Arc<SituationalAwareness>) -> Self {
         self.situational_awareness = sa;
+        self
+    }
+
+    /// v3.8 WS2 — attach a pre-configured [`GmlAdjustmentLayer`] for
+    /// the telemetry RPCs.
+    #[must_use]
+    pub fn with_gml(mut self, gml: Arc<Mutex<crate::gml::GmlAdjustmentLayer>>) -> Self {
+        self.gml = gml;
         self
     }
 
@@ -459,11 +470,45 @@ impl<H: ShellHandler> A2aService for A2aServer<H> {
 
     async fn stream_harness_task(
         &self,
-        _request: Request<Streaming<pb::HarnessTask>>,
+        request: Request<Streaming<pb::HarnessTask>>,
     ) -> Result<Response<Self::StreamHarnessTaskStream>, Status> {
-        Err(Status::unimplemented(
-            "StreamHarnessTask: v1.5 ferry implementation lands in WS1 Phase 1b",
-        ))
+        let mut incoming = request.into_inner();
+        let (tx, rx) = mpsc::channel::<Result<pb::HarnessTaskResult, Status>>(STREAM_CHANNEL_CAPACITY);
+        let ferry_handler = Arc::clone(&self.ferry_handler);
+        let sa = Arc::clone(&self.situational_awareness);
+
+        tokio::spawn(async move {
+            while let Some(task_result) = incoming.next().await {
+                match task_result {
+                    Ok(task) => {
+                        let agent_id = task.target_agent_id.clone();
+                        sa.task_started(&agent_id).await;
+
+                        let result = ferry_handler.handle_task(task).await;
+                        match &result {
+                            Ok(r) => {
+                                sa.task_finished(&agent_id, r.is_error).await;
+                                if tx.send(Ok(r.clone())).await.is_err() {
+                                    break;
+                                }
+                            }
+                            Err(e) => {
+                                sa.task_finished(&agent_id, true).await;
+                                let _ = tx.send(Err(Status::internal(e.to_string()))).await;
+                                break;
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        warn!(error = %e, "stream_harness_task: ingest stream error");
+                        let _ = tx.send(Err(e)).await;
+                        break;
+                    }
+                }
+            }
+        });
+
+        Ok(Response::new(ReceiverStream::new(rx)))
     }
 
     type BroadcastSwarmStateStream = ReceiverStream<Result<pb::SwarmCoordinate, Status>>;
@@ -520,6 +565,94 @@ impl<H: ShellHandler> A2aService for A2aServer<H> {
         });
 
         Ok(Response::new(ReceiverStream::new(rx)))
+    }
+
+    // ---------------------------------------------------------------
+    // v1.6 — GML telemetry RPCs (WS2).
+    // ---------------------------------------------------------------
+
+    async fn submit_telemetry_snapshot(
+        &self,
+        request: Request<pb::TelemetrySnapshotProto>,
+    ) -> Result<Response<pb::Empty>, Status> {
+        let proto = request.into_inner();
+
+        // Convert proto types to domain types.
+        let mut node_features = std::collections::HashMap::new();
+        for (k, v) in proto.node_features {
+            node_features.insert(
+                k,
+                nexus_mesh::telemetry::NodeFeatures {
+                    peer_id: v.peer_id,
+                    message_count: v.message_count,
+                    bytes_sent: v.bytes_sent,
+                    bytes_recv: v.bytes_recv,
+                    task_count: v.task_count,
+                    error_rate: v.error_rate,
+                    total_syscalls: v.total_syscalls,
+                    total_memory_allocated: v.total_memory_allocated,
+                    total_processes_spawned: v.total_processes_spawned,
+                    total_files_touched: v.total_files_touched,
+                    total_network_connections: v.total_network_connections,
+                    sandbox_violations: v.sandbox_violations,
+                },
+            );
+        }
+
+        let snapshot = nexus_mesh::telemetry::TelemetrySnapshot {
+            window_start: proto.window_start,
+            window_end: proto.window_end,
+            node_features,
+            edge_features: vec![],
+        };
+
+        let mut gml = self
+            .gml
+            .lock()
+            .map_err(|e| Status::internal(format!("GML lock poisoned: {e}")))?;
+        gml.ingest_snapshot(&snapshot);
+
+        Ok(Response::new(pb::Empty {}))
+    }
+
+    async fn query_anomaly_score(
+        &self,
+        _request: Request<pb::Empty>,
+    ) -> Result<Response<pb::AnomalyScoreResponse>, Status> {
+        let gml = self
+            .gml
+            .lock()
+            .map_err(|e| Status::internal(format!("GML lock poisoned: {e}")))?;
+
+        // Collect agent attributions from the internal HashMap.
+        let mut attributions = std::collections::HashMap::new();
+        for (peer_id, score) in gml.agent_attributions_iter() {
+            attributions.insert(peer_id.clone(), *score);
+        }
+
+        Ok(Response::new(pb::AnomalyScoreResponse {
+            barometer: gml.barometer(),
+            agent_attributions: attributions,
+            throttling_active: gml.should_throttle(),
+        }))
+    }
+
+    async fn adjust_agent_rate(
+        &self,
+        request: Request<pb::RateAdjustmentRequest>,
+    ) -> Result<Response<pb::RateAdjustmentResponse>, Status> {
+        let req = request.into_inner();
+        let gml = self
+            .gml
+            .lock()
+            .map_err(|e| Status::internal(format!("GML lock poisoned: {e}")))?;
+
+        let multiplier = gml.rate_adjustment(&req.agent_id);
+
+        Ok(Response::new(pb::RateAdjustmentResponse {
+            agent_id: req.agent_id,
+            multiplier,
+        }))
     }
 }
 

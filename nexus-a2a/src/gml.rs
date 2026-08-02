@@ -140,6 +140,11 @@ impl GmlAdjustmentLayer {
         self.barometer
     }
 
+    /// Iterate over the per-agent attribution scores.
+    pub fn agent_attributions_iter(&self) -> impl Iterator<Item = (&String, &f64)> {
+        self.agent_attributions.iter()
+    }
+
     /// Whether the layer recommends throttling right now.
     ///
     /// Returns `false` when:

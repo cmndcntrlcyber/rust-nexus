@@ -47,6 +47,10 @@ async-trait = { workspace = true }
 futures = { workspace = true }
 anyhow = { workspace = true }
 
+# Mesh transport bridge
+nexus-mesh = { workspace = true }
+libp2p = { workspace = true }
+
 [features]
 default = ["http-fallback", "websocket-fallback", "domain-fronting"]
 http-fallback = ["reqwest", "warp"]

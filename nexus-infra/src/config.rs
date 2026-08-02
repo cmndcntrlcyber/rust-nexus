@@ -30,6 +30,9 @@ pub struct NexusConfig {
 
     /// Security configuration
     pub security: SecurityConfig,
+
+    #[serde(default)]
+    pub harness: HarnessConfig,
 }
 
 /// Cloudflare API and DNS configuration
@@ -249,6 +252,31 @@ pub struct RateLimitConfig {
 
     /// Enable per-IP rate limiting
     pub per_ip_limiting: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HarnessConfig {
+    pub enabled: bool,
+    pub listen_addr: String,
+    pub engagement: String,
+    pub results_dir: PathBuf,
+    pub session_timeout: u64,
+    pub max_concurrent_techniques: u32,
+    pub transport: String,
+}
+
+impl Default for HarnessConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            listen_addr: "127.0.0.1:50053".to_string(),
+            engagement: String::new(),
+            results_dir: PathBuf::from("./results"),
+            session_timeout: 3600,
+            max_concurrent_techniques: 4,
+            transport: "grpc".to_string(),
+        }
+    }
 }
 
 impl Default for CloudflareConfig {

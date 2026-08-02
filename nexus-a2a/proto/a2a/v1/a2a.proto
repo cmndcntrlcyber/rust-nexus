@@ -291,6 +291,46 @@ message SwarmCoordinate {
     bytes source_peer_id = 5;
 }
 
+// ---------------------------------------------------------------
+// v1.6 — GML telemetry (WS2).
+// ---------------------------------------------------------------
+
+message TelemetrySnapshotProto {
+    uint64 window_start = 1;
+    uint64 window_end = 2;
+    map<string, NodeFeaturesProto> node_features = 3;
+}
+
+message NodeFeaturesProto {
+    string peer_id = 1;
+    uint64 message_count = 2;
+    uint64 bytes_sent = 3;
+    uint64 bytes_recv = 4;
+    uint64 task_count = 5;
+    double error_rate = 6;
+    uint64 total_syscalls = 7;
+    uint64 total_memory_allocated = 8;
+    uint64 total_processes_spawned = 9;
+    uint64 total_files_touched = 10;
+    uint64 total_network_connections = 11;
+    uint64 sandbox_violations = 12;
+}
+
+message AnomalyScoreResponse {
+    double barometer = 1;
+    map<string, double> agent_attributions = 2;
+    bool throttling_active = 3;
+}
+
+message RateAdjustmentRequest {
+    string agent_id = 1;
+}
+
+message RateAdjustmentResponse {
+    string agent_id = 1;
+    double multiplier = 2;
+}
+
 service A2aService {
     // v1.0 / v1.2 surface (load-bearing for shell-session).
     rpc SendMessage(Message) returns (Message);
@@ -316,4 +356,9 @@ service A2aService {
     rpc SubmitHarnessTask(HarnessTask) returns (HarnessTaskResult);
     rpc StreamHarnessTask(stream HarnessTask) returns (stream HarnessTaskResult);
     rpc BroadcastSwarmState(stream SwarmCoordinate) returns (stream SwarmCoordinate);
+
+    // v1.6 — GML telemetry RPCs (WS2).
+    rpc SubmitTelemetrySnapshot(TelemetrySnapshotProto) returns (Empty);
+    rpc QueryAnomalyScore(Empty) returns (AnomalyScoreResponse);
+    rpc AdjustAgentRate(RateAdjustmentRequest) returns (RateAdjustmentResponse);
 }

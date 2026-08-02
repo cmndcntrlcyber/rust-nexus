@@ -8,7 +8,7 @@ members = [
     "nexus-web-comms",
     "nexus-mesh",
     "nexus-a2a",
-    "nexus-console/src-tauri",
+    # "nexus-console/src-tauri",  # temporarily excluded — tauri-plugin-tray-icon missing from index
     "integration-tests",
 ]
 # nexus-console/ui targets wasm32-unknown-unknown via Trunk; excluding it

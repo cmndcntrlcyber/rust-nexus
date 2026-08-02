@@ -242,3 +242,15 @@ debug_mode = false
 
 # Use shorter timeouts for faster testing
 fast_timeouts = false
+
+# ===========================================================================
+# [harness] — nexus-harness integration
+# ===========================================================================
+[harness]
+enabled = false
+listen_addr = "127.0.0.1:50053"
+engagement = ""
+results_dir = "./results"
+session_timeout = 3600
+max_concurrent_techniques = 4
+transport = "grpc"

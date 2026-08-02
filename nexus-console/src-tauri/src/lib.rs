@@ -5,3 +5,4 @@
 pub mod commands;
 pub mod session;
 pub mod state;
+pub mod tray;

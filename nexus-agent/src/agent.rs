@@ -18,13 +18,19 @@ pub struct NexusAgent {
     capabilities: Vec<String>,
     last_heartbeat: u64,
     registered: bool,
+    /// v1.6 — ferry handler for harness task dispatch.
+    ferry_handler: Arc<crate::harness_ferry::AgentFerryHandler>,
 }
 
 impl NexusAgent {
     pub async fn new(server_addr: String, encryption_key: [u8; 32]) -> Result<Self> {
         let crypto = Crypto::new(encryption_key);
         let network_client = NetworkClient::new(server_addr.clone());
-        let task_executor = TaskExecutor::new();
+        // v1.6 WS1.5 — create platform sandbox and wire into executor.
+        let sandbox: Arc<dyn crate::sandbox::ExecutionSandbox> =
+            Arc::from(crate::sandbox::create_sandbox());
+        let task_executor = TaskExecutor::new().with_sandbox(sandbox);
+        let ferry_handler = Arc::new(crate::harness_ferry::AgentFerryHandler::new());
         let technique_registry = TechniqueRegistry::build();
         let system_info = SystemInfo::collect().await?;
 
@@ -69,6 +75,7 @@ impl NexusAgent {
             capabilities,
             last_heartbeat: 0,
             registered: false,
+            ferry_handler,
         })
     }
 
@@ -268,6 +275,11 @@ impl NexusAgent {
 
     pub fn time_since_last_heartbeat(&self) -> u64 {
         current_timestamp() - self.last_heartbeat
+    }
+
+    /// v1.6 — get the ferry handler for wiring into A2A streams.
+    pub fn ferry_handler(&self) -> Arc<crate::harness_ferry::AgentFerryHandler> {
+        Arc::clone(&self.ferry_handler)
     }
 }
 

@@ -211,6 +211,16 @@ pub async fn close_shell_session(
     Ok(())
 }
 
+/// Switch the active tab in the console UI.
+///
+/// WS2.4 stub -- the actual tab state lives on the frontend; this
+/// command exists so future backend logic (e.g. session routing) can
+/// be wired in without a protocol change.
+#[tauri::command]
+pub async fn switch_tab(tab_id: u64) -> Result<(), String> {
+    Ok(())
+}
+
 fn hex_lower(bytes: &[u8]) -> String {
     use std::fmt::Write as _;
     let mut s = String::with_capacity(bytes.len() * 2);

@@ -56,6 +56,25 @@ pub enum Role {
     Operator,
 }
 
+/// v1.6 — string-form harness task topic for a peer (used by the ferry
+/// protocol when the peer id is already in string form).
+#[must_use]
+pub fn harness_task(peer: &str) -> String {
+    format!("nexus/agent/{peer}/harness-task")
+}
+
+/// v1.6 — string-form harness result aggregation topic.
+#[must_use]
+pub fn harness_result() -> String {
+    "nexus/server/harness-result".to_string()
+}
+
+/// v1.6 — telemetry snapshot broadcast topic (WS2 / GML).
+#[must_use]
+pub fn telemetry_snapshot_topic() -> IdentTopic {
+    IdentTopic::new("nexus/telemetry/snapshot")
+}
+
 fn hex_lower(bytes: &[u8]) -> String {
     use std::fmt::Write as _;
     let mut s = String::with_capacity(bytes.len() * 2);

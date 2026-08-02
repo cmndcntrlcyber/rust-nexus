@@ -27,6 +27,7 @@ mod harness_ferry;
 mod op_mode;
 mod persistence;
 mod registry;
+mod sandbox;
 mod shell;
 mod system;
 
