@@ -121,4 +121,38 @@ impl A2aClient {
         let response = self.inner.issue_operator_token(request).await?;
         Ok(response.into_inner())
     }
+
+    /// v1.5 — submit a nexus-harness tool invocation to a remote agent
+    /// via the ferry protocol (unary RPC).
+    pub async fn submit_harness_task(
+        &mut self,
+        task: pb::HarnessTask,
+    ) -> Result<pb::HarnessTaskResult, tonic::Status> {
+        let response = self.inner.submit_harness_task(task).await?;
+        Ok(response.into_inner())
+    }
+
+    /// v1.5 — open a bidi stream for interactive/streaming harness task
+    /// execution on a remote agent.
+    pub async fn stream_harness_task(
+        &mut self,
+    ) -> Result<(mpsc::Sender<pb::HarnessTask>, Streaming<pb::HarnessTaskResult>), tonic::Status>
+    {
+        let (tx, rx) = mpsc::channel::<pb::HarnessTask>(CLIENT_TX_CAPACITY);
+        let outbound = ReceiverStream::new(rx);
+        let response = self.inner.stream_harness_task(outbound).await?;
+        Ok((tx, response.into_inner()))
+    }
+
+    /// v1.5 — open a bidi stream for distributed swarm consensus
+    /// coordination between nexus-harness instances.
+    pub async fn broadcast_swarm_state(
+        &mut self,
+    ) -> Result<(mpsc::Sender<pb::SwarmCoordinate>, Streaming<pb::SwarmCoordinate>), tonic::Status>
+    {
+        let (tx, rx) = mpsc::channel::<pb::SwarmCoordinate>(CLIENT_TX_CAPACITY);
+        let outbound = ReceiverStream::new(rx);
+        let response = self.inner.broadcast_swarm_state(outbound).await?;
+        Ok((tx, response.into_inner()))
+    }
 }
