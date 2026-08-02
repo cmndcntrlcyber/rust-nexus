@@ -18,8 +18,12 @@
 
 pub mod a2a_client;
 pub mod audit;
+pub mod ephemeral_state;
 pub mod harness_bridge;
+pub mod op_mode;
+pub mod process_name;
 pub mod sandbox;
+pub mod self_destruct;
 pub mod shell;
 pub mod smoke;
 pub mod techniques;

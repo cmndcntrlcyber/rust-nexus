@@ -74,6 +74,7 @@ async fn agent_round_trip_via_a2a_bidi() {
         c2_addr: url.clone(),
         tag: "test-agent".into(),
         insecure_network: false,
+        op_mode: nexus_agent::op_mode::OpMode::Lab,
     };
     let (stop_tx, stop_rx) = tokio::sync::oneshot::channel::<()>();
     let agent_task = tokio::spawn(async move {
