@@ -12,7 +12,10 @@ pub mod audit_s3;
 pub mod capabilities;
 pub mod cards;
 pub mod client;
+pub mod dual_auth;
+pub mod ferry_handler;
 pub mod framing;
+pub mod gml;
 pub mod handler;
 pub mod insecure;
 pub mod interceptors;
@@ -20,6 +23,8 @@ pub mod metrics;
 pub mod mock;
 pub mod otel;
 pub mod server;
+pub mod situational_awareness;
+pub mod swarm_coordinator;
 pub mod tls;
 pub mod tokens;
 
@@ -46,6 +51,10 @@ pub mod pb_upstream {
 }
 
 pub use client::A2aClient;
+pub use dual_auth::{DualAuthGate, DualAuthResult};
+pub use ferry_handler::HarnessFerryHandler;
+pub use situational_awareness::{AgentSnapshot, SituationalAwareness};
+pub use swarm_coordinator::SwarmCoordinator;
 pub use framing::{
     ShellControl, AGENT_REGISTER_KIND, SHELL_EXIT_KIND, SHELL_OPEN_KIND, SHELL_RESIZE_KIND,
 };

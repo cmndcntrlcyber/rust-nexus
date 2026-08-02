@@ -4779,6 +4779,7 @@ dependencies = [
  "futures",
  "nalgebra",
  "nexus-common",
+ "nexus-mesh",
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry_sdk",

@@ -144,3 +144,41 @@ operator console) can be added to `scripts/demo.sh` and CI.
 - Wire `nexus-hybrid-exec` executor stubs (SSH, WMI, API, PowerShell real impls)
 - Mesh + A2A interop checkpoint (D-XLINK-A boundary work)
 - Sphinx anonymity layer (v2.1 Phase 9)
+
+### v3.7 — ferry protocol + config crate + harness DB
+
+- Ferry protocol definition (nexus-config ↔ harness-nexus bridge)
+- PostgreSQL knowledge backend in nexus-config
+- Kernel context types + DB client wiring
+- Config read/write + sandbox trait foundation
+
+### v3.8 — workspace consolidation + sandbox + GML foundations
+
+**Workspace consolidation:** trimmed from 14 to 9 active crates. The
+following crates were archived under `archive/`:
+
+- `nexus-webui` — replaced by Tauri console
+- `nexus-hybrid-exec` — executor stubs consolidated into `nexus-agent`
+- `nexus-t1059-command-scripting` — ATT&CK techniques consolidated into `nexus-agent/src/techniques/`
+- `nexus-t1547-boot-logon-autostart` — ATT&CK techniques consolidated
+- `nexus-t1021-006-winrm` — ATT&CK techniques consolidated
+
+**WS1.5 — Linux sandbox (Phase 1.5c):**
+
+- [x] `LinuxSandbox` (cgroup v2 containment): creates `/sys/fs/cgroup/nexus-{uuid}/` slices with `memory.max` and `pids.max` limits; falls back to `NoopBoundary` when cgroups unavailable
+- [x] `ProcObserver`: reads `/proc/{pid}/status`, `fd/`, `net/tcp`, `maps` to build `KernelContext` snapshots without elevated permissions
+- [x] `create_sandbox()` returns `LinuxSandbox` on `cfg(target_os = "linux")`
+
+**WS2 — GML foundations:**
+
+- [x] `TelemetryAggregator` in `nexus-mesh`: temporal-window counters for gossipsub message/byte rates, per-peer `NodeFeatures` with kernel context aggregates, `EdgeFeature` inter-node edges
+- [x] `GmlAdjustmentLayer` in `nexus-a2a`: ingests telemetry snapshots, computes anomaly barometer via z-score/sigmoid, hysteresis-based throttle engagement (engage 0.7 / disengage 0.4), per-agent rate adjustments floored at 10%, operator kill switch, shadow mode
+
+**WS4 — ATT&CK consolidation:**
+
+- ATT&CK technique crates (`nexus-t1059-*`, `nexus-t1547-*`, `nexus-t1021-006-*`) consolidated into `nexus-agent/src/techniques/` module; feature-gated via `nexus-agent` Cargo features
+
+**WS5 — Documentation:**
+
+- SwarmCoordinator + SituationalAwareness wired into A2aServer
+- README + ROADMAP updated for 9-crate workspace

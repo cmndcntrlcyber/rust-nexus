@@ -6,6 +6,7 @@ description = "A2A gRPC server/client for rust-nexus (v1.1 simple-mesh integrati
 
 [dependencies]
 nexus-common = { workspace = true }
+nexus-mesh = { workspace = true }
 
 # Early cert/key match validation in tls.rs (uses the same rustls 0.21 API as
 # the rest of the workspace; cargo resolves it alongside the 0.23 that tonic

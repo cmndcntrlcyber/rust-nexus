@@ -14,12 +14,13 @@ Tauri 2 + Leptos desktop operator console.
 
 ## Status
 
-**v1.4 — code complete.** 276 / 276 tests pass; `./scripts/demo.sh`
-PASSes; workspace builds clean with `-D warnings` (all eleven v1.4
-phases closed, commit-prep done 2026-05-20).
+**v3.8 — in progress.** Workspace trimmed from 14 to 9 crates; Linux
+cgroup v2 sandbox and `/proc` observer implemented (WS1.5); GML
+telemetry aggregator and adjustment layer foundations laid (WS2);
+ATT&CK techniques consolidated into `nexus-agent` (WS4).
 
-v1.5 enhancement phases are in progress — see
-[`docs/enhancements/v1.5/`](docs/enhancements/v1.5/).
+For the per-phase rollup see [`STATUS.md`](STATUS.md) and
+[`ROADMAP.md`](ROADMAP.md).
 
 For the per-phase rollup and what's deferred to v1.4.x / v1.5, see
 [`STATUS.md`](STATUS.md) and [`ROADMAP.md`](ROADMAP.md).
@@ -48,25 +49,30 @@ For production rollouts, see
 
 ## Workspace map
 
-14 crates plus a Tauri UI sub-crate. v1.2 additions in **bold**.
+9 workspace members plus a Tauri UI sub-crate (excluded from the
+workspace; built by Trunk for wasm32). v3.8 trimmed from 14 crates --
+5 archived under `archive/`.
 
 | Crate | Role |
 |---|---|
-| `nexus-common` | NodeIdentity (Ed25519 + X25519), sealed envelopes, OS detection, shared error / message types |
-| `nexus-a2a` | **v1.2 A2A gRPC plane:** server / client, signed AgentCards, mTLS env-var loader, capability matrix, hash-chained audit log, rate limit + 4 MiB message cap, agent-registration handler |
-| `nexus-mesh` | libp2p mesh transport (TCP + Noise + Yamux + Gossipsub + Identify + Ping); replicates GhostWire primitives from MIT/Apache libp2p crates (no AGPL paths) |
-| `nexus-infra` | C2 server runtime — OperatorRouter, AgentRegistrar, SessionRegistry, RegistryLister, mTLS plumbing. Hosts the A2A service (port 50052) alongside the legacy NexusC2 service (port 50051) |
-| `nexus-agent` | Cross-platform agent — PTY shell (`portable-pty`), transports (gRPC / mesh / legacy), **`a2a_client::connect_and_serve` agent-side bidi** |
+| `nexus-common` | NodeIdentity (Ed25519 + X25519), sealed envelopes, OS detection, kernel context types, shared error / message types |
+| `nexus-a2a` | A2A gRPC plane: server / client, signed AgentCards, mTLS, capability matrix, hash-chained audit log, rate limit + 4 MiB message cap, GML adjustment layer, SwarmCoordinator, SituationalAwareness |
+| `nexus-mesh` | libp2p mesh transport (TCP + Noise + Yamux + Gossipsub + Identify + Ping + Kademlia + mDNS), DTN store-and-forward, telemetry aggregator |
+| `nexus-infra` | C2 server runtime -- OperatorRouter, AgentRegistrar, SessionRegistry, RegistryLister, mTLS plumbing. Hosts A2A (:50052) alongside legacy NexusC2 (:50051) |
+| `nexus-agent` | Cross-platform agent -- PTY shell, transports (gRPC / mesh / legacy), Linux cgroup v2 sandbox, `/proc` observer, consolidated ATT&CK techniques |
 | `nexus-web-comms` | `Transport` trait abstraction + legacy HTTP / WebSocket transports |
-| **`nexus-console/src-tauri`** | **v1.2 Tauri 2 operator console** (Rust backend) — connect dialog, agent list, shell session management |
-| **`nexus-console/ui`** | **v1.2 Leptos + WASM frontend** with xterm.js terminal (excluded from the workspace; built by Trunk) |
-| `nexus-webui` | Optional web UI (overlay-era) |
 | `nexus-recon` | Reconnaissance helpers |
-| `nexus-hybrid-exec` | Hybrid SSH / WMI / API / PowerShell executor (feature-gated, mostly stubbed in v1.2.1) |
-| `nexus-t1059-command-scripting` | ATT&CK T1059 (Command and Scripting Interpreter) |
-| `nexus-t1547-boot-logon-autostart` | ATT&CK T1547 (Boot or Logon Autostart Execution) |
-| `nexus-t1021-006-winrm` | ATT&CK T1021.006 (Remote Services: Windows Remote Management) |
-| **`integration-tests`** | **v1.1 + v1.2 cross-crate integration tests** (A2A loopback, mTLS round-trip, agent-side bidi PTY round-trip) |
+| `nexus-console/src-tauri` | Tauri 2 operator console (Rust backend) -- connect dialog, agent list, shell session, audit viewer |
+| `integration-tests` | Cross-crate integration tests (A2A loopback, mTLS round-trip, agent-side bidi PTY round-trip) |
+
+**Archived (v3.8):** `nexus-webui`, `nexus-hybrid-exec`,
+`nexus-t1059-command-scripting`, `nexus-t1547-boot-logon-autostart`,
+`nexus-t1021-006-winrm` -- see `archive/` for the original source.
+ATT&CK techniques are consolidated into `nexus-agent/src/techniques/`.
+
+| Excluded | Notes |
+|---|---|
+| `nexus-console/ui` | Leptos + WASM frontend; built by Trunk for `wasm32-unknown-unknown` |
 
 ---
 
