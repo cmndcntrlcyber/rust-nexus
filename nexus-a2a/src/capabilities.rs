@@ -456,6 +456,39 @@ impl CapabilityCheck {
             })
         }
     }
+
+    /// Register additional skills for an agent at runtime (e.g. nexus-harness
+    /// skill capabilities discovered via `SituationalAwareness`). Recompiles
+    /// the matrix after mutation.
+    pub fn register_agent_skills(&mut self, agent_id: &str, skills: &[String]) {
+        let entry = self
+            .file
+            .agents
+            .entry(agent_id.to_string())
+            .or_default();
+        for skill in skills {
+            entry.skills.insert(skill.clone());
+        }
+        self.router = MatrixRouter::compile(&self.file);
+    }
+
+    /// List the skill ids an agent is allowed to use. Returns an empty
+    /// vec for unknown agents (unless a wildcard entry exists).
+    pub fn agent_skills(&self, agent_id: &str) -> Vec<String> {
+        let mut skills = Vec::new();
+        if let Some(entry) = self.file.agents.get(agent_id) {
+            skills.extend(entry.skills.iter().cloned());
+        }
+        if let Some(wildcard) = self.file.agents.get("*") {
+            for s in &wildcard.skills {
+                if !skills.contains(s) {
+                    skills.push(s.clone());
+                }
+            }
+        }
+        skills.sort();
+        skills
+    }
 }
 
 #[cfg(test)]

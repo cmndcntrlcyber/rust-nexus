@@ -75,7 +75,8 @@ pub fn telemetry_snapshot_topic() -> IdentTopic {
     IdentTopic::new("nexus/telemetry/snapshot")
 }
 
-fn hex_lower(bytes: &[u8]) -> String {
+/// Encode a byte slice as a lowercase hex string.
+pub fn hex_lower(bytes: &[u8]) -> String {
     use std::fmt::Write as _;
     let mut s = String::with_capacity(bytes.len() * 2);
     for &b in bytes {

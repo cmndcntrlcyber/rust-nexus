@@ -1,3 +1,4 @@
+use crate::kernel_context::{KernelContextBuilder, SandboxConfig};
 use crate::{Crypto, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -96,6 +97,8 @@ pub struct ExecutionContext {
     pub crypto: Arc<Crypto>,
     pub agent_id: String,
     pub platform: Platform,
+    pub sandbox_config: Option<SandboxConfig>,
+    pub kernel_context_builder: Option<Arc<KernelContextBuilder>>,
 }
 
 /// The core trait that every ATT&CK technique crate must implement.

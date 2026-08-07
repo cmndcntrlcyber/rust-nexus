@@ -41,6 +41,14 @@ pub struct GmlAdjustmentLayer {
     running_m2: f64,
     /// Number of snapshots ingested.
     snapshot_count: u64,
+
+    // ── PSI drift detection (WS2 Phase 2b) ────────────────────
+    /// Previous barometer value for PSI drift detection.
+    prev_barometer: f64,
+    /// Threshold for flagging PSI drift (default 0.25).
+    psi_drift_threshold: f64,
+    /// Count of consecutive windows with labels lagging (SIEM lag detection).
+    siem_lag_count: u64,
 }
 
 impl GmlAdjustmentLayer {
@@ -57,6 +65,9 @@ impl GmlAdjustmentLayer {
             running_mean: 0.0,
             running_m2: 0.0,
             snapshot_count: 0,
+            prev_barometer: 0.0,
+            psi_drift_threshold: 0.25,
+            siem_lag_count: 0,
         }
     }
 
@@ -99,6 +110,16 @@ impl GmlAdjustmentLayer {
         // Map z-score to [0, 1] via sigmoid.
         self.barometer = sigmoid(z_score).clamp(0.0, 1.0);
 
+        tracing::debug!(
+            barometer = format!("{:.3}", self.barometer),
+            z_score = format!("{:.2}", z_score),
+            window_msgs = total_messages,
+            peers = snapshot.node_features.len(),
+            throttling = self.throttling_active,
+            shadow = self.shadow_mode,
+            "GML barometer"
+        );
+
         // Update per-agent attributions.
         self.agent_attributions.clear();
         if !snapshot.node_features.is_empty() {
@@ -133,6 +154,39 @@ impl GmlAdjustmentLayer {
             self.throttling_active = false;
         }
         // Between disengage and engage: maintain current state (hysteresis).
+
+        // PSI drift detection: flag when the barometer jumps by more than
+        // psi_drift_threshold between consecutive windows.
+        let drift = (self.barometer - self.prev_barometer).abs();
+        if drift > self.psi_drift_threshold {
+            tracing::warn!(
+                drift,
+                prev = self.prev_barometer,
+                current = self.barometer,
+                "GML: PSI drift detected (>{:.2})",
+                self.psi_drift_threshold,
+            );
+        }
+        self.prev_barometer = self.barometer;
+
+        // SIEM label lag: if the snapshot contains nodes whose error_rate
+        // is NaN or exactly 0.0 while their message_count is nonzero, the
+        // ground-truth labels may be lagging behind the telemetry.
+        let lagging = snapshot
+            .node_features
+            .values()
+            .any(|f| f.message_count > 0 && (f.error_rate.is_nan() || f.error_rate == 0.0));
+        if lagging {
+            self.siem_lag_count += 1;
+            if self.siem_lag_count >= 3 {
+                tracing::warn!(
+                    consecutive_windows = self.siem_lag_count,
+                    "GML: SIEM label lag — error_rate is stale for active peers"
+                );
+            }
+        } else {
+            self.siem_lag_count = 0;
+        }
     }
 
     /// Return the current anomaly barometer value (0.0 = nominal, 1.0 = max alert).

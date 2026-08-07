@@ -144,6 +144,23 @@ impl A2aClient {
         Ok((tx, response.into_inner()))
     }
 
+    /// v1.6 — submit a telemetry snapshot to the GML adjustment layer (WS2).
+    pub async fn submit_telemetry_snapshot(
+        &mut self,
+        snapshot: pb::TelemetrySnapshotProto,
+    ) -> Result<(), tonic::Status> {
+        self.inner.submit_telemetry_snapshot(snapshot).await?;
+        Ok(())
+    }
+
+    /// v1.6 — query the current anomaly barometer from the GML layer (WS2).
+    pub async fn query_anomaly_score(
+        &mut self,
+    ) -> Result<pb::AnomalyScoreResponse, tonic::Status> {
+        let response = self.inner.query_anomaly_score(pb::Empty {}).await?;
+        Ok(response.into_inner())
+    }
+
     /// v1.5 — open a bidi stream for distributed swarm consensus
     /// coordination between nexus-harness instances.
     pub async fn broadcast_swarm_state(

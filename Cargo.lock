@@ -2772,6 +2772,7 @@ name = "integration-tests"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "futures",
  "libp2p",
  "nexus-a2a",
@@ -2779,11 +2780,13 @@ dependencies = [
  "nexus-common",
  "nexus-infra",
  "nexus-mesh",
+ "prost 0.14.3",
  "tempfile",
  "tokio",
  "tokio-stream",
  "tonic 0.14.6",
  "tracing-subscriber",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3777,6 +3780,7 @@ dependencies = [
  "aws-sdk-s3",
  "aws-smithy-types",
  "blake3",
+ "criterion",
  "ed25519-dalek",
  "futures",
  "nalgebra",

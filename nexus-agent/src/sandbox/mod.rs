@@ -15,6 +15,10 @@ use std::pin::Pin;
 pub mod linux;
 #[cfg(target_os = "linux")]
 pub mod proc_observer;
+#[cfg(target_os = "windows")]
+pub mod windows;
+#[cfg(target_os = "windows")]
+pub mod etw_observer;
 
 /// Creates platform-appropriate execution sandboxes.
 #[async_trait]
@@ -93,7 +97,11 @@ pub fn create_sandbox() -> Box<dyn ExecutionSandbox> {
     {
         Box::new(linux::LinuxSandbox::new())
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "windows")]
+    {
+        Box::new(windows::WindowsSandbox::new())
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
     {
         Box::new(NoopSandbox)
     }

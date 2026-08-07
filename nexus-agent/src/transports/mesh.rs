@@ -11,7 +11,8 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use libp2p::Multiaddr;
 use nexus_common::{NodeIdentity, SealedEnvelope};
-use nexus_mesh::{topics, MeshEvent, MeshHandle, MeshNode};
+use nexus_mesh::topics::{self, hex_lower};
+use nexus_mesh::{MeshEvent, MeshHandle, MeshNode};
 use nexus_web_comms::{ShutdownFuture, Transport, TransportContext, TransportKind};
 use tracing::{debug, info, warn};
 
@@ -71,6 +72,14 @@ impl Transport for MeshTransport {
             .subscribe(&topics::heartbeat())
             .await
             .context("subscribe heartbeat")?;
+
+        let peer_hex = hex_lower(&peer_id);
+        let harness_topic = libp2p::gossipsub::IdentTopic::new(topics::harness_task(&peer_hex));
+        handle
+            .subscribe(&harness_topic)
+            .await
+            .context("subscribe harness-task")?;
+        debug!(topic = %harness_topic, "mesh: subscribed to harness-task ferry topic");
 
         for addr in &self.bootstrap {
             if let Err(err) = handle.dial(addr.clone()).await {

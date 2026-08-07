@@ -65,6 +65,30 @@ pub enum ShellControl {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         tag: Option<String>,
     },
+    /// v1.6: harness-task control frame sent over the bidi stream as a
+    /// fallback when the dedicated `SubmitHarnessTask` RPC is unavailable.
+    HarnessTask {
+        /// Task identifier.
+        task_id: String,
+        /// Tool/skill name to invoke.
+        tool_name: String,
+        /// JSON-encoded arguments.
+        json_arguments: String,
+        /// Session identifier for correlation.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        session_id: Option<String>,
+    },
+    /// v1.6: harness-task result sent as a response control frame.
+    HarnessTaskResult {
+        /// Task identifier (matches the request).
+        task_id: String,
+        /// Execution output.
+        output: String,
+        /// Whether the execution failed.
+        is_error: bool,
+        /// Duration in milliseconds.
+        execution_duration_ms: u64,
+    },
 }
 
 impl ShellControl {

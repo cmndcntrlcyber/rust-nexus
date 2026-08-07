@@ -196,6 +196,8 @@ impl NexusAgent {
                 } else {
                     Platform::Linux
                 },
+                sandbox_config: None,
+                kernel_context_builder: None,
             };
             let params = TechniqueParams::from(&task_data);
             let technique_result = timeout(

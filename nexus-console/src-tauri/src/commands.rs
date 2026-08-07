@@ -1,7 +1,7 @@
 //! Tauri commands invoked by the WASM frontend.
 
 use nexus_a2a::framing::{bytes_request, control_request, ShellControl};
-use nexus_a2a::A2aClient;
+use nexus_a2a::{A2aClient, DualAuthGate};
 use serde::Serialize;
 use tauri::{AppHandle, State};
 use tracing::{info, warn};
@@ -15,6 +15,10 @@ pub struct ConnectResponse {
     /// Same fields as `ConnectionSummary`.
     #[serde(flatten)]
     pub summary: ConnectionSummary,
+    /// Whether dual-auth (gRPC + mesh) was achieved.
+    pub dual_authenticated: bool,
+    /// Mesh peer ID if mesh connected.
+    pub mesh_peer_id: Option<String>,
 }
 
 /// Startup configuration read from environment variables.
@@ -32,7 +36,9 @@ pub fn get_startup_config() -> StartupConfig {
     }
 }
 
-/// Connect to the C2's A2A service.
+/// Connect to the C2's A2A service. After gRPC connect, also attempts
+/// to establish a mesh connection via `MeshNode::spawn()` and validates
+/// both auth paths via `DualAuthGate` before returning (WS1 Phase 1d).
 #[tauri::command]
 pub async fn connect_c2(
     state: State<'_, ConsoleState>,
@@ -40,9 +46,11 @@ pub async fn connect_c2(
     insecure_network: bool,
 ) -> Result<ConnectResponse, String> {
     info!(c2 = %addr, insecure_network, "console: connecting");
+
+    // ── Phase 1: gRPC connection ──────────────────────────────────
     let tls = nexus_a2a::tls::load_client_config_from_env().ok();
     let addr2 = addr.clone();
-    let (mut client, card) = tokio::time::timeout(
+    let (client, card) = tokio::time::timeout(
         std::time::Duration::from_secs(15),
         async move {
             let mut c = A2aClient::connect_with_optional_tls(&addr2, insecure_network, tls)
@@ -62,6 +70,39 @@ pub async fn connect_c2(
     })?
     .map_err(|e| e)?;
 
+    let grpc_authenticated = true;
+    let operator_id = Some("console-operator".to_string());
+
+    // ── Phase 2: Mesh connection (WS1 Phase 1d) ───────────────────
+    let (mesh_authenticated, mesh_peer_id) = match try_mesh_connect(&state, insecure_network).await
+    {
+        Ok(peer_id) => {
+            info!(mesh_peer = %peer_id, "console: mesh connected");
+            (true, Some(peer_id))
+        }
+        Err(e) => {
+            warn!(error = %e, "console: mesh connection failed — continuing with gRPC only");
+            (false, None)
+        }
+    };
+
+    // ── Phase 3: Dual-auth validation ─────────────────────────────
+    let require_dual = !insecure_network;
+    let gate = DualAuthGate::new(require_dual);
+    let auth_result = DualAuthGate::build_result(
+        grpc_authenticated,
+        operator_id,
+        mesh_authenticated,
+        mesh_peer_id.clone(),
+    );
+
+    if let Err(e) = gate.validate(&auth_result) {
+        state.clear_connection().await;
+        return Err(format!("dual-auth validation failed: {e}"));
+    }
+
+    let dual_authenticated = auth_result.is_fully_authenticated();
+
     let conn = Connection {
         addr: addr.clone(),
         insecure_network,
@@ -77,7 +118,49 @@ pub async fn connect_c2(
             server_name: card.name,
             server_version: card.version,
         },
+        dual_authenticated,
+        mesh_peer_id,
     })
+}
+
+/// Attempt to spawn a mesh node and connect to the server's mesh
+/// address. Returns the local mesh peer ID on success.
+async fn try_mesh_connect(
+    state: &State<'_, ConsoleState>,
+    insecure_network: bool,
+) -> Result<String, String> {
+    use nexus_common::NodeIdentity;
+    use nexus_mesh::MeshNode;
+
+    let identity = NodeIdentity::generate();
+
+    let listen_addr: libp2p::Multiaddr = "/ip4/0.0.0.0/tcp/0"
+        .parse()
+        .map_err(|e| format!("parse listen addr: {e}"))?;
+
+    let handle = MeshNode::spawn(&identity, listen_addr)
+        .map_err(|e| format!("mesh spawn: {e}"))?;
+
+    // Subscribe to heartbeat topic for liveness detection.
+    let heartbeat_topic = nexus_mesh::topics::heartbeat();
+    handle
+        .subscribe(&heartbeat_topic)
+        .await
+        .map_err(|e| format!("mesh subscribe heartbeat: {e}"))?;
+
+    // Optionally dial the server's mesh address if provided via env.
+    if let Ok(mesh_addr) = std::env::var("NEXUS_MESH_ADDR") {
+        if let Ok(addr) = mesh_addr.parse::<libp2p::Multiaddr>() {
+            handle
+                .dial(addr)
+                .await
+                .map_err(|e| format!("mesh dial: {e}"))?;
+        }
+    }
+
+    let peer_id = handle.local_peer_id().to_string();
+    state.set_mesh(handle).await;
+    Ok(peer_id)
 }
 
 /// Drop the active connection.
@@ -213,12 +296,20 @@ pub async fn close_shell_session(
 
 /// Switch the active tab in the console UI.
 ///
-/// WS2.4 stub -- the actual tab state lives on the frontend; this
-/// command exists so future backend logic (e.g. session routing) can
-/// be wired in without a protocol change.
+/// Validates tab_id is in range [0, 3] for the 4-tab architecture
+/// (WS3 Phase 3a). Backend hook point for future session routing.
 #[tauri::command]
 pub async fn switch_tab(tab_id: u64) -> Result<(), String> {
+    if tab_id > 3 {
+        return Err(format!("invalid tab_id {tab_id}: expected 0..3"));
+    }
     Ok(())
+}
+
+/// Query whether the console is dual-authenticated (gRPC + mesh).
+#[tauri::command]
+pub async fn is_dual_authenticated(state: State<'_, ConsoleState>) -> Result<bool, String> {
+    Ok(state.is_dual_connected().await)
 }
 
 fn hex_lower(bytes: &[u8]) -> String {
@@ -232,12 +323,6 @@ fn hex_lower(bytes: &[u8]) -> String {
 
 // ---------------------------------------------------------------------
 // v1.4.4 — Tauri audit log viewer (Phase 1.4.4).
-//
-// Wraps the v1.4.3 `StreamAuditRecords` A2A RPC so the Leptos UI can
-// tail records, apply filters, and run integrity verification against
-// a snapshot. The chain-integrity check is pure Rust (no extra RPC
-// roundtrip), since `BLAKE3(prev_hash || canonical_bytes)` is the same
-// formula whether the records came from disk or from the wire.
 // ---------------------------------------------------------------------
 
 /// One audit-log record as it travels to the Leptos UI.
@@ -276,11 +361,6 @@ pub struct AuditFilter {
 }
 
 /// Tail the last `count` audit records via `StreamAuditRecords`.
-///
-/// Implementation: subscribe to the broadcast stream, accumulate up
-/// to `count` records or until the deadline fires, then return.
-/// Operators wire a longer-running streaming command for live tail
-/// (v1.5 work — the v1.4 surface is a snapshot grab).
 #[tauri::command]
 pub async fn audit_log_tail(
     state: State<'_, ConsoleState>,
@@ -332,10 +412,7 @@ pub async fn audit_log_filter(
     Ok(out)
 }
 
-/// Pure-Rust chain-integrity check. Walks the supplied records,
-/// recomputes each record's hash and confirms it matches the
-/// declared `record_hash`. Returns the index of the first broken
-/// record on failure, or `None` on success.
+/// Pure-Rust chain-integrity check.
 #[tauri::command]
 pub fn audit_log_verify(records: Vec<AuditRecord>) -> Result<Option<usize>, String> {
     use blake3::Hasher;
@@ -367,14 +444,6 @@ pub fn audit_log_verify(records: Vec<AuditRecord>) -> Result<Option<usize>, Stri
         prev = record.record_hash.clone();
     }
     Ok(None)
-}
-
-// Suppress dead-code warning on `hex_lower` if no upstream caller
-// references it in this build (it's used by existing shell-session
-// commands).
-#[allow(dead_code)]
-fn _hex_lower_used_for_shell_sessions(b: &[u8]) -> String {
-    hex_lower(b)
 }
 
 #[cfg(test)]
@@ -467,5 +536,20 @@ mod tests {
         assert!(filter.actor.is_empty());
         assert!(filter.action.is_empty());
         assert_eq!(filter.since_unix, 0);
+    }
+
+    #[test]
+    fn test_switch_tab_valid_ids() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        for id in 0..=3 {
+            assert!(rt.block_on(switch_tab(id)).is_ok());
+        }
+    }
+
+    #[test]
+    fn test_switch_tab_invalid_id_rejected() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        assert!(rt.block_on(switch_tab(4)).is_err());
+        assert!(rt.block_on(switch_tab(99)).is_err());
     }
 }

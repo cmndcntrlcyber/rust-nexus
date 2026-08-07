@@ -1,4 +1,4 @@
-//! System tray icon and menu setup for the nexus-console.
+//! System tray icon and menu setup for the nexus-console (WS3 Phase 3f).
 
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
@@ -8,6 +8,8 @@ use tracing::info;
 ///
 /// Menu items: Connect, Disconnect, (separator), Quit.
 /// Left-click on the tray icon opens/focuses the main window.
+/// Tooltip shows connection status.
+/// Minimize-to-tray is the default behavior (WS3 Phase 3f).
 pub fn setup_tray(app: &tauri::App) -> anyhow::Result<()> {
     let connect = MenuItem::with_id(app, "connect", "Connect", true, None::<&str>)?;
     let disconnect = MenuItem::with_id(app, "disconnect", "Disconnect", true, None::<&str>)?;
@@ -20,6 +22,7 @@ pub fn setup_tray(app: &tauri::App) -> anyhow::Result<()> {
         .icon(app.default_window_icon().cloned().unwrap_or_else(|| {
             tauri::image::Image::new(&[], 0, 0)
         }))
+        .tooltip("Nexus Console — Disconnected")
         .menu(&menu)
         .on_tray_icon_event(|tray_icon, event| {
             use tauri::tray::TrayIconEvent;

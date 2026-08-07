@@ -102,6 +102,12 @@ pub struct LoadedBof {
     pub symbols: HashMap<String, BofSymbol>,
 }
 
+// SAFETY: LoadedBof owns its heap allocation (`base_address`). All access
+// in the agent is serialized through `Arc<Mutex<KeyloggerState>>`, so the
+// raw pointer never escapes unsynchronized.
+unsafe impl Send for LoadedBof {}
+unsafe impl Sync for LoadedBof {}
+
 impl Drop for LoadedBof {
     fn drop(&mut self) {
         if !self.base_address.is_null() {

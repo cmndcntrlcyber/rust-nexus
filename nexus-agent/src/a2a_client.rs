@@ -200,6 +200,37 @@ async fn handle_inbound(
                     let _ = sender.send(SessionCmd::Close).await;
                 }
             }
+            Ok(Some(ShellControl::HarnessTask {
+                task_id,
+                tool_name,
+                json_arguments,
+                session_id,
+            })) => {
+                info!(
+                    %task_id,
+                    %tool_name,
+                    session = session_id.as_deref().unwrap_or("-"),
+                    "ferry: received harness-task via bidi stream control frame"
+                );
+                let result_frame = ShellControl::HarnessTaskResult {
+                    task_id: task_id.clone(),
+                    output: format!("harness-task dispatch not wired in bidi stream (use SubmitHarnessTask RPC); tool={tool_name}"),
+                    is_error: true,
+                    execution_duration_ms: 0,
+                };
+                if let Ok(part) = result_frame.to_text_part() {
+                    let msg = pb::Message {
+                        message_id: String::new(),
+                        role: "agent".into(),
+                        parts: vec![part],
+                        task_id,
+                    };
+                    let _ = tx.send(msg).await;
+                }
+            }
+            Ok(Some(ShellControl::HarnessTaskResult { .. })) => {
+                debug!("agent ignored HarnessTaskResult on agent-mode stream");
+            }
             Ok(Some(other)) => {
                 debug!(?other, "agent ignored control frame on agent-mode stream");
             }

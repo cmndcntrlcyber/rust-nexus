@@ -62,6 +62,12 @@ default = []
 windows-specific = []
 linux-specific = ["libc"]
 
+# Sandboxing (WS1.5)
+sandbox = []
+etw-observer = ["sandbox"]
+ebpf-observer = ["sandbox"]
+seccomp-sandbox = ["sandbox"]
+
 # Execution capabilities
 bof-loading = []
 wmi-execution = []

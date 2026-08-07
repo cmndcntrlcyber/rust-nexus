@@ -32,6 +32,8 @@ fn main() {
             commands::audit_log_verify,
             // WS2.4 — tab management.
             commands::switch_tab,
+            // WS1 Phase 1d — dual-auth query.
+            commands::is_dual_authenticated,
         ])
         .setup(|app| {
             tray::setup_tray(app)?;

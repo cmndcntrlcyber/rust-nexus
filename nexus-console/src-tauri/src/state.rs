@@ -7,6 +7,7 @@ use std::sync::Arc;
 use anyhow::{anyhow, Result};
 use nexus_a2a::pb as a2a_pb;
 use nexus_a2a::A2aClient;
+use nexus_mesh::node::MeshHandle;
 use serde::Serialize;
 use tokio::sync::{mpsc, Mutex};
 use tokio::task::JoinHandle;
@@ -44,6 +45,8 @@ pub struct ConsoleState {
 struct Inner {
     connection: Option<Connection>,
     sessions: HashMap<u64, SessionHandle>,
+    /// Mesh handle for libp2p gossipsub connectivity (WS1 Phase 1d).
+    mesh: Option<MeshHandle>,
 }
 
 impl ConsoleState {
@@ -66,9 +69,11 @@ impl ConsoleState {
         self.inner.lock().await.connection = Some(conn);
     }
 
-    /// Drop the active connection.
+    /// Drop the active connection and mesh handle.
     pub async fn clear_connection(&self) -> Option<Connection> {
-        self.inner.lock().await.connection.take()
+        let mut guard = self.inner.lock().await;
+        guard.mesh = None;
+        guard.connection.take()
     }
 
     /// Clone the active A2A client.
@@ -120,6 +125,29 @@ impl ConsoleState {
     pub async fn active_session_count(&self) -> usize {
         self.inner.lock().await.sessions.len()
     }
+
+    // ── Mesh handle (WS1 Phase 1d) ─────────────────────────────────
+
+    /// Store the mesh handle after successful mesh join.
+    pub async fn set_mesh(&self, handle: MeshHandle) {
+        self.inner.lock().await.mesh = Some(handle);
+    }
+
+    /// Check whether both gRPC and mesh connections are established.
+    pub async fn is_dual_connected(&self) -> bool {
+        let guard = self.inner.lock().await;
+        guard.connection.is_some() && guard.mesh.is_some()
+    }
+
+    /// Get the local mesh peer ID (hex), if connected.
+    pub async fn mesh_peer_id(&self) -> Option<String> {
+        self.inner
+            .lock()
+            .await
+            .mesh
+            .as_ref()
+            .map(|m| m.local_peer_id().to_string())
+    }
 }
 
 #[cfg(test)]
@@ -164,6 +192,18 @@ mod tests {
     async fn test_active_session_count_starts_at_zero() {
         let state = ConsoleState::new();
         assert_eq!(state.active_session_count().await, 0);
+    }
+
+    #[tokio::test]
+    async fn test_not_dual_connected_when_empty() {
+        let state = ConsoleState::new();
+        assert!(!state.is_dual_connected().await);
+    }
+
+    #[tokio::test]
+    async fn test_mesh_peer_id_none_when_disconnected() {
+        let state = ConsoleState::new();
+        assert!(state.mesh_peer_id().await.is_none());
     }
 }
 
