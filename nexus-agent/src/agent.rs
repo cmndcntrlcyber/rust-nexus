@@ -31,6 +31,8 @@ impl NexusAgent {
             Arc::from(crate::sandbox::create_sandbox());
         let task_executor = TaskExecutor::new().with_sandbox(sandbox);
         let ferry_handler = Arc::new(crate::harness_ferry::AgentFerryHandler::new());
+        // v3.10: register ferry handler for bidi stream dispatch.
+        crate::a2a_client::set_bidi_ferry_handler(Arc::clone(&ferry_handler) as Arc<dyn nexus_a2a::ferry_handler::HarnessFerryHandler>);
         let technique_registry = TechniqueRegistry::build();
         let system_info = SystemInfo::collect().await?;
 

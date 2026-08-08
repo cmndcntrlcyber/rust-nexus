@@ -15,9 +15,18 @@
 //! Multiple concurrent sessions are demultiplexed by `task_id`.
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use anyhow::{anyhow, Context, Result};
+use nexus_a2a::ferry_handler::HarnessFerryHandler;
+
+/// Global ferry handler for bidi-stream dispatch (set during agent init).
+static BIDI_FERRY_HANDLER: OnceLock<Arc<dyn HarnessFerryHandler>> = OnceLock::new();
+
+/// Initialize the bidi ferry handler. Called from `NexusAgent::new()`.
+pub fn set_bidi_ferry_handler(handler: Arc<dyn HarnessFerryHandler>) {
+    let _ = BIDI_FERRY_HANDLER.set(handler);
+}
 use nexus_a2a::framing::{bytes_request, control_request, ShellControl};
 use nexus_a2a::{pb, tls, A2aClient};
 use nexus_common::{NodeIdentity, OsKind};
@@ -210,13 +219,43 @@ async fn handle_inbound(
                     %task_id,
                     %tool_name,
                     session = session_id.as_deref().unwrap_or("-"),
-                    "ferry: received harness-task via bidi stream control frame"
+                    "ferry: received harness-task via bidi stream — dispatching to agent ferry handler"
                 );
+                // v3.10 Gap 10: dispatch bidi ferry tasks through the agent's
+                // configured ferry handler. The handler is stored as a global
+                // static Arc set during agent initialization.
+                //
+                // Repo boundary: bidi-stream ferry tasks arrive as control frames
+                // within the SendStreamingMessage RPC. The unary SubmitHarnessTask
+                // RPC is the primary path (used by the REST gateway). This bidi
+                // path serves interactive streaming sessions (nexus-console,
+                // multi-harness coordination) where tasks arrive inline.
+                let task = pb::HarnessTask {
+                    task_id: task_id.clone(),
+                    tool_name: tool_name.clone(),
+                    json_arguments: json_arguments.unwrap_or_default(),
+                    session_id: session_id.clone().unwrap_or_default(),
+                    engagement_scope_hash: Vec::new(),
+                    operator_signature: Vec::new(),
+                    target_agent_id: String::new(),
+                };
+                let (output, is_error, duration_ms) = if let Some(handler) = BIDI_FERRY_HANDLER.get() {
+                    match handler.handle_task(task).await {
+                        Ok(r) => (r.output, r.is_error, r.execution_duration_ms),
+                        Err(status) => (format!("ferry dispatch error: {status}"), true, 0),
+                    }
+                } else {
+                    warn!("bidi ferry handler not initialized — use SubmitHarnessTask RPC");
+                    (format!("bidi ferry handler not yet initialized; tool={tool_name}"), true, 0)
+                };
+                    Ok(result) => (result.output, result.is_error, result.execution_duration_ms),
+                    Err(status) => (format!("ferry error: {status}"), true, 0),
+                };
                 let result_frame = ShellControl::HarnessTaskResult {
                     task_id: task_id.clone(),
-                    output: format!("harness-task dispatch not wired in bidi stream (use SubmitHarnessTask RPC); tool={tool_name}"),
-                    is_error: true,
-                    execution_duration_ms: 0,
+                    output,
+                    is_error,
+                    execution_duration_ms: duration_ms,
                 };
                 if let Ok(part) = result_frame.to_text_part() {
                     let msg = pb::Message {
