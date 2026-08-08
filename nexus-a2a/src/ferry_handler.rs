@@ -22,7 +22,7 @@ pub trait HarnessFerryHandler: Send + Sync + 'static {
 }
 
 /// Null implementation used when no ferry handler is attached.
-pub(crate) struct NullFerryHandler;
+pub struct NullFerryHandler;
 
 #[async_trait]
 impl HarnessFerryHandler for NullFerryHandler {

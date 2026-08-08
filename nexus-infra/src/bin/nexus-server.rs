@@ -21,6 +21,8 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::Arc;
 
+use nexus_a2a::gml::GmlAdjustmentLayer;
+use nexus_a2a::situational_awareness::SituationalAwareness;
 use nexus_a2a::A2aServer;
 use nexus_common::NodeIdentity;
 use serde::Deserialize;
@@ -30,6 +32,7 @@ use tracing_subscriber::EnvFilter;
 
 use nexus_infra::a2a_lister::RegistryLister;
 use nexus_infra::a2a_router::{AgentChannels, AgentRegistrar, OperatorRouter};
+use nexus_infra::ferry_gateway::FerryState;
 use nexus_infra::metrics_server::{run_metrics, MetricsServerOptions};
 use nexus_infra::serve::default_agent_card;
 use nexus_infra::sessions::SessionRegistry;
@@ -473,15 +476,34 @@ fn run_serve(config_path: Option<PathBuf>) -> ExitCode {
         nexus_a2a::cards::sign(&mut card, identity.as_ref());
         info!("A2A AgentCard signed with server identity");
 
-        let server = A2aServer::new(card, router)
-            .with_lister(lister)
-            .with_agent_registration(registrar);
+        let ferry_handler = Arc::new(nexus_a2a::ferry_handler::NullFerryHandler);
+        let situational_awareness = Arc::new(SituationalAwareness::new());
+        let gml = Arc::new(tokio::sync::Mutex::new(GmlAdjustmentLayer::new()));
 
-        // Metrics HTTP server on port 9100 (runs alongside A2A gRPC).
+        let server = A2aServer::new(card.clone(), router)
+            .with_lister(lister)
+            .with_agent_registration(registrar)
+            .with_situational_awareness(situational_awareness.clone());
+
+        // v3.10 WS1: REST ferry gateway state — shares the same ferry
+        // handler, situational awareness, and GML layer as the A2A server.
+        let ferry_state = FerryState {
+            ferry_handler,
+            situational_awareness,
+            gml,
+            agent_card_name: card.name.clone(),
+            agent_card_version: card.version.clone(),
+        };
+
+        // Metrics + ferry gateway HTTP server on port 9100.
         let metrics_shutdown = shutdown_signal();
+        let metrics_opts = MetricsServerOptions {
+            ferry_state: Some(ferry_state),
+            ..MetricsServerOptions::default()
+        };
         tokio::spawn(async move {
-            if let Err(err) = run_metrics(MetricsServerOptions::default(), metrics_shutdown).await {
-                warn!(error = %err, "metrics server exited with error");
+            if let Err(err) = run_metrics(metrics_opts, metrics_shutdown).await {
+                warn!(error = %err, "metrics/ferry server exited with error");
             }
         });
 

@@ -24,6 +24,9 @@ pub mod sessions;
 pub mod mesh_listener;
 pub mod metrics_server;
 
+// v3.10 WS1 — REST ferry gateway.
+pub mod ferry_gateway;
+
 // Re-export generated gRPC code
 pub mod proto {
     tonic::include_proto!("nexus.v1");
