@@ -99,6 +99,7 @@ impl AgentChannels {
 }
 
 /// A2A `ShellHandler` for the C2's operator-facing service.
+#[derive(Clone)]
 pub struct OperatorRouter {
     agents: AgentChannels,
     sessions: SessionRegistry,
@@ -273,6 +274,7 @@ impl ShellHandler for OperatorRouter {
 /// into [`AgentChannels`] so [`OperatorRouter::pick_target`] can find it,
 /// then pumps the agent's inbound replies back to the right operator
 /// session.
+#[derive(Clone)]
 pub struct AgentRegistrar {
     agents: AgentChannels,
     sessions: SessionRegistry,

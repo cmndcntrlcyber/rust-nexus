@@ -26,6 +26,7 @@ use crate::swarm_coordinator::SwarmCoordinator;
 const STREAM_CHANNEL_CAPACITY: usize = 64;
 
 /// A2A service implementation.
+#[derive(Clone)]
 pub struct A2aServer<H: ShellHandler> {
     agent_card: pb::AgentCard,
     handler: Arc<H>,
@@ -176,6 +177,7 @@ impl<H: ShellHandler> A2aServer<H> {
             "A2A server starting"
         );
         let listener = tokio::net::TcpListener::bind(addr).await?;
+        info!("A2A server listening on {addr}");
         let incoming = TcpIncoming::from(listener);
         let mut builder = Server::builder();
         if let Some(t) = tls {

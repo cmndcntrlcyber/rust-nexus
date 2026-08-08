@@ -30,6 +30,7 @@ use tracing_subscriber::EnvFilter;
 
 use nexus_infra::a2a_lister::RegistryLister;
 use nexus_infra::a2a_router::{AgentChannels, AgentRegistrar, OperatorRouter};
+use nexus_infra::metrics_server::{run_metrics, MetricsServerOptions};
 use nexus_infra::serve::default_agent_card;
 use nexus_infra::sessions::SessionRegistry;
 use nexus_infra::PkiManager;
@@ -86,6 +87,10 @@ See `docs/deployment/production.md` for the full deployment guide.
 ";
 
 fn main() -> ExitCode {
+    // rustls 0.23 (pulled transitively by tonic 0.14) requires an explicit
+    // CryptoProvider. Install ring's provider before any TLS operations.
+    let _ = rustls023::crypto::ring::default_provider().install_default();
+
     let args: Vec<String> = std::env::args().skip(1).collect();
     let parsed = match parse_args(&args) {
         Ok(p) => p,
@@ -472,10 +477,40 @@ fn run_serve(config_path: Option<PathBuf>) -> ExitCode {
             .with_lister(lister)
             .with_agent_registration(registrar);
 
-        let shutdown = shutdown_signal();
-        server
-            .serve_with_optional_tls(bind, cfg.a2a.insecure_network, tls, shutdown)
-            .await
+        // Metrics HTTP server on port 9100 (runs alongside A2A gRPC).
+        let metrics_shutdown = shutdown_signal();
+        tokio::spawn(async move {
+            if let Err(err) = run_metrics(MetricsServerOptions::default(), metrics_shutdown).await {
+                warn!(error = %err, "metrics server exited with error");
+            }
+        });
+
+        // Tonic 0.14 mTLS propagates the first bad TLS handshake as a fatal
+        // server error. Wrap in a restart loop: transient TLS errors restart
+        // the listener, real errors (bind failure, etc.) exit.
+        loop {
+            let shutdown = shutdown_signal();
+            match server
+                .clone()
+                .serve_with_optional_tls(bind, cfg.a2a.insecure_network, tls.clone(), shutdown)
+                .await
+            {
+                Ok(()) => return Ok(()),
+                Err(err) => {
+                    let msg = format!("{err:#}");
+                    if msg.contains("peer sent no certificates")
+                        || msg.contains("tls handshake eof")
+                        || msg.contains("connection reset")
+                        || msg.contains("certificate required")
+                    {
+                        warn!(error = %err, "mTLS rejected a probe — restarting listener");
+                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                        continue;
+                    }
+                    return Err(err);
+                }
+            }
+        }
     });
 
     match result {
