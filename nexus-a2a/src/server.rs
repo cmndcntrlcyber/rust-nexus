@@ -11,6 +11,7 @@ use tonic::transport::Server;
 use tonic::{Request, Response, Status, Streaming};
 use tracing::{info, warn};
 
+use crate::chat_dispatcher::{ChatDispatcher, NullChatDispatcher};
 use crate::ferry_handler::{HarnessFerryHandler, NullFerryHandler};
 use crate::framing::ShellControl;
 use crate::handler::{
@@ -49,6 +50,8 @@ pub struct A2aServer<H: ShellHandler> {
     situational_awareness: Arc<SituationalAwareness>,
     /// v3.8 WS2 — GML adjustment layer for telemetry RPCs.
     gml: Arc<Mutex<crate::gml::GmlAdjustmentLayer>>,
+    /// v1.7 — chat dispatcher for operator LLM interaction.
+    chat_dispatcher: Arc<dyn ChatDispatcher>,
 }
 
 impl<H: ShellHandler> A2aServer<H> {
@@ -66,6 +69,7 @@ impl<H: ShellHandler> A2aServer<H> {
             swarm_coordinator: Arc::new(SwarmCoordinator::default()),
             situational_awareness: Arc::new(SituationalAwareness::new()),
             gml: Arc::new(Mutex::new(crate::gml::GmlAdjustmentLayer::new())),
+            chat_dispatcher: Arc::new(NullChatDispatcher),
         }
     }
 
@@ -97,6 +101,13 @@ impl<H: ShellHandler> A2aServer<H> {
     #[must_use]
     pub fn with_ferry_handler<F: HarnessFerryHandler>(mut self, handler: F) -> Self {
         self.ferry_handler = Arc::new(handler);
+        self
+    }
+
+    /// v1.7 — attach a [`ChatDispatcher`] for `StreamChat` RPCs.
+    #[must_use]
+    pub fn with_chat_dispatcher(mut self, dispatcher: Arc<dyn ChatDispatcher>) -> Self {
+        self.chat_dispatcher = dispatcher;
         self
     }
 
@@ -655,6 +666,92 @@ impl<H: ShellHandler> A2aService for A2aServer<H> {
             agent_id: req.agent_id,
             multiplier,
         }))
+    }
+
+    // ----- v1.6.1 — Mesh topology streaming (v3.10 WS9) -----
+
+    type StreamMeshTopologyStream =
+        ReceiverStream<Result<pb::MeshTopologySnapshot, Status>>;
+
+    async fn stream_mesh_topology(
+        &self,
+        _request: Request<pb::MeshTopologyRequest>,
+    ) -> Result<Response<Self::StreamMeshTopologyStream>, Status> {
+        Err(Status::unimplemented(
+            "StreamMeshTopology: v1.6.1 lands in v3.10.1 WS9 Phase 9b",
+        ))
+    }
+
+    // ----- v1.7 — Operator chat + control (v3.10.2) -----
+
+    type StreamChatStream = ReceiverStream<Result<pb::ChatChunk, Status>>;
+
+    async fn stream_chat(
+        &self,
+        request: Request<pb::ChatRequest>,
+    ) -> Result<Response<Self::StreamChatStream>, Status> {
+        let req = request.into_inner();
+        let (tx, rx) = mpsc::channel(64);
+        let dispatcher = self.chat_dispatcher.clone();
+
+        tokio::spawn(async move {
+            if let Err(e) = dispatcher.dispatch_chat(req, tx.clone()).await {
+                let _ = tx.send(Err(e)).await;
+            }
+        });
+
+        Ok(Response::new(ReceiverStream::new(rx)))
+    }
+
+    async fn steer_agent(
+        &self,
+        _request: Request<pb::SteerRequest>,
+    ) -> Result<Response<pb::SteerResponse>, Status> {
+        Err(Status::unimplemented(
+            "SteerAgent: v1.7 lands in v3.10.2 WS14",
+        ))
+    }
+
+    async fn get_approval_queue(
+        &self,
+        _request: Request<pb::Empty>,
+    ) -> Result<Response<pb::ApprovalQueueResponse>, Status> {
+        Err(Status::unimplemented(
+            "GetApprovalQueue: v1.7 lands in v3.10.2 WS14",
+        ))
+    }
+
+    async fn submit_approval(
+        &self,
+        _request: Request<pb::ApprovalDecision>,
+    ) -> Result<Response<pb::Empty>, Status> {
+        Err(Status::unimplemented(
+            "SubmitApproval: v1.7 lands in v3.10.2 WS14",
+        ))
+    }
+
+    type StreamApprovalsStream =
+        ReceiverStream<Result<pb::ApprovalRequestProto, Status>>;
+
+    async fn stream_approvals(
+        &self,
+        _request: Request<pb::Empty>,
+    ) -> Result<Response<Self::StreamApprovalsStream>, Status> {
+        Err(Status::unimplemented(
+            "StreamApprovals: v1.7 lands in v3.10.2 WS14",
+        ))
+    }
+
+    type StreamNotificationsStream =
+        ReceiverStream<Result<pb::OperatorNotification, Status>>;
+
+    async fn stream_notifications(
+        &self,
+        _request: Request<pb::Empty>,
+    ) -> Result<Response<Self::StreamNotificationsStream>, Status> {
+        Err(Status::unimplemented(
+            "StreamNotifications: v1.7 lands in v3.10.2 WS14",
+        ))
     }
 }
 

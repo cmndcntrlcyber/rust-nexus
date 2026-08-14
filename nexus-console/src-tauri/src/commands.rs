@@ -296,12 +296,14 @@ pub async fn close_shell_session(
 
 /// Switch the active tab in the console UI.
 ///
-/// Validates tab_id is in range [0, 3] for the 4-tab architecture
-/// (WS3 Phase 3a). Backend hook point for future session routing.
+/// Validates tab_id is in range [0, 9] for the 5 fixed tabs
+/// (Dashboard, Transfer, Mesh, Kali, Chat) plus up to 4 dynamic
+/// tabs (Shell sessions, AuditLog). Backend hook point for future
+/// session routing.
 #[tauri::command]
 pub async fn switch_tab(tab_id: u64) -> Result<(), String> {
-    if tab_id > 3 {
-        return Err(format!("invalid tab_id {tab_id}: expected 0..3"));
+    if tab_id > 9 {
+        return Err(format!("invalid tab_id {tab_id}: expected 0..9"));
     }
     Ok(())
 }
@@ -541,7 +543,7 @@ mod tests {
     #[test]
     fn test_switch_tab_valid_ids() {
         let rt = tokio::runtime::Runtime::new().unwrap();
-        for id in 0..=3 {
+        for id in 0..=9 {
             assert!(rt.block_on(switch_tab(id)).is_ok());
         }
     }
@@ -549,7 +551,7 @@ mod tests {
     #[test]
     fn test_switch_tab_invalid_id_rejected() {
         let rt = tokio::runtime::Runtime::new().unwrap();
-        assert!(rt.block_on(switch_tab(4)).is_err());
+        assert!(rt.block_on(switch_tab(10)).is_err());
         assert!(rt.block_on(switch_tab(99)).is_err());
     }
 }

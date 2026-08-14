@@ -172,4 +172,68 @@ impl A2aClient {
         let response = self.inner.broadcast_swarm_state(outbound).await?;
         Ok((tx, response.into_inner()))
     }
+
+    // ----- v1.6.1 — Mesh topology streaming -----
+
+    /// Subscribe to live mesh topology snapshots.
+    pub async fn stream_mesh_topology(
+        &mut self,
+        request: pb::MeshTopologyRequest,
+    ) -> Result<Streaming<pb::MeshTopologySnapshot>, tonic::Status> {
+        let response = self.inner.stream_mesh_topology(request).await?;
+        Ok(response.into_inner())
+    }
+
+    // ----- v1.7 — Operator chat + control -----
+
+    /// Stream an LLM chat response from the harness.
+    pub async fn stream_chat(
+        &mut self,
+        request: pb::ChatRequest,
+    ) -> Result<Streaming<pb::ChatChunk>, tonic::Status> {
+        let response = self.inner.stream_chat(request).await?;
+        Ok(response.into_inner())
+    }
+
+    /// Steer a running agent task (pause, resume, redirect, kill).
+    pub async fn steer_agent(
+        &mut self,
+        request: pb::SteerRequest,
+    ) -> Result<pb::SteerResponse, tonic::Status> {
+        let response = self.inner.steer_agent(request).await?;
+        Ok(response.into_inner())
+    }
+
+    /// Get the current HITL approval queue.
+    pub async fn get_approval_queue(
+        &mut self,
+    ) -> Result<pb::ApprovalQueueResponse, tonic::Status> {
+        let response = self.inner.get_approval_queue(pb::Empty {}).await?;
+        Ok(response.into_inner())
+    }
+
+    /// Submit an approval decision (approve or deny).
+    pub async fn submit_approval(
+        &mut self,
+        decision: pb::ApprovalDecision,
+    ) -> Result<(), tonic::Status> {
+        self.inner.submit_approval(decision).await?;
+        Ok(())
+    }
+
+    /// Subscribe to new HITL approval requests as they arrive.
+    pub async fn stream_approvals(
+        &mut self,
+    ) -> Result<Streaming<pb::ApprovalRequestProto>, tonic::Status> {
+        let response = self.inner.stream_approvals(pb::Empty {}).await?;
+        Ok(response.into_inner())
+    }
+
+    /// Subscribe to operator notifications (agent events, alerts, etc.).
+    pub async fn stream_notifications(
+        &mut self,
+    ) -> Result<Streaming<pb::OperatorNotification>, tonic::Status> {
+        let response = self.inner.stream_notifications(pb::Empty {}).await?;
+        Ok(response.into_inner())
+    }
 }

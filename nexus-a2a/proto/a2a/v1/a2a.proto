@@ -1,6 +1,18 @@
 // A2A proto subset for rust-nexus.
 //
-// v1.5 (this file): adds nexus-harness ferry protocol (HarnessTask,
+// v1.7 (this file): adds operator chat (StreamChat), agent steering
+// (SteerAgent), HITL approval queue (GetApprovalQueue, SubmitApproval,
+// StreamApprovals), and operator notifications (StreamNotifications)
+// for v3.10.2 WS10.
+//
+// v1.6.1: adds mesh topology streaming (StreamMeshTopology) with
+// AgentNodeProto, MeshEdgeProto, FlowEventProto, NoiseBarometerProto
+// for v3.10 WS9.
+//
+// v1.6: adds GML telemetry (TelemetrySnapshotProto, AnomalyScoreResponse,
+// RateAdjustment) for v3.7 WS2.
+//
+// v1.5: adds nexus-harness ferry protocol (HarnessTask,
 // HarnessTaskResult, KernelContextProto), distributed swarm coordination
 // (SwarmCoordinate, BroadcastSwarmState), and 3 new RPCs for v3.7 WS1.
 //
@@ -331,6 +343,192 @@ message RateAdjustmentResponse {
     double multiplier = 2;
 }
 
+// ---------------------------------------------------------------
+// v1.6.1 — Mesh topology streaming for SA dashboard (v3.10 WS9).
+// ---------------------------------------------------------------
+
+enum AgentHealthProto {
+    AGENT_HEALTH_UNSPECIFIED   = 0;
+    AGENT_HEALTH_HEALTHY       = 1;
+    AGENT_HEALTH_DEGRADED      = 2;
+    AGENT_HEALTH_UNRESPONSIVE  = 3;
+}
+
+enum MeshEdgeType {
+    MESH_EDGE_UNSPECIFIED       = 0;
+    MESH_EDGE_FERRY_GRPC        = 1;
+    MESH_EDGE_LIBP2P            = 2;
+    MESH_EDGE_TELEMETRY         = 3;
+    MESH_EDGE_SWARM_GOSSIPSUB   = 4;
+    MESH_EDGE_KERNEL_CONTEXT    = 5;
+}
+
+message AgentNodeProto {
+    string agent_id             = 1;
+    string peer_id              = 2;
+    AgentHealthProto health     = 3;
+    uint32 current_tasks        = 4;
+    repeated string skills      = 5;
+    repeated string techniques  = 6;
+    string role                 = 7;
+    uint64 connected_at_unix    = 8;
+    uint64 last_heartbeat_unix  = 9;
+}
+
+message MeshEdgeProto {
+    string source_agent_id      = 1;
+    string target_agent_id      = 2;
+    MeshEdgeType edge_type      = 3;
+    float traffic_rate_bps      = 4;
+    bool is_active              = 5;
+}
+
+message FlowEventProto {
+    string source_agent_id      = 1;
+    string target_agent_id      = 2;
+    MeshEdgeType edge_type      = 3;
+    string task_id              = 4;
+    uint32 payload_bytes        = 5;
+    uint64 timestamp_unix       = 6;
+}
+
+message NoiseBarometerProto {
+    float global_score                 = 1;
+    map<string, float> per_agent       = 2;
+    string controller_state            = 3;
+    float throttle_floor               = 4;
+}
+
+message MeshTopologySnapshot {
+    repeated AgentNodeProto agents     = 1;
+    repeated MeshEdgeProto edges       = 2;
+    repeated FlowEventProto flows      = 3;
+    NoiseBarometerProto barometer      = 4;
+    uint64 snapshot_timestamp_unix     = 5;
+    uint64 sequence_number             = 6;
+}
+
+message MeshTopologyRequest {
+    bool include_flows                 = 1;
+    bool include_barometer             = 2;
+    uint32 flow_batch_ms               = 3;
+    uint32 snapshot_interval_ms        = 4;
+}
+
+message TargetEndpointProto {
+    string target_id                   = 1;
+    string agent_id                    = 2;
+    string os_family                   = 3;
+    string hostname                    = 4;
+    string ip_address                  = 5;
+    bool is_active                     = 6;
+}
+
+// ---------------------------------------------------------------
+// v1.7 — Operator chat, steering, HITL approvals, and
+// notifications (v3.10.2 WS10).
+// ---------------------------------------------------------------
+
+enum ChatMode {
+    CHAT_MODE_UNSPECIFIED  = 0;
+    CHAT_MODE_ORG_LLM      = 1;
+    CHAT_MODE_OPERATIONS    = 2;
+    CHAT_MODE_HARNESS       = 3;
+    CHAT_MODE_COWORKERS     = 4;
+}
+
+message ChatRequest {
+    ChatMode mode                      = 1;
+    string content                     = 2;
+    string session_id                  = 3;
+    string engagement_id               = 4;
+    map<string, string> metadata       = 5;
+}
+
+message ChatChunk {
+    string text                        = 1;
+    bool done                          = 2;
+    string session_id                  = 3;
+    ChatChunkMeta meta                 = 4;
+}
+
+message ChatChunkMeta {
+    string model_used                  = 1;
+    uint32 input_tokens                = 2;
+    uint32 output_tokens               = 3;
+    repeated string tools_invoked      = 4;
+    string task_id                     = 5;
+    float latency_ms                   = 6;
+}
+
+enum SteerAction {
+    STEER_UNSPECIFIED  = 0;
+    STEER_PAUSE         = 1;
+    STEER_RESUME        = 2;
+    STEER_REDIRECT      = 3;
+    STEER_KILL          = 4;
+    STEER_INJECT_CTX    = 5;
+}
+
+message SteerRequest {
+    string agent_id                    = 1;
+    string task_id                     = 2;
+    SteerAction action                 = 3;
+    string instruction                 = 4;
+    string operator_id                 = 5;
+}
+
+message SteerResponse {
+    bool success                       = 1;
+    string message                     = 2;
+    string previous_state              = 3;
+    string new_state                   = 4;
+}
+
+message ApprovalRequestProto {
+    string approval_id                 = 1;
+    string skill_name                  = 2;
+    string target                      = 3;
+    string risk_level                  = 4;
+    string requesting_agent            = 5;
+    string description                 = 6;
+    repeated string techniques         = 7;
+    uint64 created_at_unix             = 8;
+    uint64 expires_at_unix             = 9;
+}
+
+message ApprovalDecision {
+    string approval_id                 = 1;
+    bool approved                      = 2;
+    string operator_id                 = 3;
+    string reason                      = 4;
+    uint64 decided_at_unix             = 5;
+}
+
+message ApprovalQueueResponse {
+    repeated ApprovalRequestProto pending = 1;
+    uint32 total_pending               = 2;
+    uint32 approved_today              = 3;
+    uint32 denied_today                = 4;
+}
+
+enum NotificationSeverity {
+    NOTIFICATION_INFO      = 0;
+    NOTIFICATION_WARNING   = 1;
+    NOTIFICATION_CRITICAL  = 2;
+}
+
+message OperatorNotification {
+    string id                          = 1;
+    NotificationSeverity severity      = 2;
+    string title                       = 3;
+    string body                        = 4;
+    string source                      = 5;
+    uint64 timestamp_unix              = 6;
+    bool requires_action               = 7;
+    string action_ref                  = 8;
+}
+
 service A2aService {
     // v1.0 / v1.2 surface (load-bearing for shell-session).
     rpc SendMessage(Message) returns (Message);
@@ -361,4 +559,15 @@ service A2aService {
     rpc SubmitTelemetrySnapshot(TelemetrySnapshotProto) returns (Empty);
     rpc QueryAnomalyScore(Empty) returns (AnomalyScoreResponse);
     rpc AdjustAgentRate(RateAdjustmentRequest) returns (RateAdjustmentResponse);
+
+    // v1.6.1 — Mesh topology streaming (v3.10 WS9).
+    rpc StreamMeshTopology(MeshTopologyRequest) returns (stream MeshTopologySnapshot);
+
+    // v1.7 — Operator chat + control (v3.10.2).
+    rpc StreamChat(ChatRequest) returns (stream ChatChunk);
+    rpc SteerAgent(SteerRequest) returns (SteerResponse);
+    rpc GetApprovalQueue(Empty) returns (ApprovalQueueResponse);
+    rpc SubmitApproval(ApprovalDecision) returns (Empty);
+    rpc StreamApprovals(Empty) returns (stream ApprovalRequestProto);
+    rpc StreamNotifications(Empty) returns (stream OperatorNotification);
 }

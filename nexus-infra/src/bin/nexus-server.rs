@@ -487,12 +487,27 @@ fn run_serve(config_path: Option<PathBuf>) -> ExitCode {
 
         // v3.10 WS1: REST ferry gateway state — shares the same ferry
         // handler, situational awareness, and GML layer as the A2A server.
+        // v1.7: create a lazy A2A client for chat/steering/approval proxying.
+        let a2a_loopback = {
+            let scheme = if tls.is_some() { "https" } else { "http" };
+            let loopback_port = bind.port();
+            let addr = format!("{scheme}://127.0.0.1:{loopback_port}");
+            match tonic_14::transport::Endpoint::from_shared(addr) {
+                Ok(ep) => Some(nexus_a2a::A2aClient::from_channel(ep.connect_lazy())),
+                Err(err) => {
+                    warn!(error = %err, "failed to create A2A loopback client");
+                    None
+                }
+            }
+        };
+
         let ferry_state = FerryState {
             ferry_handler,
             situational_awareness,
             gml,
             agent_card_name: card.name.clone(),
             agent_card_version: card.version.clone(),
+            a2a_client: a2a_loopback,
         };
 
         // Metrics + ferry gateway HTTP server on port 9100.

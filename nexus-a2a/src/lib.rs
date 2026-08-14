@@ -11,6 +11,7 @@ pub mod audit;
 pub mod audit_s3;
 pub mod capabilities;
 pub mod cards;
+pub mod chat_dispatcher;
 pub mod client;
 pub mod dual_auth;
 pub mod ferry_handler;
@@ -52,6 +53,7 @@ pub mod pb_upstream {
 
 pub use client::A2aClient;
 pub use dual_auth::{DualAuthGate, DualAuthResult};
+pub use chat_dispatcher::{ChatDispatcher, NullChatDispatcher};
 pub use ferry_handler::HarnessFerryHandler;
 pub use situational_awareness::{AgentSnapshot, SituationalAwareness};
 pub use swarm_coordinator::SwarmCoordinator;
