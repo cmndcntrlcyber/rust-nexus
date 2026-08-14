@@ -698,17 +698,237 @@ async fn get_ferry_notifications(State(state): State<FerryState>) -> impl IntoRe
 }
 
 // ---------------------------------------------------------------------------
+// v3.10.3a Sprint 1.8 — 3 missing endpoints
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Deserialize)]
+struct TokenRequest {
+    #[serde(default)]
+    pub operator_id: String,
+    #[serde(default = "default_token_lifetime")]
+    pub lifetime_seconds: u64,
+}
+
+fn default_token_lifetime() -> u64 {
+    3600
+}
+
+#[derive(Debug, Serialize)]
+struct TokenResponse {
+    pub token: String,
+    pub issued_unix: u64,
+    pub expires_unix: u64,
+}
+
+#[derive(Debug, Serialize)]
+struct SwarmCoordinateJson {
+    pub round_id: String,
+    pub triad_id: String,
+    pub grammar_constraint: String,
+    pub source_peer_id: String,
+}
+
+/// `POST /ferry/stream` — SSE stream of incremental `HarnessTaskResult`.
+///
+/// Maps to `StreamHarnessTask` bidi gRPC. Accepts a single task, opens the
+/// bidi stream, sends the task, then yields results as SSE events.
+async fn post_ferry_stream(
+    State(state): State<FerryState>,
+    Json(req): Json<FerryTaskRequest>,
+) -> impl IntoResponse {
+    let Some(ref a2a) = state.a2a_client else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(serde_json::json!({"error": "A2A client not configured"})),
+        )
+            .into_response();
+    };
+    let mut client = a2a.clone();
+
+    let task = pb::HarnessTask {
+        task_id: req.task_id,
+        tool_name: req.tool_name,
+        json_arguments: req.json_arguments,
+        session_id: req.session_id,
+        engagement_scope_hash: Vec::new(),
+        operator_signature: Vec::new(),
+        target_agent_id: req.target_agent_id,
+    };
+
+    let (tx, mut rx) = match client.stream_harness_task().await {
+        Ok(pair) => pair,
+        Err(status) => {
+            warn!(error = %status, "stream_harness_task open failed");
+            return (
+                StatusCode::BAD_GATEWAY,
+                Json(serde_json::json!({
+                    "error": format!("{status}"),
+                    "code": status.code() as i32,
+                })),
+            )
+                .into_response();
+        }
+    };
+
+    // Send the single task, then close the send side.
+    let _ = tx.send(task).await;
+    drop(tx);
+
+    let stream = async_stream::stream! {
+        loop {
+            match rx.message().await {
+                Ok(Some(result)) => {
+                    let json = FerryTaskResponse {
+                        task_id: result.task_id,
+                        output: result.output,
+                        is_error: result.is_error,
+                        execution_duration_ms: result.execution_duration_ms,
+                        bytes_sent: result.bytes_sent,
+                        bytes_recv: result.bytes_recv,
+                        commands_run: result.commands_run,
+                    };
+                    let data = serde_json::to_string(&json).unwrap_or_default();
+                    yield Ok::<_, Infallible>(Event::default().data(data));
+                }
+                Ok(None) => break,
+                Err(status) => {
+                    let err = serde_json::json!({
+                        "error": format!("{status}"),
+                        "code": status.code() as i32,
+                    });
+                    yield Ok::<_, Infallible>(
+                        Event::default()
+                            .event("error")
+                            .data(serde_json::to_string(&err).unwrap_or_default()),
+                    );
+                    break;
+                }
+            }
+        }
+    };
+
+    Sse::new(stream).into_response()
+}
+
+/// `GET /ferry/swarm` — SSE stream of `SwarmCoordinate` messages.
+///
+/// Maps to `BroadcastSwarmState` bidi gRPC. Subscribe-only: opens the
+/// stream, sends nothing, yields incoming swarm coordination events.
+async fn get_ferry_swarm(State(state): State<FerryState>) -> impl IntoResponse {
+    let Some(ref a2a) = state.a2a_client else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(serde_json::json!({"error": "A2A client not configured"})),
+        )
+            .into_response();
+    };
+    let mut client = a2a.clone();
+
+    let (_tx, mut rx) = match client.broadcast_swarm_state().await {
+        Ok(pair) => pair,
+        Err(status) => {
+            warn!(error = %status, "broadcast_swarm_state open failed");
+            return (
+                StatusCode::BAD_GATEWAY,
+                Json(serde_json::json!({
+                    "error": format!("{status}"),
+                    "code": status.code() as i32,
+                })),
+            )
+                .into_response();
+        }
+    };
+
+    let stream = async_stream::stream! {
+        loop {
+            match rx.message().await {
+                Ok(Some(coord)) => {
+                    let json = SwarmCoordinateJson {
+                        round_id: coord.round_id,
+                        triad_id: coord.triad_id,
+                        grammar_constraint: coord.grammar_constraint,
+                        source_peer_id: coord.source_peer_id.iter().map(|b| format!("{b:02x}")).collect::<String>(),
+                    };
+                    let data = serde_json::to_string(&json).unwrap_or_default();
+                    yield Ok::<_, Infallible>(Event::default().data(data));
+                }
+                Ok(None) => break,
+                Err(status) => {
+                    let err = serde_json::json!({
+                        "error": format!("{status}"),
+                        "code": status.code() as i32,
+                    });
+                    yield Ok::<_, Infallible>(
+                        Event::default()
+                            .event("error")
+                            .data(serde_json::to_string(&err).unwrap_or_default()),
+                    );
+                    break;
+                }
+            }
+        }
+    };
+
+    Sse::new(stream).into_response()
+}
+
+/// `POST /ferry/token` — issue an operator authentication token.
+///
+/// Maps to `IssueOperatorToken` unary gRPC.
+async fn post_ferry_token(
+    State(state): State<FerryState>,
+    Json(req): Json<TokenRequest>,
+) -> impl IntoResponse {
+    let Some(ref a2a) = state.a2a_client else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(serde_json::json!({"error": "A2A client not configured"})),
+        )
+            .into_response();
+    };
+    let mut client = a2a.clone();
+
+    let grpc_req = pb::IssueOperatorTokenRequest {
+        operator_id: req.operator_id.into_bytes(),
+        lifetime_seconds: req.lifetime_seconds,
+    };
+
+    match client.issue_operator_token(grpc_req).await {
+        Ok(reply) => Json(TokenResponse {
+            token: reply.token.iter().map(|b| format!("{b:02x}")).collect::<String>(),
+            issued_unix: reply.issued_unix,
+            expires_unix: reply.expires_unix,
+        })
+        .into_response(),
+        Err(status) => {
+            warn!(error = %status, "issue_operator_token failed");
+            (
+                StatusCode::BAD_GATEWAY,
+                Json(serde_json::json!({
+                    "error": format!("{status}"),
+                    "code": status.code() as i32,
+                })),
+            )
+                .into_response()
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Router constructor
 // ---------------------------------------------------------------------------
 
 pub fn ferry_router(state: FerryState) -> Router {
     Router::new()
         .route("/ferry/task", post(post_ferry_task))
+        .route("/ferry/stream", post(post_ferry_stream))
         .route("/ferry/agents", get(get_ferry_agents))
         .route("/ferry/anomaly", get(get_ferry_anomaly))
         .route("/ferry/telemetry", post(post_ferry_telemetry))
         .route("/ferry/rate-adjust", post(post_ferry_rate_adjust))
         .route("/ferry/health", get(get_ferry_health))
+        .route("/ferry/swarm", get(get_ferry_swarm))
+        .route("/ferry/token", post(post_ferry_token))
         // v1.7 — operator chat, steering, approvals
         .route("/ferry/chat", post(post_ferry_chat))
         .route("/ferry/steer", post(post_ferry_steer))
