@@ -26,6 +26,7 @@ pub mod otel;
 pub mod server;
 pub mod situational_awareness;
 pub mod swarm_coordinator;
+pub mod topology_stream;
 pub mod tls;
 pub mod tokens;
 

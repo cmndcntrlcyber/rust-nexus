@@ -31,6 +31,9 @@ tracing-subscriber = { workspace = true }
 tempfile = "3"
 async-trait = { workspace = true }
 prost = "0.14"
+reqwest = { workspace = true }
+serde_json = { workspace = true }
+axum = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dev-dependencies]
 windows-sys = { workspace = true }

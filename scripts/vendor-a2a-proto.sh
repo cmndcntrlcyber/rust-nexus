@@ -24,7 +24,7 @@ set -euo pipefail
 
 REF="${1:-v0.3.0}"
 UPSTREAM_REPO="a2aproject/A2A"
-UPSTREAM_PATH="a2a/v1/a2a.proto"
+UPSTREAM_PATH="specification/grpc/a2a.proto"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VENDOR_FILE="$ROOT/nexus-a2a/vendor/a2a-upstream/a2a.v1.proto"
@@ -56,6 +56,17 @@ curl -fsSL "$RAW_URL" -o "$TMP"
 # compiles into our `pb_upstream` Rust module alongside `pb`.
 sed -i.bak 's/^package a2a\.v1;/package a2a.upstream.v1;/' "$TMP"
 rm -f "${TMP}.bak"
+
+# Strip google.api.* imports and annotations — these are HTTP transcoding
+# decorations that require the googleapis proto tree. They're not needed
+# for gRPC wire-format interop testing.
+sed -i.bak '/^import "google\/api\//d' "$TMP"
+rm -f "${TMP}.bak"
+# Remove option annotations like (google.api.http) and (google.api.field_behavior)
+sed -i.bak '/google\.api\.\(http\|method_signature\|field_behavior\)/d' "$TMP"
+rm -f "${TMP}.bak"
+# Remove option blocks (multi-line `option (google.api.http) = { ... };`)
+perl -i -0pe 's/\n\s*option \(google\.api\.http\) = \{[^}]*\};\n/\n/gs' "$TMP"
 
 # Sanity check: confirm the package rename took effect.
 if ! grep -q '^package a2a.upstream.v1;' "$TMP"; then

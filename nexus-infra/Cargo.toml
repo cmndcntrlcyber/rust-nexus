@@ -47,6 +47,8 @@ prost = { workspace = true }
 prost-types = "0.12"
 async-stream = "0.3"
 tokio-stream = "0.1"
+axum-server = { workspace = true }
+tower = { workspace = true }
 
 # TLS and certificates
 rustls = { workspace = true }

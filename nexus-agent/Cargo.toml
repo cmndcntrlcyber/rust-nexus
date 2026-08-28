@@ -41,6 +41,8 @@ base64 = { workspace = true }
 thiserror = { workspace = true }
 num_cpus = "1.16"
 rand = { workspace = true }
+# Zeroing secret storage — optional, pulled in by embedded-certs feature.
+secrecy = { workspace = true, optional = true }
 # v1.4.9 — per-agent audit log uses tempfile in tests.
 
 # Windows-specific dependencies
@@ -77,6 +79,10 @@ systemd-integration = []
 # Communication features
 domain-fronting = []
 http-fallback = []
+
+# Ephemeral agent certificates (ECHOTRIBBLE P3) — compile-time cert
+# embedding with runtime memory-only extraction and self-destruct zeroing.
+embedded-certs = ["secrecy"]
 
 # Evasion features
 anti-debug = []

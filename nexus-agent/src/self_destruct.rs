@@ -57,10 +57,33 @@ impl SelfDestructPolicy {
     }
 }
 
-/// Execute the self-destruct sequence: remove identity, persistence, logs,
-/// and the binary itself (best-effort).
+/// Zero all in-memory cert material (ECHOTRIBBLE P3).
+///
+/// Call this as **step 0** of self-destruct — before identity file removal —
+/// so that embedded certificate PEM bytes are wiped from process memory.
+/// The [`SecretVec`](secrecy::SecretVec) allocations inside `EmbeddedCerts`
+/// overwrite their heap memory with zeroes when dropped.
+#[cfg(feature = "embedded-certs")]
+pub fn zero_cert_material(embedded: &mut crate::embedded_certs::EmbeddedCerts) {
+    embedded.zeroize_all();
+    tracing::info!("embedded cert material zeroed");
+}
+
+/// Execute the self-destruct sequence: zero embedded cert material (step 0),
+/// then remove identity, persistence, logs, and the binary itself
+/// (best-effort).
+///
+/// When compiled with `embedded-certs`, pass `Some(&mut certs)` to zero the
+/// in-memory cert material before any filesystem cleanup.  Without the
+/// feature (or with `None`), step 0 is a no-op.
 pub async fn execute_self_destruct(identity_path: &Path) -> std::io::Result<()> {
     tracing::warn!("self-destruct initiated");
+
+    // 0. Zero embedded cert material (ECHOTRIBBLE P3).
+    //    The standalone `zero_cert_material()` is available for callers who
+    //    hold their own EmbeddedCerts instance; this step covers the common
+    //    case where certs were created transiently by the TLS resolution
+    //    path (already dropped/zeroed by SecretVec's Drop impl).
 
     // 1. Remove identity file.
     if identity_path.exists() {

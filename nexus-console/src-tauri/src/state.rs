@@ -9,7 +9,7 @@ use nexus_a2a::pb as a2a_pb;
 use nexus_a2a::A2aClient;
 use nexus_mesh::node::MeshHandle;
 use serde::Serialize;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{mpsc, watch, Mutex};
 use tokio::task::JoinHandle;
 
 /// Per-session handle.
@@ -47,6 +47,8 @@ struct Inner {
     sessions: HashMap<u64, SessionHandle>,
     /// Mesh handle for libp2p gossipsub connectivity (WS1 Phase 1d).
     mesh: Option<MeshHandle>,
+    /// WS9 Phase 9e: cancellation sender for the topology stream task.
+    topology_stop: Option<watch::Sender<bool>>,
 }
 
 impl ConsoleState {
@@ -147,6 +149,29 @@ impl ConsoleState {
             .mesh
             .as_ref()
             .map(|m| m.local_peer_id().to_string())
+    }
+
+    // ── Topology stream (WS9 Phase 9e) ────────────────────────────
+
+    /// Store a cancellation sender for the topology stream.
+    pub async fn set_topology_stop(&self, tx: watch::Sender<bool>) {
+        self.inner.lock().await.topology_stop = Some(tx);
+    }
+
+    /// Signal the topology stream task to stop.
+    pub async fn stop_topology(&self) -> bool {
+        let mut guard = self.inner.lock().await;
+        if let Some(tx) = guard.topology_stop.take() {
+            let _ = tx.send(true);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Whether a topology stream is currently active.
+    pub async fn is_topology_streaming(&self) -> bool {
+        self.inner.lock().await.topology_stop.is_some()
     }
 }
 

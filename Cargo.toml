@@ -106,8 +106,10 @@ libp2p = { version = "0.53", features = ["tcp", "noise", "yamux", "tokio", "macr
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
 
-# Axum (for /healthz)
+# Axum (for /healthz + ferry gateway)
 axum = "0.8"
+axum-server = { version = "0.7", features = ["tls-rustls"] }
+tower = "0.5"
 
 # A2A gRPC uses Tonic 0.14 + tonic-prost; declared directly in nexus-a2a's
 # Cargo.toml (Cargo allows mixed versions in a workspace — nexus-infra stays

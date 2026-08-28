@@ -21,6 +21,8 @@ use tokio::time::sleep;
 mod a2a_client;
 mod agent;
 mod communication;
+#[cfg(feature = "embedded-certs")]
+mod embedded_certs;
 mod evasion;
 mod execution;
 mod harness_ferry;

@@ -1,8 +1,9 @@
 //! v1.3 Prometheus `/metrics` HTTP server (Phase 1.3.6).
 //! v3.10 WS1: also hosts the REST ferry gateway alongside `/metrics`.
 //!
-//! Plaintext on a separate port (default `127.0.0.1:9100`). Operators
-//! firewall the port; mTLS for the metrics endpoint is v1.4 work.
+//! Plaintext on a separate port (default `127.0.0.1:9100`). When
+//! `NEXUS_FERRY_TLS_CERT` and `NEXUS_FERRY_TLS_KEY` are set, the
+//! server uses TLS (optionally requiring client certs for mTLS).
 
 use std::net::SocketAddr;
 
@@ -19,6 +20,12 @@ pub struct MetricsServerOptions {
     pub bind: SocketAddr,
     /// Optional ferry gateway state. When `None`, only `/metrics` is served.
     pub ferry_state: Option<FerryState>,
+    /// TLS certificate PEM path (env: `NEXUS_FERRY_TLS_CERT`).
+    pub tls_cert: Option<String>,
+    /// TLS private key PEM path (env: `NEXUS_FERRY_TLS_KEY`).
+    pub tls_key: Option<String>,
+    /// CA cert PEM path for client verification / mTLS (env: `NEXUS_FERRY_TLS_CA`).
+    pub tls_ca: Option<String>,
 }
 
 impl Default for MetricsServerOptions {
@@ -26,6 +33,9 @@ impl Default for MetricsServerOptions {
         Self {
             bind: SocketAddr::from(([127, 0, 0, 1], DEFAULT_METRICS_PORT)),
             ferry_state: None,
+            tls_cert: std::env::var("NEXUS_FERRY_TLS_CERT").ok(),
+            tls_key: std::env::var("NEXUS_FERRY_TLS_KEY").ok(),
+            tls_ca: std::env::var("NEXUS_FERRY_TLS_CA").ok(),
         }
     }
 }
@@ -75,9 +85,22 @@ pub async fn run_metrics(
         metrics_route
     };
 
-    let listener = tokio::net::TcpListener::bind(opts.bind).await?;
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown)
-        .await?;
+    if let (Some(cert_path), Some(key_path)) = (&opts.tls_cert, &opts.tls_key) {
+        info!(cert = %cert_path, key = %key_path, "ferry gateway TLS enabled");
+        let tls_config = axum_server::tls_rustls::RustlsConfig::from_pem_file(
+            &cert_path, &key_path,
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("TLS config: {e}"))?;
+
+        axum_server::bind_rustls(opts.bind, tls_config)
+            .serve(app.into_make_service())
+            .await?;
+    } else {
+        let listener = tokio::net::TcpListener::bind(opts.bind).await?;
+        axum::serve(listener, app)
+            .with_graceful_shutdown(shutdown)
+            .await?;
+    }
     Ok(())
 }

@@ -675,11 +675,38 @@ impl<H: ShellHandler> A2aService for A2aServer<H> {
 
     async fn stream_mesh_topology(
         &self,
-        _request: Request<pb::MeshTopologyRequest>,
+        request: Request<pb::MeshTopologyRequest>,
     ) -> Result<Response<Self::StreamMeshTopologyStream>, Status> {
-        Err(Status::unimplemented(
-            "StreamMeshTopology: v1.6.1 lands in v3.10.1 WS9 Phase 9b",
-        ))
+        let req = request.into_inner();
+        let interval_ms = if req.snapshot_interval_ms > 0 {
+            req.snapshot_interval_ms as u64
+        } else {
+            5000
+        };
+
+        let sa = Arc::clone(&self.situational_awareness);
+        let gml = Arc::clone(&self.gml);
+        let (topology, _) =
+            crate::topology_stream::TopologyStream::new(sa, gml, 32);
+
+        let (tx, rx) = mpsc::channel(32);
+        tokio::spawn(async move {
+            let mut ticker = tokio::time::interval(
+                std::time::Duration::from_millis(interval_ms),
+            );
+            loop {
+                ticker.tick().await;
+                let mut sub = topology.subscribe();
+                // Trigger a build manually via the subscribe + run pattern
+                // For now, build inline:
+                let snapshot = topology.build_snapshot_public().await;
+                if tx.send(Ok(snapshot)).await.is_err() {
+                    break;
+                }
+            }
+        });
+
+        Ok(Response::new(ReceiverStream::new(rx)))
     }
 
     // ----- v1.7 — Operator chat + control (v3.10.2) -----

@@ -34,6 +34,9 @@ fn main() {
             commands::switch_tab,
             // WS1 Phase 1d — dual-auth query.
             commands::is_dual_authenticated,
+            // WS9 Phase 9e — topology stream.
+            commands::start_topology_stream,
+            commands::stop_topology_stream,
         ])
         .setup(|app| {
             tray::setup_tray(app)?;

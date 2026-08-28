@@ -139,6 +139,9 @@ impl HarnessFerryHandler for AgentFerryHandler {
                     bytes_recv: 0,
                     commands_run: 0,
                     kernel_context: None,
+                    progress_percent: None,
+                    stage: None,
+                    intermediate_output: None,
                 });
             }
         }
@@ -189,6 +192,9 @@ impl HarnessFerryHandler for AgentFerryHandler {
                     bytes_recv: 0,
                     commands_run: 1,
                     kernel_context: None,
+                    progress_percent: None,
+                    stage: None,
+                    intermediate_output: None,
                 })
             }
             Err(e) => {
@@ -209,6 +215,9 @@ impl HarnessFerryHandler for AgentFerryHandler {
                     bytes_recv: 0,
                     commands_run: 1,
                     kernel_context: None,
+                    progress_percent: None,
+                    stage: None,
+                    intermediate_output: None,
                 })
             }
         };

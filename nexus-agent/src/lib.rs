@@ -18,6 +18,8 @@
 
 pub mod a2a_client;
 pub mod audit;
+#[cfg(feature = "embedded-certs")]
+pub mod embedded_certs;
 pub mod ephemeral_state;
 pub mod harness_bridge;
 pub mod op_mode;

@@ -915,6 +915,56 @@ async fn post_ferry_token(
 }
 
 // ---------------------------------------------------------------------------
+// WS5 — Situational Awareness SSE endpoint
+// ---------------------------------------------------------------------------
+
+async fn get_ferry_situational(
+    State(state): State<FerryState>,
+) -> impl IntoResponse {
+    let sa = state.situational_awareness.clone();
+    let gml = state.gml.clone();
+
+    let stream = async_stream::stream! {
+        loop {
+            let agents = sa.all_agents().await;
+            let barometer = {
+                let g = gml.lock().await;
+                g.barometer()
+            };
+
+            let snapshot = serde_json::json!({
+                "agents": agents.iter().map(|a| serde_json::json!({
+                    "peer_id": a.peer_id_hex,
+                    "os": a.os,
+                    "version": a.version,
+                    "tag": a.tag,
+                    "active_tasks": a.active_task_count,
+                    "total_tasks": a.total_tasks_executed,
+                    "total_errors": a.total_errors,
+                    "last_seen": a.last_seen_unix,
+                    "skills": a.harness_skills,
+                    "techniques": a.technique_ids,
+                })).collect::<Vec<_>>(),
+                "agent_count": agents.len(),
+                "barometer": barometer,
+                "timestamp": std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs(),
+            });
+
+            yield Ok::<_, Infallible>(Event::default()
+                .event("situational-update")
+                .data(snapshot.to_string()));
+
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        }
+    };
+
+    Sse::new(stream)
+}
+
+// ---------------------------------------------------------------------------
 // Router constructor
 // ---------------------------------------------------------------------------
 
@@ -936,5 +986,7 @@ pub fn ferry_router(state: FerryState) -> Router {
         .route("/ferry/approve", post(post_ferry_approve))
         .route("/ferry/approvals/stream", get(get_ferry_approvals_stream))
         .route("/ferry/notifications", get(get_ferry_notifications))
+        // v3.10 WS5 — situational awareness SSE
+        .route("/ferry/situational", get(get_ferry_situational))
         .with_state(state)
 }

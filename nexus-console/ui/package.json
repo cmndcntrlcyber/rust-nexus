@@ -2,12 +2,26 @@
   "name": "nexus-console-ui-assets",
   "version": "0.1.0",
   "private": true,
-  "description": "xterm.js + addons vendored into the Tauri webview.",
+  "description": "xterm.js + addons vendored into the Tauri webview, plus React/three.js mesh visualization.",
   "scripts": {
-    "build-xterm": "node ./vendor-xterm.mjs"
+    "build-xterm": "node ./vendor-xterm.mjs",
+    "build-mesh": "esbuild src/mesh-viz/mesh-viz-entry.tsx --bundle --outfile=dist/mesh-viz.js --format=esm --target=es2022"
   },
   "dependencies": {
     "@xterm/xterm": "5.5.0",
-    "@xterm/addon-fit": "0.10.0"
+    "@xterm/addon-fit": "0.10.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "three": "^0.170.0",
+    "@react-three/fiber": "^8.17.10",
+    "@react-three/drei": "^9.117.0",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/three": "^0.170.0",
+    "typescript": "^5.7.2",
+    "esbuild": "^0.24.0"
   }
 }

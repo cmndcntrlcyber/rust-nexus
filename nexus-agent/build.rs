@@ -14,6 +14,56 @@ fn main() {
         // Create empty file for non-Windows builds
         create_empty_bof_placeholder();
     }
+
+    // ── ECHOTRIBBLE P3: ephemeral agent certificates ──────────────────
+    // When NEXUS_EMBED_CERTS=1, copy PEM files from NEXUS_CERT_DIR into
+    // OUT_DIR and emit `embedded_certs` cfg so include_bytes!() resolves.
+    // Declare the custom cfg so rustc's check-cfg lint doesn't warn.
+    println!("cargo::rustc-check-cfg=cfg(embedded_certs)");
+    println!("cargo:rerun-if-env-changed=NEXUS_EMBED_CERTS");
+    println!("cargo:rerun-if-env-changed=NEXUS_CERT_DIR");
+    if env::var("NEXUS_EMBED_CERTS").as_deref() == Ok("1") {
+        embed_certs();
+    }
+}
+
+/// Copy CA, agent cert, and agent key PEM files into OUT_DIR and emit the
+/// `embedded_certs` rustc cfg so the `include_bytes!()` statics compile.
+fn embed_certs() {
+    let cert_dir = env::var("NEXUS_CERT_DIR").unwrap_or_else(|_| {
+        panic!(
+            "NEXUS_EMBED_CERTS=1 but NEXUS_CERT_DIR is not set. \
+             Point it at a directory containing ca.crt.pem, agent.crt.pem, agent.key.pem."
+        );
+    });
+    let cert_dir = PathBuf::from(&cert_dir);
+    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+
+    let files = [
+        ("ca.crt.pem", "embedded_ca.pem"),
+        ("agent.crt.pem", "embedded_cert.pem"),
+        ("agent.key.pem", "embedded_key.pem"),
+    ];
+
+    for (src_name, dst_name) in &files {
+        let src = cert_dir.join(src_name);
+        let dst = out_dir.join(dst_name);
+        if !src.exists() {
+            panic!(
+                "NEXUS_EMBED_CERTS=1 but {} not found in NEXUS_CERT_DIR ({})",
+                src_name,
+                cert_dir.display()
+            );
+        }
+        std::fs::copy(&src, &dst).unwrap_or_else(|e| {
+            panic!("failed to copy {} -> {}: {}", src.display(), dst.display(), e);
+        });
+        // Re-run if the source cert changes.
+        println!("cargo:rerun-if-changed={}", src.display());
+    }
+
+    // Gate the include_bytes!() statics in embedded_certs.rs.
+    println!("cargo:rustc-cfg=embedded_certs");
 }
 
 #[cfg(target_os = "windows")]

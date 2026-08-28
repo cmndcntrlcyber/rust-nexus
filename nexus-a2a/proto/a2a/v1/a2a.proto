@@ -68,15 +68,20 @@ message AgentCard {
     string description = 2;
     string version = 3;
     repeated AgentSkill skills = 4;
+    // Fields 5-17 reserved for upstream A2A v0.3 compatibility.
+    // See WS8 proto audit (2026-08-27) for the full divergence analysis.
+    reserved 5 to 17;
     // v1.2 (D-V1.2-cards): Ed25519 signature over the canonical JSON
     // encoding of the unsigned card (everything except `signature` and
     // `signer_peer_id`). Empty bytes = unsigned (accepted only when the
     // loopback gate is on / `accept_unsigned_cards = true`).
-    bytes signature = 5;
+    // Moved from field 5 to 50 in WS8 to avoid upstream field collision.
+    bytes signature = 50;
     // v1.2: 32-byte Ed25519 public key of the signer. The short-form
     // `peer_id` is `BLAKE3(this)` (see [`nexus_common::PeerId`]); we ship
     // the pubkey because verifiers need it directly.
-    bytes signer_peer_id = 6;
+    // Moved from field 6 to 51 in WS8 to avoid upstream field collision.
+    bytes signer_peer_id = 51;
 }
 
 message AgentSkill {
@@ -293,6 +298,10 @@ message HarnessTaskResult {
     uint64 bytes_recv = 6;
     uint32 commands_run = 7;
     KernelContextProto kernel_context = 8;
+    // v3.10 WS5 — streaming progress fields
+    optional float progress_percent = 9;
+    optional string stage = 10;
+    optional string intermediate_output = 11;
 }
 
 message SwarmCoordinate {

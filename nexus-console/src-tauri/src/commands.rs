@@ -448,6 +448,197 @@ pub fn audit_log_verify(records: Vec<AuditRecord>) -> Result<Option<usize>, Stri
     Ok(None)
 }
 
+// ─── WS9 Phase 9e: Topology stream commands ─────────────────────────
+
+use nexus_a2a::pb as pb;
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AgentNodeEvent {
+    pub agent_id: String,
+    pub peer_id: String,
+    pub health: i32,
+    pub current_tasks: u32,
+    pub skills: Vec<String>,
+    pub techniques: Vec<String>,
+    pub role: String,
+    pub last_heartbeat_unix: u64,
+}
+
+impl From<pb::AgentNodeProto> for AgentNodeEvent {
+    fn from(a: pb::AgentNodeProto) -> Self {
+        Self {
+            agent_id: a.agent_id,
+            peer_id: a.peer_id,
+            health: a.health,
+            current_tasks: a.current_tasks,
+            skills: a.skills,
+            techniques: a.techniques,
+            role: a.role,
+            last_heartbeat_unix: a.last_heartbeat_unix,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct MeshEdgeEvent {
+    pub source_agent_id: String,
+    pub target_agent_id: String,
+    pub edge_type: i32,
+    pub traffic_rate_bps: f32,
+    pub is_active: bool,
+}
+
+impl From<pb::MeshEdgeProto> for MeshEdgeEvent {
+    fn from(e: pb::MeshEdgeProto) -> Self {
+        Self {
+            source_agent_id: e.source_agent_id,
+            target_agent_id: e.target_agent_id,
+            edge_type: e.edge_type,
+            traffic_rate_bps: e.traffic_rate_bps,
+            is_active: e.is_active,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct FlowEventPayload {
+    pub source_agent_id: String,
+    pub target_agent_id: String,
+    pub edge_type: i32,
+    pub task_id: String,
+    pub payload_bytes: u32,
+    pub timestamp_unix: u64,
+}
+
+impl From<pb::FlowEventProto> for FlowEventPayload {
+    fn from(f: pb::FlowEventProto) -> Self {
+        Self {
+            source_agent_id: f.source_agent_id,
+            target_agent_id: f.target_agent_id,
+            edge_type: f.edge_type,
+            task_id: f.task_id,
+            payload_bytes: f.payload_bytes,
+            timestamp_unix: f.timestamp_unix,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct BarometerEvent {
+    pub global_score: f32,
+    pub per_agent: std::collections::HashMap<String, f32>,
+    pub controller_state: String,
+    pub throttle_floor: f32,
+}
+
+impl From<pb::NoiseBarometerProto> for BarometerEvent {
+    fn from(b: pb::NoiseBarometerProto) -> Self {
+        Self {
+            global_score: b.global_score,
+            per_agent: b.per_agent,
+            controller_state: b.controller_state,
+            throttle_floor: b.throttle_floor,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TopologySnapshotEvent {
+    pub agents: Vec<AgentNodeEvent>,
+    pub edges: Vec<MeshEdgeEvent>,
+    pub flows: Vec<FlowEventPayload>,
+    pub barometer: Option<BarometerEvent>,
+    pub sequence_number: u64,
+    pub timestamp_unix: u64,
+}
+
+impl From<pb::MeshTopologySnapshot> for TopologySnapshotEvent {
+    fn from(s: pb::MeshTopologySnapshot) -> Self {
+        Self {
+            agents: s.agents.into_iter().map(AgentNodeEvent::from).collect(),
+            edges: s.edges.into_iter().map(MeshEdgeEvent::from).collect(),
+            flows: s.flows.into_iter().map(FlowEventPayload::from).collect(),
+            barometer: s.barometer.map(BarometerEvent::from),
+            sequence_number: s.sequence_number,
+            timestamp_unix: s.snapshot_timestamp_unix,
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn start_topology_stream(
+    app: AppHandle,
+    state: State<'_, ConsoleState>,
+    interval_ms: Option<u32>,
+    include_flows: Option<bool>,
+    include_barometer: Option<bool>,
+) -> Result<(), String> {
+    use tauri::Emitter;
+    use tokio::sync::watch;
+
+    if state.is_topology_streaming().await {
+        return Err("Topology stream already running".into());
+    }
+
+    let mut client = state.client().await.map_err(|e| e.to_string())?;
+
+    let request = pb::MeshTopologyRequest {
+        include_flows: include_flows.unwrap_or(true),
+        include_barometer: include_barometer.unwrap_or(true),
+        flow_batch_ms: 500,
+        snapshot_interval_ms: interval_ms.unwrap_or(5000),
+    };
+
+    let mut stream = client
+        .stream_mesh_topology(request)
+        .await
+        .map_err(|e| format!("topology stream: {e}"))?;
+
+    let (stop_tx, mut stop_rx) = watch::channel(false);
+    state.set_topology_stop(stop_tx).await;
+
+    tokio::spawn(async move {
+        let mut backoff_ms: u64 = 1000;
+        loop {
+            tokio::select! {
+                _ = stop_rx.changed() => {
+                    info!("topology stream: stop signal received");
+                    break;
+                }
+                frame = stream.message() => {
+                    match frame {
+                        Ok(Some(snapshot)) => {
+                            backoff_ms = 1000;
+                            let event = TopologySnapshotEvent::from(snapshot);
+                            if let Err(e) = app.emit("topology-snapshot", &event) {
+                                warn!("topology stream: emit failed: {e}");
+                            }
+                        }
+                        Ok(None) => {
+                            info!("topology stream: server closed");
+                            break;
+                        }
+                        Err(e) => {
+                            warn!("topology stream error: {e}, reconnecting in {backoff_ms}ms");
+                            tokio::time::sleep(std::time::Duration::from_millis(backoff_ms)).await;
+                            backoff_ms = (backoff_ms * 2).min(30_000);
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn stop_topology_stream(
+    state: State<'_, ConsoleState>,
+) -> Result<bool, String> {
+    Ok(state.stop_topology().await)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

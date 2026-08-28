@@ -53,9 +53,21 @@ pub struct A2aClientConfig {
 
 const SESSION_CMD_CAPACITY: usize = 64;
 
-/// Load mTLS config from env vars. Returns `None` if NEXUS_CA_CERT is unset
-/// (falls back to system trust store via the `https://` URI scheme).
+/// Load mTLS config with priority: embedded certs (no disk I/O, no log of
+/// file paths) -> env-var certs (`NEXUS_CA_CERT` etc.).  Returns `None` if
+/// neither source provides material (falls back to system trust store via
+/// the `https://` URI scheme).
 fn client_tls() -> Option<tonic_14::transport::ClientTlsConfig> {
+    // Priority 1: compile-time embedded certs (ECHOTRIBBLE P3).
+    #[cfg(feature = "embedded-certs")]
+    {
+        let embedded = crate::embedded_certs::EmbeddedCerts::from_embedded();
+        if let Some(config) = embedded.tls_config() {
+            return Some(config);
+        }
+    }
+
+    // Priority 2: runtime env-var certs.
     tls::load_client_config_from_env().ok()
 }
 
@@ -233,7 +245,7 @@ async fn handle_inbound(
                 let task = pb::HarnessTask {
                     task_id: task_id.clone(),
                     tool_name: tool_name.clone(),
-                    json_arguments: json_arguments.unwrap_or_default(),
+                    json_arguments,
                     session_id: session_id.clone().unwrap_or_default(),
                     engagement_scope_hash: Vec::new(),
                     operator_signature: Vec::new(),
@@ -247,9 +259,6 @@ async fn handle_inbound(
                 } else {
                     warn!("bidi ferry handler not initialized — use SubmitHarnessTask RPC");
                     (format!("bidi ferry handler not yet initialized; tool={tool_name}"), true, 0)
-                };
-                    Ok(result) => (result.output, result.is_error, result.execution_duration_ms),
-                    Err(status) => (format!("ferry error: {status}"), true, 0),
                 };
                 let result_frame = ShellControl::HarnessTaskResult {
                     task_id: task_id.clone(),
