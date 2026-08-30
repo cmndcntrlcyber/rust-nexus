@@ -30,8 +30,12 @@ pub struct MetricsServerOptions {
 
 impl Default for MetricsServerOptions {
     fn default() -> Self {
+        let bind = std::env::var("NEXUS_FERRY_BIND")
+            .ok()
+            .and_then(|s| s.parse::<SocketAddr>().ok())
+            .unwrap_or_else(|| SocketAddr::from(([127, 0, 0, 1], DEFAULT_METRICS_PORT)));
         Self {
-            bind: SocketAddr::from(([127, 0, 0, 1], DEFAULT_METRICS_PORT)),
+            bind,
             ferry_state: None,
             tls_cert: std::env::var("NEXUS_FERRY_TLS_CERT").ok(),
             tls_key: std::env::var("NEXUS_FERRY_TLS_KEY").ok(),
