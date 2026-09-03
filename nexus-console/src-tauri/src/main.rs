@@ -14,7 +14,6 @@ fn main() {
     init_tracing();
 
     tauri::Builder::default()
-        .plugin(tauri_plugin_tray_icon::init())
         .manage(ConsoleState::new())
         .invoke_handler(tauri::generate_handler![
             commands::get_startup_config,
