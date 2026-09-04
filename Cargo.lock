@@ -5013,6 +5013,7 @@ dependencies = [
  "anyhow",
  "blake3",
  "futures",
+ "libp2p",
  "nexus-a2a",
  "nexus-common",
  "nexus-mesh",

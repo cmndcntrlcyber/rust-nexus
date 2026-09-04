@@ -21,7 +21,7 @@ nexus-a2a = { workspace = true }
 nexus-mesh = { path = "../../nexus-mesh" }
 # v1.4.4 — audit chain verification in `audit_log_verify` Tauri command.
 blake3 = { workspace = true }
-tauri = { workspace = true }
+tauri = { workspace = true, features = ["tray-icon"] }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 futures = { workspace = true }
@@ -31,9 +31,9 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
+libp2p = { workspace = true }
 # Tonic 0.14 directly (independent of the overlay's 0.10).
 tonic = { version = "0.14", default-features = false, features = ["transport", "channel"] }
-# tauri-plugin-tray-icon = "2"  # Not published on crates.io; tray support deferred
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]

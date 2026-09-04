@@ -2,6 +2,7 @@
 
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
+use tauri::Manager;
 use tracing::info;
 
 /// Set up the system tray icon with a context menu.
