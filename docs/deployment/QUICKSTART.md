@@ -262,16 +262,27 @@ curl -s http://192.168.1.124:11434/api/tags | python3 -c "import sys,json; [prin
 | 5434 | PostgreSQL (RTPI) | TCP | `0.0.0.0` |
 | 6381 | Redis (RTPI) | TCP | `0.0.0.0` |
 | 9100 | rust-nexus metrics + ferry gateway | HTTP | `127.0.0.1` |
-| 50052 | rust-nexus A2A gRPC | HTTP/2 | `127.0.0.1` |
+| 50052 | rust-nexus A2A gRPC | HTTP/2 | `0.0.0.0` (prod) / `127.0.0.1` (dev) |
 | 11434 | Ollama (LAN) | HTTP | `192.168.1.124` |
 
 ## Domain Architecture
 
-| Subdomain | Service | Through Cloudflare? |
-|---|---|---|
-| `onoiroi.us` | RTPI backend API | Yes (Origin CA) |
-| `c3s.onoiroi.us` | RTPI frontend | Yes (Origin CA) |
-| `c3s-workbench.onoiroi.us` | ATT&CK Workbench | Yes (Origin CA) |
-| `c3s-kasm.onoiroi.us` | Kasm Workspaces | Yes (Origin CA) |
-| `c2.onoiroi.us` | rust-nexus A2A gRPC | Optional (self-signed PKI for direct) |
-| `metrics.onoiroi.us` | Metrics/ferry gateway | Optional |
+| Subdomain | Service | Through Cloudflare? | Console Tab |
+|---|---|---|---|
+| `onoiroi.us` | RTPI backend API | Yes (Origin CA) | — |
+| `c3s.onoiroi.us` | Kasm Workspace Portal | Yes (Origin CA) | Kasm (#10) |
+| `c3s-admin.onoiroi.us` | RTPI admin frontend | Yes (Origin CA) | Dashboard (#0) |
+| `c3s-kali.onoiroi.us` | Kali KasmVNC desktop | Yes (Origin CA) | Kali (#3) |
+| `c3s-workbench.onoiroi.us` | ATT&CK Workbench | Yes (Origin CA) | Workbench (#5) |
+| `c3s-mgmt.onoiroi.us` | Portainer | Yes (Origin CA) | Portainer (#6) |
+| `c3s-wiki.onoiroi.us` | Docmost Wiki | Yes (Origin CA) | Wiki (#7) |
+| `c3s-vscode.onoiroi.us` | VS Code KasmVNC | Yes (Origin CA) | VS Code (#8) |
+| `c3s-reports.onoiroi.us` | SysReptor | Yes (Origin CA) | Reports (#9) |
+| `c3s-empire.onoiroi.us` | Empire C2 | Yes (Origin CA) | Status bar badge |
+| `c3s-registry.onoiroi.us` | Docker Registry | Yes (Origin CA) | Status bar badge |
+| `c3s-api.onoiroi.us` | RTPI API | Yes (Origin CA) | Status bar badge |
+| `c2.onoiroi.us` | rust-nexus A2A gRPC | No (direct mTLS) | — |
+
+> The console auto-discovers these services from `RTPI_SLUG` + `RTPI_DOMAIN`
+> environment variables. See [`operator-console.md`](operator-console.md)
+> for the full tab-to-tunnel mapping.

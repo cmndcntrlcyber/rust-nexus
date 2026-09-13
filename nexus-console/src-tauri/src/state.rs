@@ -12,6 +12,32 @@ use serde::Serialize;
 use tokio::sync::{mpsc, watch, Mutex};
 use tokio::task::JoinHandle;
 
+/// A tunnel service discovered from RTPI_SLUG + RTPI_DOMAIN.
+#[derive(Debug, Clone, Serialize)]
+pub struct TunnelService {
+    /// Tunnel subdomain suffix (e.g. "-admin").
+    pub suffix: String,
+    /// Human-readable label (e.g. "RTPI Admin").
+    pub label: String,
+    /// Computed URL (e.g. "https://c3s-admin.onoiroi.us").
+    pub url: String,
+    /// Fixed tab mapping key, if any (e.g. "dashboard", "kali").
+    pub tab_mapping: Option<String>,
+    /// Whether the service can be embedded in an iframe.
+    pub embeddable: bool,
+}
+
+/// Tunnel configuration derived from build.sh environment.
+#[derive(Debug, Clone, Serialize)]
+pub struct TunnelConfig {
+    /// Tunnel subdomain slug (e.g. "c3s").
+    pub slug: String,
+    /// Tunnel base domain (e.g. "onoiroi.us").
+    pub domain: String,
+    /// Discovered services.
+    pub services: Vec<TunnelService>,
+}
+
 /// Per-session handle.
 pub struct SessionHandle {
     /// Outbound channel into the A2A stream.
@@ -49,6 +75,8 @@ struct Inner {
     mesh: Option<MeshHandle>,
     /// WS9 Phase 9e: cancellation sender for the topology stream task.
     topology_stop: Option<watch::Sender<bool>>,
+    /// v4.4: tunnel service discovery config.
+    tunnel: Option<TunnelConfig>,
 }
 
 impl ConsoleState {
@@ -172,6 +200,18 @@ impl ConsoleState {
     /// Whether a topology stream is currently active.
     pub async fn is_topology_streaming(&self) -> bool {
         self.inner.lock().await.topology_stop.is_some()
+    }
+
+    // ── Tunnel config (v4.4) ─────────────────────────────────────
+
+    /// Store tunnel configuration from RTPI_SLUG + RTPI_DOMAIN.
+    pub async fn set_tunnel_config(&self, config: TunnelConfig) {
+        self.inner.lock().await.tunnel = Some(config);
+    }
+
+    /// Retrieve the current tunnel configuration.
+    pub async fn get_tunnel_config(&self) -> Option<TunnelConfig> {
+        self.inner.lock().await.tunnel.clone()
     }
 }
 

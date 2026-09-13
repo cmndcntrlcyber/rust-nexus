@@ -66,6 +66,24 @@ where
     Ok(closure)
 }
 
+// ─── v4.4: Tunnel badge connector ────────────────────────────────────
+
+use crate::components::tab_bar::TunnelServiceInfo;
+
+/// Fetch configured tunnel services from the backend.
+pub async fn get_tunnel_services() -> Result<Vec<TunnelServiceInfo>, String> {
+    invoke_no_args("get_tunnel_services").await
+}
+
+/// Open a tunnel URL in the system default browser.
+pub async fn open_tunnel_url(url: &str) -> Result<(), String> {
+    #[derive(serde::Serialize)]
+    struct Args<'a> {
+        url: &'a str,
+    }
+    invoke("open_tunnel_url", &Args { url }).await
+}
+
 fn js_value_to_string(v: &JsValue) -> String {
     if let Some(s) = v.as_string() {
         s

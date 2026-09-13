@@ -30,19 +30,25 @@ locally for development or as a production service.
 |  nexus-console     | <─── signed card ─────────► |  nexus-infra       |
 |  Tauri + Leptos    |   (NEXUS_CA_CERT +           |  C2 server         |
 |  + xterm.js        |    NEXUS_CLIENT_CERT/KEY)    |  (NodeIdentity,    |
-+--------------------+                             |   AgentChannels,   |
-                                                   |   capability       |
-+--------------------+      v1.2 agent-mode        |   matrix, audit    |
-|  nexus-agent       | <─ mTLS + AgentRegister ─►  |   sink, rate       |
-|  (PTY shell,       |    :50052                   |   limiter)         |
-|   OS-aware shell   |                             +────┬───────────────+
-|   select)          |                                  │
-+--------------------+                                  │ (Tonic 0.10 lane
-                                                        │  unchanged)
-+--------------------+     legacy task-pull             │
-|  overlay agents    | <────────────────────────────────┘
-|  (v1.0 era)        |   :50051
-+--------------------+
+|                    |                             |   AgentChannels,   |
+|  11 fixed tabs     |        env vars             |   capability       |
+|  (v4.4 tunnel      | <── RTPI_SLUG ──┐           |   matrix, audit    |
+|   badge connector) |     RTPI_DOMAIN ─┤           |   sink, rate       |
++--------------------+                 │           |   limiter)         |
+                                       │           +────┬───────────────+
++--------------------+   v1.2 agent    │                │
+|  nexus-agent       | <─ mTLS ──────► │                │ (Tonic 0.10 lane
+|  (PTY shell,       |    :50052       │                │  unchanged)
+|   OS-aware shell)  |                 │                │
++--------------------+                 │   +--------------------+
+                             ┌─────────┘   |  overlay agents    |
+                             │             |  (v1.0 era) :50051 |
+                   +---------┴───────+     +--------------------+
+                   | Cloudflare      |
+                   | Tunnel          |
+                   | *.onoiroi.us    |
+                   | (10 subdomains) |
+                   +-----------------+
 ```
 
 All clients connect **directly** to the C2 server on port **50052** over
@@ -64,6 +70,8 @@ server process:
 - **Tauri codesigning (CI)**: [`../enhancements/agent-swarm-mesh/v1.2/codesigning.md`](../enhancements/agent-swarm-mesh/v1.2/codesigning.md).
 - **All-in-one server deployment**: [`../../scripts/deploy-server-prod.sh`](../../scripts/deploy-server-prod.sh)
   — single-script alternative to the multi-step `transfer-prep.sh` + `remote-host-prep.sh` workflow.
+- **v4.4 synergy spec**: [`../enhancements/harness optimization/v4/v4.4/v4.4 - rust-nexus-synergy.md`](../enhancements/harness%20optimization/v4/v4.4/v4.4%20-%20rust-nexus-synergy.md)
+  — tunnel badge connector, remote agent deployment, Docker Compose, CI pipeline.
 - **Current status + version**: [`../../STATUS.md`](../../STATUS.md),
   [`../../ROADMAP.md`](../../ROADMAP.md).
 
@@ -77,3 +85,6 @@ server process:
 - Environment variable names are reserved and load-bearing:
   `NEXUS_CA_CERT`, `NEXUS_SERVER_CERT`, `NEXUS_SERVER_KEY`,
   `NEXUS_CLIENT_CERT`, `NEXUS_CLIENT_KEY`. Never rename.
+- Console-only env vars (v4.4): `RTPI_SLUG`, `RTPI_DOMAIN` enable
+  the tunnel badge connector. `NEXUS_MESH_ADDR` sets the mesh
+  bootstrap address for dual-auth.

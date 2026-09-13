@@ -6,6 +6,8 @@
 
 mod tray;
 
+use tauri::Manager;
+
 use nexus_console::commands;
 use nexus_console::state::ConsoleState;
 use tracing_subscriber::EnvFilter;
@@ -36,9 +38,27 @@ fn main() {
             // WS9 Phase 9e — topology stream.
             commands::start_topology_stream,
             commands::stop_topology_stream,
+            // v4.4 — tunnel badge connector.
+            commands::load_tunnel_config,
+            commands::get_tunnel_services,
+            commands::open_tunnel_url,
         ])
         .setup(|app| {
             tray::setup_tray(app)?;
+
+            // v4.4: auto-load tunnel config from RTPI_SLUG + RTPI_DOMAIN.
+            if let (Ok(slug), Ok(domain)) = (
+                std::env::var("RTPI_SLUG"),
+                std::env::var("RTPI_DOMAIN"),
+            ) {
+                let config = commands::build_tunnel_config(&slug, &domain);
+                tracing::info!(slug = %slug, domain = %domain, "auto-loaded tunnel config from env");
+                let state: tauri::State<'_, ConsoleState> = app.state();
+                tauri::async_runtime::block_on(async {
+                    state.set_tunnel_config(config).await;
+                });
+            }
+
             Ok(())
         })
         .run(tauri::generate_context!())

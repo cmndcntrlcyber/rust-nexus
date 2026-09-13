@@ -7,7 +7,7 @@ use tauri::{AppHandle, State};
 use tracing::{info, warn};
 
 use crate::session::open_session;
-use crate::state::{Connection, ConnectionSummary, ConsoleState, SessionHandle};
+use crate::state::{Connection, ConnectionSummary, ConsoleState, SessionHandle, TunnelConfig, TunnelService};
 
 /// Result of `connect_c2`.
 #[derive(Debug, Clone, Serialize)]
@@ -296,14 +296,15 @@ pub async fn close_shell_session(
 
 /// Switch the active tab in the console UI.
 ///
-/// Validates tab_id is in range [0, 9] for the 5 fixed tabs
-/// (Dashboard, Transfer, Mesh, Kali, Chat) plus up to 4 dynamic
-/// tabs (Shell sessions, AuditLog). Backend hook point for future
-/// session routing.
+/// Validates tab_id is in range [0, 14] for the 11 fixed tabs
+/// (Dashboard, Transfer, Mesh, Kali, Chat, Workbench, Portainer,
+/// Wiki, VsCode, Reports, Kasm) plus dynamic tabs (Shell sessions,
+/// AuditLog, TunnelService). Backend hook point for future session
+/// routing.
 #[tauri::command]
 pub async fn switch_tab(tab_id: u64) -> Result<(), String> {
-    if tab_id > 9 {
-        return Err(format!("invalid tab_id {tab_id}: expected 0..9"));
+    if tab_id > 14 {
+        return Err(format!("invalid tab_id {tab_id}: expected 0..14"));
     }
     Ok(())
 }
@@ -446,6 +447,75 @@ pub fn audit_log_verify(records: Vec<AuditRecord>) -> Result<Option<usize>, Stri
         prev = record.record_hash.clone();
     }
     Ok(None)
+}
+
+// ─── v4.4: Tunnel badge connector ────────────────────────────────────
+
+const SERVICES: &[(&str, &str, Option<&str>, bool)] = &[
+    // (suffix, label, tab_mapping, embeddable)
+    ("-admin",     "RTPI Admin",       Some("dashboard"),  true),
+    ("-kali",      "Kali Desktop",     Some("kali"),       true),
+    ("-workbench", "ATT&CK Workbench", Some("workbench"),  true),
+    ("-mgmt",      "Portainer",        Some("portainer"),  true),
+    ("-wiki",      "Docmost Wiki",     Some("wiki"),       true),
+    ("-vscode",    "VS Code Desktop",  Some("vscode"),     true),
+    ("-reports",   "SysReptor",        Some("reports"),    true),
+    ("-kasm",      "Kasm Portal",      Some("kasm"),       true),
+    ("-empire",    "Empire C2",        None,               true),
+    ("-registry",  "Registry",         None,               true),
+    ("-api",       "RTPI API",         None,               false),
+];
+
+/// Build a `TunnelConfig` from a slug and domain, populating all
+/// known services with computed URLs.
+pub fn build_tunnel_config(slug: &str, domain: &str) -> TunnelConfig {
+    let services = SERVICES
+        .iter()
+        .map(|&(suffix, label, tab_mapping, embeddable)| TunnelService {
+            suffix: suffix.to_string(),
+            label: label.to_string(),
+            url: format!("https://{slug}{suffix}.{domain}"),
+            tab_mapping: tab_mapping.map(String::from),
+            embeddable,
+        })
+        .collect();
+    TunnelConfig {
+        slug: slug.to_string(),
+        domain: domain.to_string(),
+        services,
+    }
+}
+
+/// Populate tunnel config from RTPI_SLUG + RTPI_DOMAIN and store it
+/// in console state.
+#[tauri::command]
+pub async fn load_tunnel_config(
+    state: State<'_, ConsoleState>,
+    slug: String,
+    domain: String,
+) -> Result<(), String> {
+    let config = build_tunnel_config(&slug, &domain);
+    info!(slug = %slug, domain = %domain, count = config.services.len(), "tunnel config loaded");
+    state.set_tunnel_config(config).await;
+    Ok(())
+}
+
+/// Return the configured tunnel services (empty vec if not configured).
+#[tauri::command]
+pub async fn get_tunnel_services(
+    state: State<'_, ConsoleState>,
+) -> Result<Vec<TunnelService>, String> {
+    Ok(state
+        .get_tunnel_config()
+        .await
+        .map(|c| c.services)
+        .unwrap_or_default())
+}
+
+/// Open a tunnel URL in the system default browser.
+#[tauri::command]
+pub async fn open_tunnel_url(url: String) -> Result<(), String> {
+    open::that(&url).map_err(|e| format!("open URL: {e}"))
 }
 
 // ─── WS9 Phase 9e: Topology stream commands ─────────────────────────
@@ -734,7 +804,7 @@ mod tests {
     #[test]
     fn test_switch_tab_valid_ids() {
         let rt = tokio::runtime::Runtime::new().unwrap();
-        for id in 0..=9 {
+        for id in 0..=14 {
             assert!(rt.block_on(switch_tab(id)).is_ok());
         }
     }
@@ -742,7 +812,24 @@ mod tests {
     #[test]
     fn test_switch_tab_invalid_id_rejected() {
         let rt = tokio::runtime::Runtime::new().unwrap();
-        assert!(rt.block_on(switch_tab(10)).is_err());
+        assert!(rt.block_on(switch_tab(15)).is_err());
         assert!(rt.block_on(switch_tab(99)).is_err());
+    }
+
+    #[test]
+    fn test_build_tunnel_config() {
+        let config = build_tunnel_config("c3s", "onoiroi.us");
+        assert_eq!(config.slug, "c3s");
+        assert_eq!(config.domain, "onoiroi.us");
+        assert_eq!(config.services.len(), 11);
+        assert_eq!(config.services[0].url, "https://c3s-admin.onoiroi.us");
+        assert_eq!(config.services[0].tab_mapping, Some("dashboard".to_string()));
+        // Status-bar-only service has no tab mapping.
+        let empire = config.services.iter().find(|s| s.suffix == "-empire").unwrap();
+        assert!(empire.tab_mapping.is_none());
+        assert!(empire.embeddable);
+        // API service is not embeddable.
+        let api = config.services.iter().find(|s| s.suffix == "-api").unwrap();
+        assert!(!api.embeddable);
     }
 }

@@ -38,7 +38,8 @@ git clone https://github.com/yourorg/rust-nexus.git
 cd rust-nexus
 ```
 
-The workspace has 14 crates. The ones you'll touch in this walkthrough:
+The workspace has 9 active crates (trimmed from 14 in v3.8; 5 archived
+to `archive/`). The ones you'll touch in this walkthrough:
 
 ```
 nexus-common/         # NodeIdentity, sealed envelope, OsKind
@@ -154,7 +155,8 @@ cd src-tauri
 cargo tauri dev
 ```
 
-The console window opens. Click **Connect** and fill in:
+The console window opens with 11 fixed tabs. Click **Connect** and
+fill in:
 
 - **C2 URL**: `https://localhost:50052`
 - **CA cert**: `<repo>/certs/ca.crt.pem`
@@ -165,6 +167,15 @@ The connection dialog calls `GetAgentCard` (verifies the Ed25519
 signature if the server is configured with a NodeIdentity), then
 `ListRegisteredAgents`. Your agent from step 6 should appear in the
 list.
+
+> **Tunnel badge connector (v4.4):** To test the 6 new service tabs
+> (Workbench, Portainer, Wiki, VS Code, Reports, Kasm) with real tunnel
+> URLs, set `RTPI_SLUG` and `RTPI_DOMAIN` before launching:
+> ```bash
+> RTPI_SLUG=c3s RTPI_DOMAIN=onoiroi.us cargo tauri dev
+> ```
+> Without these variables, the new tabs render with localhost fallback
+> URLs and tunnel badges are hidden.
 
 ## 8. Open an interactive shell
 

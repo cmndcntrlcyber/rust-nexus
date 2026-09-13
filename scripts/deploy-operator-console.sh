@@ -184,11 +184,18 @@ export NEXUS_CLIENT_KEY="${CERT_DIR}/client.key.pem"
 export NEXUS_SERVER_ADDR
 export RUST_LOG="${RUST_LOG:-info}"
 
+# v4.4: tunnel badge connector — pass RTPI env vars if available.
+export RTPI_SLUG="${RTPI_SLUG:-}"
+export RTPI_DOMAIN="${RTPI_DOMAIN:-}"
+
 log "launching operator console"
 log "  C2:           ${NEXUS_SERVER_ADDR}"
 log "  CA cert:      ${NEXUS_CA_CERT}"
 log "  Client cert:  ${NEXUS_CLIENT_CERT}"
 log "  Client key:   ${NEXUS_CLIENT_KEY}"
+if [[ -n "${RTPI_SLUG}" && -n "${RTPI_DOMAIN}" ]]; then
+    log "  Tunnel:       ${RTPI_SLUG}.${RTPI_DOMAIN} (badge connector enabled)"
+fi
 
 if [[ "${MODE}" == "dev" ]]; then
     exec env -C "${TAURI_DIR}" cargo tauri dev

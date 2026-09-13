@@ -136,6 +136,30 @@ Bridges nexus-harness (LLM orchestration) with rust-nexus (connectivity/delivery
 - `nexus-agent/src/self_destruct.rs` — heartbeat/age/detection-triggered cleanup
 - `nexus-agent/src/process_name.rs` — polymorphic system-service-like process naming
 
+## v4.4 Additions
+
+### Console Tunnel Badge Connector (nexus-console)
+
+Bridges the operator console with RTPI's Cloudflare Tunnel service topology:
+- `nexus-console/src-tauri/src/state.rs` — `TunnelConfig`, `TunnelService` structs + storage on `ConsoleState`
+- `nexus-console/src-tauri/src/commands.rs` — `build_tunnel_config()`, `load_tunnel_config`, `get_tunnel_services`, `open_tunnel_url` Tauri commands + static service table (11 services)
+- `nexus-console/src-tauri/src/main.rs` — auto-loads tunnel config from `RTPI_SLUG` + `RTPI_DOMAIN` env vars on startup
+- `nexus-console/ui/src/components/tab_bar.rs` — 11 fixed tabs (+ 6 new: Workbench, Portainer, Wiki, VsCode, Reports, Kasm), `TunnelService` dynamic variant, `TunnelBadge` component, `TunnelServiceInfo` deserialization type
+- `nexus-console/ui/src/components/service_tab.rs` — generic iframe embed component with loading overlay
+- `nexus-console/ui/src/components/status_bar.rs` — tunnel service badges for Empire, Registry, API with "Open in tab" for embeddable services
+- `nexus-console/ui/src/tauri_api.rs` — `get_tunnel_services()`, `open_tunnel_url()` invoke wrappers
+
+### Environment Variables (Console)
+
+| Variable | Description |
+|----------|-------------|
+| `RTPI_SLUG` | Tunnel subdomain slug (e.g. `c3s`) — enables badge connector |
+| `RTPI_DOMAIN` | Tunnel base domain (e.g. `onoiroi.us`) — enables badge connector |
+
+### CI/CD
+
+- `.github/workflows/v4.4-build.yml` — multi-binary build: Linux server+agent, Windows cross-compile agent, Tauri console, PKI integration test, workspace tests
+
 ## Configuration
 
 Configuration uses TOML format. Two config surfaces exist:
@@ -186,6 +210,9 @@ Binaries are optimized for size and performance:
 - `nexus-a2a/src/gml.rs` - GML adjustment layer (barometer, rate control)
 - `nexus-a2a/src/ferry_handler.rs` - HarnessFerryHandler trait
 - `nexus-mesh/src/telemetry.rs` - Telemetry aggregation for GML pipeline
+- `nexus-console/ui/src/components/tab_bar.rs` - TabKind enum (11 fixed + dynamic tabs), TunnelBadge
+- `nexus-console/ui/src/components/service_tab.rs` - Generic iframe embed for tunnel-backed tabs
+- `nexus-console/ui/src/components/status_bar.rs` - Status bar with tunnel service badges
 
 ## Running Components
 

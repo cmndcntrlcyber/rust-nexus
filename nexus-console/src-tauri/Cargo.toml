@@ -34,6 +34,8 @@ thiserror = { workspace = true }
 libp2p = { workspace = true }
 # Tonic 0.14 directly (independent of the overlay's 0.10).
 tonic = { version = "0.14", default-features = false, features = ["transport", "channel"] }
+# v4.4 — open tunnel URLs in system browser.
+open = "5"
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]

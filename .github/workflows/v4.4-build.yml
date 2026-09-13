@@ -1,0 +1,138 @@
+name: v4.4 Multi-Binary Build
+
+on:
+  push:
+    branches: [main, v4.4-synergy]
+    paths:
+      - 'nexus-infra/**'
+      - 'nexus-agent/**'
+      - 'nexus-a2a/**'
+      - 'nexus-common/**'
+      - 'nexus-console/**'
+      - 'nexus-mesh/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── Linux native builds ─────────────────────────────────────────
+  build-linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install protobuf compiler
+        run: sudo apt-get install -y protobuf-compiler
+
+      - name: Build server + agent (Linux)
+        run: cargo build --release -p nexus-server -p nexus-agent
+
+      - name: Upload Linux binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-binaries
+          path: |
+            target/release/nexus-server
+            target/release/nexus-agent
+
+  # ── Windows cross-compile ───────────────────────────────────────
+  build-windows-agent:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-gnu
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install MinGW + protobuf
+        run: |
+          sudo apt-get install -y gcc-mingw-w64-x86-64 protobuf-compiler
+
+      - name: Cross-compile Windows agent
+        run: |
+          cargo build --release --target x86_64-pc-windows-gnu -p nexus-agent
+
+      - name: Upload Windows agent
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-agent
+          path: target/x86_64-pc-windows-gnu/release/nexus-agent.exe
+
+  # ── Console build (Tauri 2) ─────────────────────────────────────
+  build-console:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
+            librsvg2-dev patchelf libssl-dev openssl \
+            pkg-config protobuf-compiler
+
+      - name: Install trunk + tauri-cli
+        run: |
+          cargo install trunk --locked
+          cargo install tauri-cli --version '^2' --locked
+
+      - name: Build console
+        working-directory: nexus-console/src-tauri
+        run: cargo tauri build
+
+      - name: Upload console
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexus-console
+          path: nexus-console/src-tauri/target/release/nexus-console
+
+  # ── PKI integration test ────────────────────────────────────────
+  pki-test:
+    runs-on: ubuntu-22.04
+    needs: build-linux
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-binaries
+          path: ./bin/
+
+      - name: Generate test PKI
+        run: |
+          chmod +x ./bin/nexus-server
+          ./bin/nexus-server pki init \
+            --domain test.example.com \
+            --ip 127.0.0.1 \
+            --agents 1 \
+            --out ./test-certs
+
+      - name: Verify cert suite
+        run: |
+          ls -la ./test-certs/
+          openssl x509 -in ./test-certs/ca.crt.pem -noout -subject -dates
+          openssl x509 -in ./test-certs/server.crt.pem -noout -subject -dates -ext subjectAltName
+          openssl x509 -in ./test-certs/agent-001.crt.pem -noout -subject -dates
+          openssl verify -CAfile ./test-certs/ca.crt.pem ./test-certs/server.crt.pem
+          openssl verify -CAfile ./test-certs/ca.crt.pem ./test-certs/agent-001.crt.pem
+
+  # ── Workspace tests ─────────────────────────────────────────────
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install protobuf compiler
+        run: sudo apt-get install -y protobuf-compiler
+
+      - name: Run tests
+        run: cargo test --workspace

@@ -41,15 +41,23 @@ machine. For the **why**, see the detailed sections below.
 ### 1. Generate certs
 
 ```bash
+# Preferred (v4.4+):
+./target/release/nexus-server pki init \
+  --domain c2.example.com \
+  --ip <server-public-ip> \
+  --agents 2 \
+  --out ./certs/prod
+
+# Legacy alternative:
 ./scripts/gen-certs-prod.sh \
   --domain c2.example.com \
   --ip <server-public-ip> \
   --out ./certs/prod
 ```
 
-Produces `ca`, `server`, `operator`, and `agent` certs in `./certs/prod/`.
-Store `ca.key.pem` offline after this step — it is only needed to mint
-new agent certs.
+Produces `ca`, `server`, `operator`, `console`, and `agent` certs in
+`./certs/prod/`. Store `ca.key.pem` offline after this step — it is
+only needed to mint new agent certs.
 
 ### 2. Stage and deploy the server
 
@@ -100,7 +108,10 @@ agent-win01\install.bat
 
 ```bash
 # Build + launch on the operator workstation (auto-detects certs/prod/)
+# Include RTPI_SLUG + RTPI_DOMAIN to enable tunnel badge connector
 NEXUS_SERVER_ADDR=https://c2.example.com:50052 \
+RTPI_SLUG=c3s \
+RTPI_DOMAIN=onoiroi.us \
   ./scripts/deploy-operator-console.sh
 
 # Or package it for distribution to another operator
@@ -298,6 +309,8 @@ Logs: `C:\ProgramData\nexus-agent\agent.log`
 
 ```bash
 NEXUS_SERVER_ADDR=https://c2.example.com:50052 \
+RTPI_SLUG=c3s \
+RTPI_DOMAIN=onoiroi.us \
   ./scripts/deploy-operator-console.sh
 
 # Or package for distribution to another operator:
@@ -305,16 +318,48 @@ NEXUS_SERVER_ADDR=https://c2.example.com:50052 \
 ```
 
 The deploy script exports `NEXUS_CA_CERT`, `NEXUS_CLIENT_CERT`,
-`NEXUS_CLIENT_KEY` from `certs/prod/` and `NEXUS_SERVER_ADDR`, then
-launches the binary. The Connect dialog pre-fills with `NEXUS_SERVER_ADDR`.
+`NEXUS_CLIENT_KEY` from `certs/prod/`, `NEXUS_SERVER_ADDR`, and
+(v4.4) `RTPI_SLUG` + `RTPI_DOMAIN`, then launches the binary.
 
-See [`operator-console.md`](operator-console.md) for the full console guide.
+When `RTPI_SLUG` and `RTPI_DOMAIN` are set, the console auto-discovers
+tunnel services and displays 11 fixed tabs with tunnel badge indicators.
+Without them, the console operates in its original 5-tab mode with
+localhost fallback URLs for the 6 new service tabs.
+
+See [`operator-console.md`](operator-console.md) for the full console
+guide, including the tab-to-tunnel mapping table.
 
 ---
 
 ## Cert management
 
 ### Generating production certs
+
+**Preferred (v4.4+):** Use the built-in `pki init` subcommand, which
+generates CA, server, operator, console, and per-agent certs in one
+step:
+
+```bash
+./target/release/nexus-server pki init \
+  --domain c2.example.com \
+  --ip <public-ip> \
+  --agents 2 \
+  --out ./certs/prod
+```
+
+Output: `ca.crt.pem`, `ca.key.pem`, `server.{crt,key}.pem`,
+`operator.{crt,key}.pem`, `console.{crt,key}.pem`, and
+`agent-{001..N}.{crt,key}.pem`. All keys are Ed25519.
+
+To mint additional agent certs later:
+
+```bash
+./target/release/nexus-server pki agent \
+  --certs-dir ./certs/prod \
+  --name agent-003
+```
+
+**Legacy alternative:**
 
 ```bash
 ./scripts/gen-certs-prod.sh \
@@ -324,7 +369,7 @@ See [`operator-console.md`](operator-console.md) for the full console guide.
 ```
 
 Produces a self-contained PKI: CA, server cert (SAN: `c2.example.com` +
-IP), operator cert, and agent cert template. All keys are ED25519.
+IP), operator cert, and agent cert template. All keys are Ed25519.
 
 ### Installing on the server host
 
@@ -452,9 +497,13 @@ single certificate is used for all connections.
 5. **Console connects** — open console → Connect dialog → click Connect
    → agent list populates.
 
-6. **Shell works** — select agent → open shell → `whoami` returns.
+6. **Tab bar** — all 11 fixed tabs visible (Dashboard through Kasm).
+   Tabs with tunnel mappings show green badge dots when `RTPI_SLUG` +
+   `RTPI_DOMAIN` are set.
 
-7. **Audit log** — `sudo tail /var/lib/nexus/audit.log` shows records.
+7. **Shell works** — select agent → open shell → `whoami` returns.
+
+8. **Audit log** — `sudo tail /var/lib/nexus/audit.log` shows records.
 
 ---
 
@@ -501,9 +550,57 @@ HTTP server** bound to `127.0.0.1:9100` by default.
 
 ### Cert rotation
 
-1. Re-run `gen-certs-prod.sh` with `--out ./certs/prod`.
+1. Re-run `pki init` (or `gen-certs-prod.sh`) with `--out ./certs/prod`.
 2. Install new server certs to `/etc/nexus/` and restart nexus-server.
 3. Rebuild agent bundles with `build-agent-bundles.sh --force` and
    redeploy to agent hosts.
 4. Distribute new `certs/prod/operator.crt.pem` to operators and
    relaunch the console with the new `CERT_DIR`.
+
+---
+
+## Docker Compose deployment (v4.4)
+
+For deployments alongside the RTPI Docker stack, `nexus-server` can run
+as a container. The binary is mounted as a volume rather than baked
+into an image.
+
+```yaml
+# Add to docker-compose.yml
+
+  nexus-server:
+    image: debian:bookworm-slim
+    container_name: nexus-server
+    restart: on-failure
+    working_dir: /opt/nexus
+    command: ["/opt/nexus/bin/nexus-server", "--config", "/etc/nexus/nexus.toml"]
+    env_file:
+      - /etc/nexus/server.env
+    volumes:
+      - ./binaries/nexus-server:/opt/nexus/bin/nexus-server:ro
+      - ./certs/prod:/etc/nexus/certs:ro
+      - ./config/nexus.toml:/etc/nexus/nexus.toml:ro
+      - nexus-data:/var/lib/nexus
+    ports:
+      - "50052:50052"
+      - "127.0.0.1:9100:9100"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:9100/metrics"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  nexus-data:
+```
+
+C2 gRPC traffic is **not** tunneled through Cloudflare. Agents connect
+directly to the server's public IP on port 50052 with mTLS. Tunnel
+services (web UIs behind `*.onoiroi.us`) go through `cloudflared`
+separately.
