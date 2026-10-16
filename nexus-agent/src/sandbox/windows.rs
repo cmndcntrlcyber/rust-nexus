@@ -226,15 +226,31 @@ impl ExecutionBoundary for WindowsBoundary {
     }
 }
 
+/// Read the current process working set size via `K32GetProcessMemoryInfo`.
+///
+/// Returns 0 on failure so that no spurious resource-exceeded verdicts are
+/// triggered when the API is unavailable.
+#[cfg(target_os = "windows")]
 fn builder_memory_snapshot(_builder: &KernelContextBuilder) -> u64 {
-    // Best-effort: read current process working set via GetProcessMemoryInfo.
-    // If unavailable, return 0 (no violation triggered).
-    #[cfg(target_os = "windows")]
-    {
-        use windows_sys::Win32::System::Threading::GetCurrentProcess;
-        0 // Placeholder — full implementation uses K32GetProcessMemoryInfo
+    use windows_sys::Win32::System::ProcessStatus::{
+        K32GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS,
+    };
+    use windows_sys::Win32::System::Threading::GetCurrentProcess;
+
+    unsafe {
+        let mut pmc: PROCESS_MEMORY_COUNTERS = std::mem::zeroed();
+        let size = std::mem::size_of::<PROCESS_MEMORY_COUNTERS>() as u32;
+        let ok = K32GetProcessMemoryInfo(GetCurrentProcess(), &mut pmc, size);
+        if ok != 0 {
+            pmc.WorkingSetSize as u64
+        } else {
+            0
+        }
     }
-    #[cfg(not(target_os = "windows"))]
+}
+
+#[cfg(not(target_os = "windows"))]
+fn builder_memory_snapshot(_builder: &KernelContextBuilder) -> u64 {
     0
 }
 

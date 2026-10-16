@@ -5,6 +5,8 @@ use tauri::tray::TrayIconBuilder;
 use tauri::Manager;
 use tracing::info;
 
+use nexus_console::state::ConsoleState;
+
 /// Set up the system tray icon with a context menu.
 ///
 /// Menu items: Connect, Disconnect, (separator), Quit.
@@ -19,7 +21,7 @@ pub fn setup_tray(app: &tauri::App) -> anyhow::Result<()> {
 
     let menu = Menu::with_items(app, &[&connect, &disconnect, &separator, &quit])?;
 
-    TrayIconBuilder::new()
+    TrayIconBuilder::with_id(app, "nexus-tray")
         .icon(app.default_window_icon().cloned().unwrap_or_else(|| {
             tauri::image::Image::new(&[], 0, 0)
         }))
@@ -45,6 +47,13 @@ pub fn setup_tray(app: &tauri::App) -> anyhow::Result<()> {
                 }
                 "disconnect" => {
                     info!("tray: Disconnect clicked");
+                    let state: tauri::State<'_, ConsoleState> = app_handle.state();
+                    tauri::async_runtime::block_on(async {
+                        state.clear_connection().await;
+                    });
+                    if let Some(tray) = app_handle.tray_by_id("nexus-tray") {
+                        let _ = tray.set_tooltip(Some("Nexus Console — Disconnected"));
+                    }
                 }
                 "quit" => {
                     info!("tray: Quit clicked");

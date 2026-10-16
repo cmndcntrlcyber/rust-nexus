@@ -709,6 +709,27 @@ pub async fn stop_topology_stream(
     Ok(state.stop_topology().await)
 }
 
+// ── Stub commands for UI components not yet backed by a real service ─────────
+
+/// Stub for HUD approval queue — returns a structured "not implemented" error
+/// so the UI can show a graceful message instead of crashing.
+#[tauri::command]
+pub async fn submit_approval(_decision_id: String, _approved: bool) -> Result<(), String> {
+    Err("Approval queue backend not yet implemented — coming in v1.5".into())
+}
+
+/// Stub for HUD steering panel — returns a structured "not implemented" error.
+#[tauri::command]
+pub async fn steer_agent(_action: String) -> Result<(), String> {
+    Err("Agent steering backend not yet implemented — coming in v1.5".into())
+}
+
+/// Stub for chat message sending — returns a structured "not implemented" error.
+#[tauri::command]
+pub async fn send_chat_message(_mode: String, _message: String) -> Result<String, String> {
+    Err("Chat backend not yet implemented — coming in v1.5".into())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
