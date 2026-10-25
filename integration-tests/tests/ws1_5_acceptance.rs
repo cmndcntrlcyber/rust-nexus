@@ -361,6 +361,7 @@ fn kernel_context_proto_round_trip() {
         bytes_recv: 0,
         commands_run: 1,
         kernel_context: Some(proto.clone()),
+        ..Default::default()
     };
 
     let result_bytes = task_result.encode_to_vec();

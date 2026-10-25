@@ -4,12 +4,11 @@
 
 //! `nexus-console` — Tauri v2 operator console entry point.
 
-mod tray;
-
 use tauri::Manager;
 
 use nexus_console::commands;
 use nexus_console::state::ConsoleState;
+use nexus_console::tray;
 use tracing_subscriber::EnvFilter;
 
 fn main() {

@@ -5,7 +5,7 @@ use tauri::tray::TrayIconBuilder;
 use tauri::Manager;
 use tracing::info;
 
-use nexus_console::state::ConsoleState;
+use crate::state::ConsoleState;
 
 /// Set up the system tray icon with a context menu.
 ///
@@ -21,7 +21,7 @@ pub fn setup_tray(app: &tauri::App) -> anyhow::Result<()> {
 
     let menu = Menu::with_items(app, &[&connect, &disconnect, &separator, &quit])?;
 
-    TrayIconBuilder::with_id(app, "nexus-tray")
+    TrayIconBuilder::with_id("nexus-tray")
         .icon(app.default_window_icon().cloned().unwrap_or_else(|| {
             tauri::image::Image::new(&[], 0, 0)
         }))
