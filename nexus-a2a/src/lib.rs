@@ -1,4 +1,4 @@
-#![allow(clippy::double_must_use)]
+#![allow(clippy::double_must_use, clippy::result_large_err)]
 //! `nexus-a2a` — A2A gRPC plane (v1.1 simple-mesh integration layer).
 //!
 //! Provides Linux Foundation A2A-protocol-compatible types + a `shell-session`

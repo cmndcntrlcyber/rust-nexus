@@ -1,4 +1,4 @@
-#![allow(clippy::double_must_use)]
+#![allow(clippy::double_must_use, clippy::result_large_err)]
 //! Nexus Infrastructure Management
 //!
 //! This crate provides infrastructure management capabilities for the Nexus C2 framework,
