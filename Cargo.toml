@@ -8,13 +8,14 @@ members = [
     "nexus-web-comms",
     "nexus-mesh",
     "nexus-a2a",
-    "nexus-console/src-tauri",
+    # "nexus-console/src-tauri",  # Excluded: tauri-plugin-tray-icon transitive dep fails to resolve (B-3)
     "integration-tests",
 ]
 # nexus-console/ui targets wasm32-unknown-unknown via Trunk; excluding it
 # from the workspace prevents the native-target workspace operations from
 # tripping over wasm-only deps (Leptos CSR mode).
-exclude = ["nexus-console/ui"]
+# nexus-console/src-tauri excluded until tauri-plugin-tray-icon is resolved (B-3).
+exclude = ["nexus-console/ui", "nexus-console/src-tauri"]
 
 [workspace.dependencies]
 serde = { version = "1.0", features = ["derive"] }
