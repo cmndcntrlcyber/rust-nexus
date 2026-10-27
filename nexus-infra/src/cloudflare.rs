@@ -1,14 +1,14 @@
 //! Cloudflare API client for DNS management and domain fronting
 
 use crate::{CloudflareConfig, InfraError, InfraResult};
-use secrecy::ExposeSecret;
-use tracing::{debug, info, warn};
 use reqwest::{
     header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE},
     Client,
 };
+use secrecy::ExposeSecret;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use tracing::{debug, info, warn};
 
 /// Cloudflare DNS record types
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

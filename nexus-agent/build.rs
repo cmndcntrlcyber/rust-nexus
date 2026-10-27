@@ -56,7 +56,12 @@ fn embed_certs() {
             );
         }
         std::fs::copy(&src, &dst).unwrap_or_else(|e| {
-            panic!("failed to copy {} -> {}: {}", src.display(), dst.display(), e);
+            panic!(
+                "failed to copy {} -> {}: {}",
+                src.display(),
+                dst.display(),
+                e
+            );
         });
         // Re-run if the source cert changes.
         println!("cargo:rerun-if-changed={}", src.display());

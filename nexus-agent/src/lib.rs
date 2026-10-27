@@ -1,3 +1,4 @@
+#![allow(clippy::double_must_use)]
 //! `nexus-agent` — library half of the rust-nexus agent (v1.1 simple-mesh
 //! integration additions).
 //!

@@ -1,3 +1,4 @@
+#![allow(clippy::double_must_use, clippy::result_large_err)]
 //! Nexus Infrastructure Management
 //!
 //! This crate provides infrastructure management capabilities for the Nexus C2 framework,
@@ -43,10 +44,10 @@ pub use config::{
     LetsEncryptConfig, NexusConfig, OriginCertConfig, SubdomainPattern,
 };
 pub use domain_manager::DomainManager;
-pub use pki::{AgentBundle, PkiBundle, PkiManager};
 pub use grpc_client::GrpcClient;
 pub use grpc_server::GrpcServer;
 pub use letsencrypt::CertificateManager;
+pub use pki::{AgentBundle, PkiBundle, PkiManager};
 
 /// Infrastructure error types
 #[derive(thiserror::Error, Debug)]

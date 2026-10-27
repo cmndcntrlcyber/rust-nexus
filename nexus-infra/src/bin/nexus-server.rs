@@ -115,17 +115,34 @@ fn main() -> ExitCode {
         }
         Action::InitIdentity(path) => run_init_identity(&path),
         Action::Serve(config_path) => run_serve(config_path),
-        Action::PkiInit { domain, ip, agents, out, cf_token, cf_zone_id, cf_client_ca } => {
-            run_pki_init(
-                &domain, &ip, agents, &out,
-                cf_token.as_deref(),
-                cf_zone_id.as_deref(),
-                cf_client_ca.as_deref(),
-            )
-        }
-        Action::PkiAgent { certs_dir, name, cf_token, cf_zone_id } => {
-            run_pki_agent(&certs_dir, &name, cf_token.as_deref(), cf_zone_id.as_deref())
-        }
+        Action::PkiInit {
+            domain,
+            ip,
+            agents,
+            out,
+            cf_token,
+            cf_zone_id,
+            cf_client_ca,
+        } => run_pki_init(
+            &domain,
+            &ip,
+            agents,
+            &out,
+            cf_token.as_deref(),
+            cf_zone_id.as_deref(),
+            cf_client_ca.as_deref(),
+        ),
+        Action::PkiAgent {
+            certs_dir,
+            name,
+            cf_token,
+            cf_zone_id,
+        } => run_pki_agent(
+            &certs_dir,
+            &name,
+            cf_token.as_deref(),
+            cf_zone_id.as_deref(),
+        ),
     }
 }
 
@@ -246,11 +263,14 @@ fn parse_pki_args(
                         cf_token = Some(iter.next().ok_or("--cf-token requires a value")?.clone());
                     }
                     "--cf-zone-id" => {
-                        cf_zone_id = Some(iter.next().ok_or("--cf-zone-id requires a value")?.clone());
+                        cf_zone_id =
+                            Some(iter.next().ok_or("--cf-zone-id requires a value")?.clone());
                     }
                     "--cf-client-ca" => {
                         cf_client_ca = Some(PathBuf::from(
-                            iter.next().ok_or("--cf-client-ca requires a path")?.as_str(),
+                            iter.next()
+                                .ok_or("--cf-client-ca requires a path")?
+                                .as_str(),
                         ));
                     }
                     other => return Err(format!("pki init: unknown flag: {other}")),
@@ -285,7 +305,8 @@ fn parse_pki_args(
                         cf_token = Some(iter.next().ok_or("--cf-token requires a value")?.clone());
                     }
                     "--cf-zone-id" => {
-                        cf_zone_id = Some(iter.next().ok_or("--cf-zone-id requires a value")?.clone());
+                        cf_zone_id =
+                            Some(iter.next().ok_or("--cf-zone-id requires a value")?.clone());
                     }
                     other => return Err(format!("pki agent: unknown flag: {other}")),
                 }
@@ -297,7 +318,9 @@ fn parse_pki_args(
                 cf_zone_id,
             })
         }
-        other => Err(format!("pki: unknown subcommand: {other}; expected init | agent")),
+        other => Err(format!(
+            "pki: unknown subcommand: {other}; expected init | agent"
+        )),
     }
 }
 
@@ -346,17 +369,31 @@ fn run_pki_init(
             return ExitCode::from(1);
         }
     };
-    match PkiManager::init(domain, ip_addr, agents, out, cf_token, cf_zone_id, cf_client_ca) {
+    match PkiManager::init(
+        domain,
+        ip_addr,
+        agents,
+        out,
+        cf_token,
+        cf_zone_id,
+        cf_client_ca,
+    ) {
         Ok(b) => {
             println!("PKI initialized in {}", b.out_dir.display());
             println!();
             println!("Server env vars:");
             println!("  NEXUS_SERVER_CERT={}", b.server_cert.display());
             println!("  NEXUS_SERVER_KEY={}", b.server_key.display());
-            println!("  NEXUS_CA_CERT={}   # CF zone client CA — validates incoming client certs", b.client_ca_cert.display());
+            println!(
+                "  NEXUS_CA_CERT={}   # CF zone client CA — validates incoming client certs",
+                b.client_ca_cert.display()
+            );
             println!();
             println!("Agent env vars (per agent):");
-            println!("  NEXUS_CA_CERT={}   # CF Origin CA ECC root — verifies server cert", b.server_ca_cert.display());
+            println!(
+                "  NEXUS_CA_CERT={}   # CF Origin CA ECC root — verifies server cert",
+                b.server_ca_cert.display()
+            );
             if let Some(a) = b.agents.first() {
                 println!("  NEXUS_CLIENT_CERT={}", a.cert.display());
                 println!("  NEXUS_CLIENT_KEY={}", a.key.display());
@@ -614,8 +651,7 @@ struct A2aSection {
 
 fn load_serve_config(path: &Path) -> anyhow::Result<ServeConfig> {
     use anyhow::Context;
-    let text = std::fs::read_to_string(path)
-        .with_context(|| format!("read {}", path.display()))?;
+    let text = std::fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?;
     let cfg: ServeConfig =
         toml::from_str(&text).with_context(|| format!("parse {}", path.display()))?;
     Ok(cfg)

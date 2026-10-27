@@ -1,7 +1,6 @@
 //! gRPC client with enhanced TLS and domain fronting support
 
 use crate::{proto::*, CertManager, DomainManager, InfraError, InfraResult};
-use tracing::{debug, info, warn};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
@@ -10,6 +9,7 @@ use tonic::{
     transport::{Channel, ClientTlsConfig, Endpoint},
     Request,
 };
+use tracing::{debug, info, warn};
 
 /// Connection status for the gRPC client
 #[derive(Debug, Clone, PartialEq)]

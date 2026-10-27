@@ -137,17 +137,16 @@ impl Clone for EtwSnapshot {
 /// On non-admin systems, `StartTraceW` will fail with
 /// `ERROR_ACCESS_DENIED` — this is expected and handled gracefully
 /// by returning immediately (the snapshot stays empty).
-fn etw_trace_loop(
-    target_pid: u32,
-    running: Arc<AtomicBool>,
-    events: Arc<Mutex<EtwSnapshot>>,
-) {
+fn etw_trace_loop(target_pid: u32, running: Arc<AtomicBool>, events: Arc<Mutex<EtwSnapshot>>) {
     // Attempt kernel-mode ETW trace setup.
     // On non-elevated processes this will fail immediately, which is
     // the graceful degradation path (WS1.5 acceptance criterion:
     // "non-SYSTEM user → kernel_context: None, no errors").
     if !try_setup_etw_session(target_pid, &running, &events) {
-        debug!(pid = target_pid, "ETW session setup failed (expected for non-admin); observer inactive");
+        debug!(
+            pid = target_pid,
+            "ETW session setup failed (expected for non-admin); observer inactive"
+        );
         return;
     }
 }
@@ -178,7 +177,9 @@ fn try_setup_etw_session(
         (*props).LoggerNameOffset = std::mem::size_of::<EVENT_TRACE_PROPERTIES>() as u32;
 
         // Copy session name into the buffer after the struct.
-        let name_dest = buffer.as_mut_ptr().add(std::mem::size_of::<EVENT_TRACE_PROPERTIES>());
+        let name_dest = buffer
+            .as_mut_ptr()
+            .add(std::mem::size_of::<EVENT_TRACE_PROPERTIES>());
         std::ptr::copy_nonoverlapping(
             session_name.as_ptr() as *const u8,
             name_dest,
@@ -186,11 +187,7 @@ fn try_setup_etw_session(
         );
 
         let mut session_handle: CONTROLTRACE_HANDLE = CONTROLTRACE_HANDLE { Value: 0 };
-        let status = StartTraceW(
-            &mut session_handle,
-            session_name.as_ptr(),
-            props,
-        );
+        let status = StartTraceW(&mut session_handle, session_name.as_ptr(), props);
 
         if status != 0 {
             debug!(
@@ -238,7 +235,8 @@ fn try_setup_etw_session(
 
         // Clean up: stop the trace session.
         // Re-use the buffer for ControlTrace stop.
-        let stop_props_size = std::mem::size_of::<EVENT_TRACE_PROPERTIES>() + (session_name.len() * 2);
+        let stop_props_size =
+            std::mem::size_of::<EVENT_TRACE_PROPERTIES>() + (session_name.len() * 2);
         let mut stop_buffer = vec![0u8; stop_props_size];
         let stop_props = stop_buffer.as_mut_ptr() as *mut EVENT_TRACE_PROPERTIES;
         (*stop_props).Wnode.BufferSize = stop_props_size as u32;
@@ -260,8 +258,8 @@ fn try_setup_etw_session(
 /// Read the working set size of a process via its PID.
 /// Returns `None` if the process handle cannot be opened.
 fn get_process_memory(pid: u32) -> Option<u64> {
-    use windows_sys::Win32::System::Threading::OpenProcess;
     use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::Threading::OpenProcess;
 
     const PROCESS_QUERY_INFORMATION: u32 = 0x0400;
     const PROCESS_VM_READ: u32 = 0x0010;

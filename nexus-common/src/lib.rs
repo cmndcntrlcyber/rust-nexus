@@ -1,3 +1,4 @@
+#![allow(clippy::double_must_use)]
 //! Shared library for the rust-nexus C2 framework: crypto, message types, identity, and error handling.
 
 // v1.5: both v1.4 module-level allows removed.
@@ -24,9 +25,7 @@ pub mod sealed;
 // v1.5 kernel-level execution context (WS1.5).
 pub mod kernel_context;
 
-pub use agent::{
-    Agent, AgentBuilder, AgentCapabilities, AgentSession, AgentStatus,
-};
+pub use agent::{Agent, AgentBuilder, AgentCapabilities, AgentSession, AgentStatus};
 pub use crypto::*;
 pub use messages::*;
 pub use tasks::*;
@@ -34,9 +33,7 @@ pub use technique::*;
 
 // New re-exports (v1.1).
 pub use identity::{NodeIdentity, PeerId, IDENTITY_BLOB_LEN};
-pub use kernel_context::{
-    KernelContext, KernelContextBuilder, SandboxConfig, SandboxVerdict,
-};
+pub use kernel_context::{KernelContext, KernelContextBuilder, SandboxConfig, SandboxVerdict};
 pub use os::OsKind;
 pub use sealed::{ReplayWindow, SealedEnvelope};
 

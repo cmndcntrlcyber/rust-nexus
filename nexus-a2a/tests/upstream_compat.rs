@@ -104,7 +104,6 @@ fn agent_skill_fields_compatible() {
         name: "shell-session".into(),
         description: "x".into(),
         tags: vec!["t1".into()],
-        ..Default::default()
     };
     let bytes = upstream.encode_to_vec();
     let ours = pb::AgentSkill::decode(bytes.as_slice()).expect("decode as our pb");
@@ -151,10 +150,7 @@ async fn live_get_agent_card_via_upstream_encoding() {
     let as_upstream =
         pb_upstream::AgentCard::decode(bytes.as_slice()).expect("decode as upstream AgentCard");
     assert_eq!(as_upstream.name, "upstream-interop");
-    // version is at field 3 in ours but field 5 in upstream — known divergence
-    // upstream sees our version bytes at field 3 as `url` (both are strings, so
-    // it decodes but into the wrong semantic field).
-    assert_eq!(as_upstream.url, "0.1.0"); // our version decoded as upstream's url
+    assert_eq!(as_upstream.version, "0.1.0");
 }
 
 /// Live RPC: confirm `GetTask` (v1.3 stub RPC) returns Unimplemented
@@ -174,17 +170,16 @@ async fn live_get_task_returns_unimplemented_to_upstream_client() {
     // Encode the request from upstream-side, ship via our client,
     // and assert the upstream side sees the right gRPC code.
     let upstream_req = pb_upstream::GetTaskRequest {
-        name: "tasks/upstream-task-1".into(),
-        history_length: 0,
+        task_id: "upstream-task-1".into(),
     };
     // Round-trip via prost so the byte-level compatibility is in the
     // critical path of the test (catches accidental field-number
     // drift even if the schema happens to compile).
     let req_bytes = upstream_req.encode_to_vec();
     let our_req = pb::GetTaskRequest::decode(req_bytes.as_slice()).expect("decode req");
-    // Our GetTaskRequest uses `task_id` at field 1; upstream uses `name` at field 1.
-    // Wire-compatible: the bytes at field 1 decode into our `task_id`.
-    assert_eq!(our_req.task_id, "tasks/upstream-task-1");
+    // Our GetTaskRequest uses `task_id` at field 1; upstream uses `task_id` at field 1.
+    // Wire-compatible: the bytes at field 1 decode into our `task_id` as-is.
+    assert_eq!(our_req.task_id, "upstream-task-1");
 
     let err = client
         .get_task(tonic::Request::new(our_req))

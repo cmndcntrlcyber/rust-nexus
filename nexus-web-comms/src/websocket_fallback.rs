@@ -27,7 +27,7 @@ mod tests {
 
     #[test]
     fn test_websocket_fallback_default() {
-        let ws = WebSocketFallback::default();
+        let ws = WebSocketFallback;
         let _ = ws;
     }
 }

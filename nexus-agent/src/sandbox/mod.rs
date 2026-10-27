@@ -11,14 +11,14 @@ use std::future::Future;
 use std::pin::Pin;
 
 // Platform-specific modules.
+#[cfg(target_os = "windows")]
+pub mod etw_observer;
 #[cfg(target_os = "linux")]
 pub mod linux;
 #[cfg(target_os = "linux")]
 pub mod proc_observer;
 #[cfg(target_os = "windows")]
 pub mod windows;
-#[cfg(target_os = "windows")]
-pub mod etw_observer;
 
 /// Creates platform-appropriate execution sandboxes.
 #[async_trait]
@@ -39,7 +39,13 @@ pub trait ExecutionBoundary: Send + Sync {
         &self,
         task_type: &str,
         f: Pin<Box<dyn Future<Output = Result<String, nexus_common::NexusError>> + Send>>,
-    ) -> Result<(Result<String, nexus_common::NexusError>, Option<KernelContext>), SandboxError>;
+    ) -> Result<
+        (
+            Result<String, nexus_common::NexusError>,
+            Option<KernelContext>,
+        ),
+        SandboxError,
+    >;
 
     /// Release OS resources (Job Object handle, cgroup slice, etc.).
     async fn teardown(&mut self) -> Result<(), SandboxError>;
@@ -48,12 +54,16 @@ pub trait ExecutionBoundary: Send + Sync {
 /// Errors from the sandbox subsystem.
 #[derive(Debug, thiserror::Error)]
 pub enum SandboxError {
+    /// Containment setup failed.
     #[error("containment setup failed: {0}")]
     Setup(String),
+    /// Observation attachment failed.
     #[error("observation attachment failed: {0}")]
     Observer(String),
+    /// Containment sandbox was breached.
     #[error("containment breach detected")]
     Breach,
+    /// I/O error during sandbox operation.
     #[error("sandbox I/O: {0}")]
     Io(#[from] std::io::Error),
 }
@@ -80,8 +90,13 @@ impl ExecutionBoundary for NoopBoundary {
         &self,
         _task_type: &str,
         f: Pin<Box<dyn Future<Output = Result<String, nexus_common::NexusError>> + Send>>,
-    ) -> Result<(Result<String, nexus_common::NexusError>, Option<KernelContext>), SandboxError>
-    {
+    ) -> Result<
+        (
+            Result<String, nexus_common::NexusError>,
+            Option<KernelContext>,
+        ),
+        SandboxError,
+    > {
         let result = f.await;
         Ok((result, None))
     }

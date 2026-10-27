@@ -29,8 +29,11 @@ use crate::transport::TransportKind;
 ///
 /// The agent tries each kind in slice order and uses the first one that
 /// connects successfully.
-pub const TRANSPORT_PRIORITY: &[TransportKind] =
-    &[TransportKind::Grpc, TransportKind::Mesh, TransportKind::Legacy];
+pub const TRANSPORT_PRIORITY: &[TransportKind] = &[
+    TransportKind::Grpc,
+    TransportKind::Mesh,
+    TransportKind::Legacy,
+];
 
 /// Selects the highest-priority transport from a set of available ones.
 ///

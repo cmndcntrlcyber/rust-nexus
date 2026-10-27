@@ -28,7 +28,7 @@ jobs:
         run: sudo apt-get install -y protobuf-compiler
 
       - name: Build server + agent (Linux)
-        run: cargo build --release -p nexus-server -p nexus-agent
+        run: cargo build --release -p nexus-infra -p nexus-agent
 
       - name: Upload Linux binaries
         uses: actions/upload-artifact@v4

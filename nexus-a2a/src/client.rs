@@ -136,8 +136,13 @@ impl A2aClient {
     /// execution on a remote agent.
     pub async fn stream_harness_task(
         &mut self,
-    ) -> Result<(mpsc::Sender<pb::HarnessTask>, Streaming<pb::HarnessTaskResult>), tonic::Status>
-    {
+    ) -> Result<
+        (
+            mpsc::Sender<pb::HarnessTask>,
+            Streaming<pb::HarnessTaskResult>,
+        ),
+        tonic::Status,
+    > {
         let (tx, rx) = mpsc::channel::<pb::HarnessTask>(CLIENT_TX_CAPACITY);
         let outbound = ReceiverStream::new(rx);
         let response = self.inner.stream_harness_task(outbound).await?;
@@ -154,9 +159,7 @@ impl A2aClient {
     }
 
     /// v1.6 — query the current anomaly barometer from the GML layer (WS2).
-    pub async fn query_anomaly_score(
-        &mut self,
-    ) -> Result<pb::AnomalyScoreResponse, tonic::Status> {
+    pub async fn query_anomaly_score(&mut self) -> Result<pb::AnomalyScoreResponse, tonic::Status> {
         let response = self.inner.query_anomaly_score(pb::Empty {}).await?;
         Ok(response.into_inner())
     }
@@ -165,8 +168,13 @@ impl A2aClient {
     /// coordination between nexus-harness instances.
     pub async fn broadcast_swarm_state(
         &mut self,
-    ) -> Result<(mpsc::Sender<pb::SwarmCoordinate>, Streaming<pb::SwarmCoordinate>), tonic::Status>
-    {
+    ) -> Result<
+        (
+            mpsc::Sender<pb::SwarmCoordinate>,
+            Streaming<pb::SwarmCoordinate>,
+        ),
+        tonic::Status,
+    > {
         let (tx, rx) = mpsc::channel::<pb::SwarmCoordinate>(CLIENT_TX_CAPACITY);
         let outbound = ReceiverStream::new(rx);
         let response = self.inner.broadcast_swarm_state(outbound).await?;
@@ -205,9 +213,7 @@ impl A2aClient {
     }
 
     /// Get the current HITL approval queue.
-    pub async fn get_approval_queue(
-        &mut self,
-    ) -> Result<pb::ApprovalQueueResponse, tonic::Status> {
+    pub async fn get_approval_queue(&mut self) -> Result<pb::ApprovalQueueResponse, tonic::Status> {
         let response = self.inner.get_approval_queue(pb::Empty {}).await?;
         Ok(response.into_inner())
     }

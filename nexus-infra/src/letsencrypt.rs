@@ -127,18 +127,16 @@ impl CertificateManager {
 
         let mut authorizations = order.authorizations();
         while let Some(result) = authorizations.next().await {
-            let mut authz = result
-                .map_err(|e| InfraError::LetsEncryptError(format!("authorization: {e}")))?;
+            let mut authz =
+                result.map_err(|e| InfraError::LetsEncryptError(format!("authorization: {e}")))?;
 
             if matches!(authz.status, AuthorizationStatus::Valid) {
                 continue;
             }
 
-            let mut challenge = authz
-                .challenge(ChallengeType::Dns01)
-                .ok_or_else(|| {
-                    InfraError::LetsEncryptError("no DNS-01 challenge found".to_string())
-                })?;
+            let mut challenge = authz.challenge(ChallengeType::Dns01).ok_or_else(|| {
+                InfraError::LetsEncryptError("no DNS-01 challenge found".to_string())
+            })?;
 
             let proof = challenge.key_authorization().dns_value();
             let ident = challenge.identifier().to_string();
@@ -188,8 +186,13 @@ impl CertificateManager {
             let _ = cloudflare.delete_acme_challenge(&txt_name).await;
         }
 
-        self.save_certificate(primary_domain, &cert_chain_pem, &private_key_pem, san_domains)
-            .await
+        self.save_certificate(
+            primary_domain,
+            &cert_chain_pem,
+            &private_key_pem,
+            san_domains,
+        )
+        .await
     }
 
     async fn save_certificate(

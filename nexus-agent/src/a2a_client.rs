@@ -251,15 +251,20 @@ async fn handle_inbound(
                     operator_signature: Vec::new(),
                     target_agent_id: String::new(),
                 };
-                let (output, is_error, duration_ms) = if let Some(handler) = BIDI_FERRY_HANDLER.get() {
-                    match handler.handle_task(task).await {
-                        Ok(r) => (r.output, r.is_error, r.execution_duration_ms),
-                        Err(status) => (format!("ferry dispatch error: {status}"), true, 0),
-                    }
-                } else {
-                    warn!("bidi ferry handler not initialized — use SubmitHarnessTask RPC");
-                    (format!("bidi ferry handler not yet initialized; tool={tool_name}"), true, 0)
-                };
+                let (output, is_error, duration_ms) =
+                    if let Some(handler) = BIDI_FERRY_HANDLER.get() {
+                        match handler.handle_task(task).await {
+                            Ok(r) => (r.output, r.is_error, r.execution_duration_ms),
+                            Err(status) => (format!("ferry dispatch error: {status}"), true, 0),
+                        }
+                    } else {
+                        warn!("bidi ferry handler not initialized — use SubmitHarnessTask RPC");
+                        (
+                            format!("bidi ferry handler not yet initialized; tool={tool_name}"),
+                            true,
+                            0,
+                        )
+                    };
                 let result_frame = ShellControl::HarnessTaskResult {
                     task_id: task_id.clone(),
                     output,

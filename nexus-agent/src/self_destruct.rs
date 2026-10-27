@@ -37,11 +37,7 @@ impl SelfDestructPolicy {
     }
 
     /// Evaluate whether the policy criteria have been met.
-    pub fn should_destruct(
-        &self,
-        consecutive_failed_heartbeats: u32,
-        uptime_hours: u64,
-    ) -> bool {
+    pub fn should_destruct(&self, consecutive_failed_heartbeats: u32, uptime_hours: u64) -> bool {
         if self.detection_triggered {
             return true;
         }
@@ -106,8 +102,7 @@ pub async fn execute_self_destruct(identity_path: &Path) -> std::io::Result<()> 
 
         // Remove user-level systemd service.
         if let Ok(home) = std::env::var("HOME") {
-            let user_service = Path::new(&home)
-                .join(".config/systemd/user/nexus-agent.service");
+            let user_service = Path::new(&home).join(".config/systemd/user/nexus-agent.service");
             if user_service.exists() {
                 let _ = std::fs::remove_file(&user_service);
                 let _ = std::process::Command::new("systemctl")
@@ -185,8 +180,7 @@ mod tests {
     #[tokio::test]
     async fn test_execute_self_destruct_missing_identity() {
         // Calling with a nonexistent path should succeed gracefully.
-        let result =
-            execute_self_destruct(Path::new("/tmp/nonexistent-nexus-identity.bin")).await;
+        let result = execute_self_destruct(Path::new("/tmp/nonexistent-nexus-identity.bin")).await;
         assert!(result.is_ok());
     }
 
