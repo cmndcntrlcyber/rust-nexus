@@ -99,7 +99,9 @@ impl DtnQueue {
         // Evict the oldest entries until we're under cap.
         let mut entries = Self::list_entries(&dir)?;
         while entries.len() >= self.opts.max_depth {
-            let Some(oldest) = entries.pop_front() else { break };
+            let Some(oldest) = entries.pop_front() else {
+                break;
+            };
             let _ = fs::remove_file(dir.join(&oldest));
             debug!(recipient = %recipient_peer_id_hex, file = %oldest, "dtn: evicted oldest");
         }

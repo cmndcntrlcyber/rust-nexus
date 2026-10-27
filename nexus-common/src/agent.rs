@@ -203,15 +203,42 @@ pub struct AgentBuilder {
 }
 
 impl AgentBuilder {
-    pub fn hostname(mut self, v: String) -> Self { self.hostname = v; self }
-    pub fn os_type(mut self, v: String) -> Self { self.os_type = v; self }
-    pub fn os_version(mut self, v: String) -> Self { self.os_version = v; self }
-    pub fn ip_address(mut self, v: String) -> Self { self.ip_address = v; self }
-    pub fn username(mut self, v: String) -> Self { self.username = v; self }
-    pub fn process_id(mut self, v: u32) -> Self { self.process_id = v; self }
-    pub fn process_name(mut self, v: String) -> Self { self.process_name = v; self }
-    pub fn architecture(mut self, v: String) -> Self { self.architecture = v; self }
-    pub fn capabilities(mut self, v: Vec<String>) -> Self { self.capabilities = v; self }
+    pub fn hostname(mut self, v: String) -> Self {
+        self.hostname = v;
+        self
+    }
+    pub fn os_type(mut self, v: String) -> Self {
+        self.os_type = v;
+        self
+    }
+    pub fn os_version(mut self, v: String) -> Self {
+        self.os_version = v;
+        self
+    }
+    pub fn ip_address(mut self, v: String) -> Self {
+        self.ip_address = v;
+        self
+    }
+    pub fn username(mut self, v: String) -> Self {
+        self.username = v;
+        self
+    }
+    pub fn process_id(mut self, v: u32) -> Self {
+        self.process_id = v;
+        self
+    }
+    pub fn process_name(mut self, v: String) -> Self {
+        self.process_name = v;
+        self
+    }
+    pub fn architecture(mut self, v: String) -> Self {
+        self.architecture = v;
+        self
+    }
+    pub fn capabilities(mut self, v: Vec<String>) -> Self {
+        self.capabilities = v;
+        self
+    }
     pub fn metadata(mut self, key: String, value: String) -> Self {
         self.metadata.insert(key, value);
         self

@@ -69,7 +69,11 @@ mod tests {
     fn test_generate_process_name_has_valid_prefix() {
         let name = generate_process_name();
         let has_prefix = PREFIXES.iter().any(|p| name.starts_with(p));
-        assert!(has_prefix, "name '{}' should start with a known prefix", name);
+        assert!(
+            has_prefix,
+            "name '{}' should start with a known prefix",
+            name
+        );
     }
 
     #[test]
@@ -91,7 +95,11 @@ mod tests {
         // Verify it has a valid generated name (no extension on Linux).
         let file_name = new_path.file_name().unwrap().to_str().unwrap();
         let has_prefix = PREFIXES.iter().any(|p| file_name.starts_with(p));
-        assert!(has_prefix, "relocated file '{}' should have a known prefix", file_name);
+        assert!(
+            has_prefix,
+            "relocated file '{}' should have a known prefix",
+            file_name
+        );
     }
 
     #[test]

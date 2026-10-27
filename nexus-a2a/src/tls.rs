@@ -35,8 +35,8 @@ fn assert_cert_key_match(cert_pem: &[u8], key_pem: &[u8]) -> Result<(), TlsError
     // Fall back to EC keys when no PKCS#8 block found (rcgen uses PKCS#8 by
     // default, but handle raw EC for certs generated outside this toolchain).
     if keys.is_empty() {
-        keys = rustls_pemfile::ec_private_keys(&mut std::io::Cursor::new(key_pem))
-            .unwrap_or_default();
+        keys =
+            rustls_pemfile::ec_private_keys(&mut std::io::Cursor::new(key_pem)).unwrap_or_default();
     }
 
     if chain.is_empty() || keys.is_empty() {

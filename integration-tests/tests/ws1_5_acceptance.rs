@@ -84,9 +84,7 @@ mod windows_tests {
             assert!(!ptr.is_null(), "VirtualAlloc should succeed");
             unsafe {
                 windows_sys::Win32::System::Memory::VirtualFree(
-                    ptr,
-                    0,
-                    0x00008000, // MEM_RELEASE
+                    ptr, 0, 0x00008000, // MEM_RELEASE
                 );
             }
             Ok("shellcode_simulation_complete".to_string())
@@ -124,7 +122,7 @@ mod windows_tests {
                 cmd.as_ptr() as *mut u8,
                 std::ptr::null_mut(),
                 std::ptr::null_mut(),
-                0, // FALSE
+                0,          // FALSE
                 0x00000004, // CREATE_SUSPENDED
                 std::ptr::null_mut(),
                 std::ptr::null(),
@@ -211,8 +209,8 @@ mod windows_tests {
     async fn degradation_non_system_graceful() {
         // The NoopSandbox path should return kernel_context: None
         // without any errors. This simulates non-SYSTEM execution.
-        use nexus_agent::sandbox::NoopSandbox;
         use nexus_agent::sandbox::ExecutionSandbox;
+        use nexus_agent::sandbox::NoopSandbox;
 
         let sandbox = NoopSandbox;
         let config = SandboxConfig::for_task_type("shell");
@@ -223,10 +221,7 @@ mod windows_tests {
 
         let f = Box::pin(async { Ok("degraded".to_string()) });
 
-        let (result, kernel_ctx) = boundary
-            .execute("shell", f)
-            .await
-            .expect("execute");
+        let (result, kernel_ctx) = boundary.execute("shell", f).await.expect("execute");
 
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "degraded");
@@ -330,8 +325,7 @@ fn kernel_context_proto_round_trip() {
     assert!(!bytes.is_empty(), "serialized bytes should be non-empty");
 
     // Deserialize back.
-    let decoded =
-        pb::KernelContextProto::decode(bytes.as_slice()).expect("decode should succeed");
+    let decoded = pb::KernelContextProto::decode(bytes.as_slice()).expect("decode should succeed");
 
     assert_eq!(decoded.execution_duration_ns, 123_456_789);
     assert_eq!(decoded.syscall_count, 42);
@@ -340,10 +334,7 @@ fn kernel_context_proto_round_trip() {
     assert_eq!(decoded.files_touched, 5);
     assert_eq!(decoded.network_connections, 2);
     assert_eq!(decoded.threads_created, 3);
-    assert_eq!(
-        decoded.sandbox_verdict,
-        pb::SandboxVerdict::Nominal as i32
-    );
+    assert_eq!(decoded.sandbox_verdict, pb::SandboxVerdict::Nominal as i32);
     assert_eq!(decoded.process_events.len(), 1);
     assert_eq!(decoded.process_events[0].image_name, "notepad.exe");
     assert_eq!(decoded.file_events.len(), 1);

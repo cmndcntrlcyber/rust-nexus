@@ -35,18 +35,14 @@ impl TechniqueBridge {
 
     fn find_technique(&self, tool_name: &str) -> Option<&Arc<dyn AttackTechnique>> {
         self.techniques.iter().find(|t| {
-            t.technique_id() == tool_name
-                || t.task_types().iter().any(|tt| tt == tool_name)
+            t.technique_id() == tool_name || t.task_types().iter().any(|tt| tt == tool_name)
         })
     }
 }
 
 #[async_trait::async_trait]
 impl HarnessFerryHandler for TechniqueBridge {
-    async fn handle_task(
-        &self,
-        task: pb::HarnessTask,
-    ) -> Result<pb::HarnessTaskResult, Status> {
+    async fn handle_task(&self, task: pb::HarnessTask) -> Result<pb::HarnessTaskResult, Status> {
         let technique = self.find_technique(&task.tool_name).ok_or_else(|| {
             Status::not_found(format!(
                 "no AttackTechnique registered for '{}'",
@@ -54,15 +50,10 @@ impl HarnessFerryHandler for TechniqueBridge {
             ))
         })?;
 
-        let parameters: HashMap<String, String> =
-            serde_json::from_str(&task.json_arguments).map_err(|e| {
-                Status::invalid_argument(format!("invalid json_arguments: {e}"))
-            })?;
+        let parameters: HashMap<String, String> = serde_json::from_str(&task.json_arguments)
+            .map_err(|e| Status::invalid_argument(format!("invalid json_arguments: {e}")))?;
 
-        let command = parameters
-            .get("command")
-            .cloned()
-            .unwrap_or_default();
+        let command = parameters.get("command").cloned().unwrap_or_default();
 
         let params = TechniqueParams {
             command,

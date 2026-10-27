@@ -486,7 +486,8 @@ impl<H: ShellHandler> A2aService for A2aServer<H> {
         request: Request<Streaming<pb::HarnessTask>>,
     ) -> Result<Response<Self::StreamHarnessTaskStream>, Status> {
         let mut incoming = request.into_inner();
-        let (tx, rx) = mpsc::channel::<Result<pb::HarnessTaskResult, Status>>(STREAM_CHANNEL_CAPACITY);
+        let (tx, rx) =
+            mpsc::channel::<Result<pb::HarnessTaskResult, Status>>(STREAM_CHANNEL_CAPACITY);
         let ferry_handler = Arc::clone(&self.ferry_handler);
         let sa = Arc::clone(&self.situational_awareness);
 
@@ -531,7 +532,8 @@ impl<H: ShellHandler> A2aService for A2aServer<H> {
         request: Request<Streaming<pb::SwarmCoordinate>>,
     ) -> Result<Response<Self::BroadcastSwarmStateStream>, Status> {
         let mut incoming = request.into_inner();
-        let (tx, rx) = mpsc::channel::<Result<pb::SwarmCoordinate, Status>>(STREAM_CHANNEL_CAPACITY);
+        let (tx, rx) =
+            mpsc::channel::<Result<pb::SwarmCoordinate, Status>>(STREAM_CHANNEL_CAPACITY);
         let coordinator = Arc::clone(&self.swarm_coordinator);
 
         // Subscribe to broadcast channel before processing incoming votes
@@ -670,8 +672,7 @@ impl<H: ShellHandler> A2aService for A2aServer<H> {
 
     // ----- v1.6.1 — Mesh topology streaming (v3.10 WS9) -----
 
-    type StreamMeshTopologyStream =
-        ReceiverStream<Result<pb::MeshTopologySnapshot, Status>>;
+    type StreamMeshTopologyStream = ReceiverStream<Result<pb::MeshTopologySnapshot, Status>>;
 
     async fn stream_mesh_topology(
         &self,
@@ -686,14 +687,11 @@ impl<H: ShellHandler> A2aService for A2aServer<H> {
 
         let sa = Arc::clone(&self.situational_awareness);
         let gml = Arc::clone(&self.gml);
-        let (topology, _) =
-            crate::topology_stream::TopologyStream::new(sa, gml, 32);
+        let (topology, _) = crate::topology_stream::TopologyStream::new(sa, gml, 32);
 
         let (tx, rx) = mpsc::channel(32);
         tokio::spawn(async move {
-            let mut ticker = tokio::time::interval(
-                std::time::Duration::from_millis(interval_ms),
-            );
+            let mut ticker = tokio::time::interval(std::time::Duration::from_millis(interval_ms));
             loop {
                 ticker.tick().await;
                 let mut sub = topology.subscribe();
@@ -757,8 +755,7 @@ impl<H: ShellHandler> A2aService for A2aServer<H> {
         ))
     }
 
-    type StreamApprovalsStream =
-        ReceiverStream<Result<pb::ApprovalRequestProto, Status>>;
+    type StreamApprovalsStream = ReceiverStream<Result<pb::ApprovalRequestProto, Status>>;
 
     async fn stream_approvals(
         &self,
@@ -769,8 +766,7 @@ impl<H: ShellHandler> A2aService for A2aServer<H> {
         ))
     }
 
-    type StreamNotificationsStream =
-        ReceiverStream<Result<pb::OperatorNotification, Status>>;
+    type StreamNotificationsStream = ReceiverStream<Result<pb::OperatorNotification, Status>>;
 
     async fn stream_notifications(
         &self,

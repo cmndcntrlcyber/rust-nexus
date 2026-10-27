@@ -91,11 +91,10 @@ pub async fn run_metrics(
 
     if let (Some(cert_path), Some(key_path)) = (&opts.tls_cert, &opts.tls_key) {
         info!(cert = %cert_path, key = %key_path, "ferry gateway TLS enabled");
-        let tls_config = axum_server::tls_rustls::RustlsConfig::from_pem_file(
-            &cert_path, &key_path,
-        )
-        .await
-        .map_err(|e| anyhow::anyhow!("TLS config: {e}"))?;
+        let tls_config =
+            axum_server::tls_rustls::RustlsConfig::from_pem_file(&cert_path, &key_path)
+                .await
+                .map_err(|e| anyhow::anyhow!("TLS config: {e}"))?;
 
         axum_server::bind_rustls(opts.bind, tls_config)
             .serve(app.into_make_service())

@@ -461,11 +461,7 @@ impl CapabilityCheck {
     /// skill capabilities discovered via `SituationalAwareness`). Recompiles
     /// the matrix after mutation.
     pub fn register_agent_skills(&mut self, agent_id: &str, skills: &[String]) {
-        let entry = self
-            .file
-            .agents
-            .entry(agent_id.to_string())
-            .or_default();
+        let entry = self.file.agents.entry(agent_id.to_string()).or_default();
         for skill in skills {
             entry.skills.insert(skill.clone());
         }

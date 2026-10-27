@@ -53,7 +53,7 @@ rustls-pemfile = "1.0"
 x509-parser = "0.15"
 
 # DNS and networking
-trust-dns-resolver = "0.23"
+# trust-dns-resolver = "0.23"  # only used by nexus-console (excluded)
 hickory-resolver = "0.24"
 
 # HTTP client for Cloudflare API
@@ -93,7 +93,7 @@ bincode = "1"
 
 # Async stream / utility
 tokio-stream = "0.1"
-tokio-util = { version = "0.7", features = ["codec"] }
+# tokio-util = { version = "0.7", features = ["codec"] }  # only used by nexus-console (excluded)
 futures = "0.3"
 anyhow = "1"
 
@@ -120,9 +120,9 @@ tonic-prost-build = "0.14"
 protoc-bin-vendored = "3"
 
 # WASM / Tauri (frontend + console backend)
-tauri = { version = "2", features = [] }
-tauri-build = { version = "2", features = [] }
-leptos = { version = "0.7", features = ["csr"] }
+# tauri = { version = "2", features = [] }         # only used by nexus-console/src-tauri (excluded)
+# tauri-build = { version = "2", features = [] }   # only used by nexus-console/src-tauri (excluded)
+# leptos = { version = "0.7", features = ["csr"] } # only used by nexus-console/ui (excluded)
 
 # Internal cross-crate paths
 nexus-common = { path = "nexus-common" }

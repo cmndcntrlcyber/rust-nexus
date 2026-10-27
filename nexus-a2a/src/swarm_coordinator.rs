@@ -75,7 +75,11 @@ impl SwarmCoordinator {
             for key in keys {
                 rounds.remove(&key);
             }
-            info!(pruned = excess, remaining = rounds.len(), "swarm coordinator: pruned old rounds");
+            info!(
+                pruned = excess,
+                remaining = rounds.len(),
+                "swarm coordinator: pruned old rounds"
+            );
         }
     }
 }

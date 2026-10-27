@@ -155,11 +155,7 @@ impl TelemetryAggregator {
     }
 
     /// Record kernel context aggregates for a peer (from WS1.5).
-    pub fn record_kernel_context(
-        &mut self,
-        peer_id: &str,
-        ctx: &nexus_common::KernelContext,
-    ) {
+    pub fn record_kernel_context(&mut self, peer_id: &str, ctx: &nexus_common::KernelContext) {
         let entry = self
             .counters
             .entry(peer_id.to_string())

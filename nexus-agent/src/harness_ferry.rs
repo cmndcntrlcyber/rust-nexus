@@ -17,7 +17,7 @@ use std::time::{Duration, Instant};
 use nexus_a2a::pb;
 use nexus_a2a::{A2aClient, HarnessFerryHandler};
 use nexus_common::messages::TaskData;
-use nexus_mesh::telemetry::{NodeFeatures, TelemetryAggregator, Direction};
+use nexus_mesh::telemetry::{Direction, NodeFeatures, TelemetryAggregator};
 use tokio::sync::Mutex;
 use tonic_14::Status;
 use tracing::{debug, info, warn};
@@ -114,10 +114,7 @@ impl AgentFerryHandler {
 
 #[async_trait::async_trait]
 impl HarnessFerryHandler for AgentFerryHandler {
-    async fn handle_task(
-        &self,
-        task: pb::HarnessTask,
-    ) -> Result<pb::HarnessTaskResult, Status> {
+    async fn handle_task(&self, task: pb::HarnessTask) -> Result<pb::HarnessTaskResult, Status> {
         // Rate-limiting: reject if at capacity.
         if self.max_concurrent > 0 {
             let active = self.active_tasks.load(Ordering::Relaxed);
@@ -129,7 +126,10 @@ impl HarnessFerryHandler for AgentFerryHandler {
                     "ferry: rate-limited — rejecting task"
                 );
                 // Record error in telemetry.
-                self.telemetry.lock().await.record_error(&self.local_peer_id);
+                self.telemetry
+                    .lock()
+                    .await
+                    .record_error(&self.local_peer_id);
                 return Ok(pb::HarnessTaskResult {
                     task_id: task.task_id,
                     output: "rate-limited: too many concurrent ferry tasks".into(),
@@ -205,7 +205,10 @@ impl HarnessFerryHandler for AgentFerryHandler {
                     "ferry: task failed"
                 );
                 // Record error in telemetry.
-                self.telemetry.lock().await.record_error(&self.local_peer_id);
+                self.telemetry
+                    .lock()
+                    .await
+                    .record_error(&self.local_peer_id);
                 Ok(pb::HarnessTaskResult {
                     task_id: task.task_id,
                     output: e.to_string(),
@@ -234,8 +237,8 @@ impl HarnessFerryHandler for AgentFerryHandler {
 /// Translate a proto `HarnessTask` into the `TaskData` struct that
 /// `TaskExecutor::execute_task` expects.
 fn harness_task_to_task_data(task: &pb::HarnessTask) -> TaskData {
-    let mut parameters: HashMap<String, String> = serde_json::from_str(&task.json_arguments)
-        .unwrap_or_default();
+    let mut parameters: HashMap<String, String> =
+        serde_json::from_str(&task.json_arguments).unwrap_or_default();
 
     let command = parameters.remove("command").unwrap_or_default();
 

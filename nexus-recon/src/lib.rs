@@ -6,10 +6,10 @@
 // v1.4: stub/overlay module — config fields are declared for future wiring.
 // Per-item #[allow(dead_code)] is used on specific unused items below.
 
-use tracing::info;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use tracing::info;
 
 pub mod browser_fingerprint;
 pub mod javascript_engine;

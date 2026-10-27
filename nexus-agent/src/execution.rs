@@ -1,11 +1,11 @@
 use base64::{engine::general_purpose, Engine as _};
-use tracing::{debug, error, info, warn};
-use nexus_common::*;
 use nexus_common::kernel_context::{ObservationLevel, SandboxConfig};
+use nexus_common::*;
 use std::process::Command;
 use std::sync::Arc as StdArc;
+use tracing::{debug, error, info, warn};
 
-use crate::sandbox::{ExecutionSandbox, create_sandbox};
+use crate::sandbox::{create_sandbox, ExecutionSandbox};
 
 #[cfg(target_os = "windows")]
 use crate::fiber_execution::FiberExecutor;
@@ -74,8 +74,8 @@ impl TaskExecutor {
     pub async fn execute_task(&self, task_data: TaskData) -> Result<String> {
         // v1.6 WS1.5 — check if sandbox should wrap this task.
         let sandbox_cfg = SandboxConfig::for_task_type(&task_data.task_type);
-        let use_sandbox = sandbox_cfg.observation_level != ObservationLevel::None
-            && self.sandbox.is_some();
+        let use_sandbox =
+            sandbox_cfg.observation_level != ObservationLevel::None && self.sandbox.is_some();
 
         if use_sandbox {
             let sandbox = self.sandbox.as_ref().unwrap();
@@ -90,10 +90,7 @@ impl TaskExecutor {
                     // Wrap the already-computed result in a ready future so the
                     // boundary's observation window captures timing metadata.
                     let result = boundary
-                        .execute(
-                            &task_type,
-                            Box::pin(async move { dispatch_result }),
-                        )
+                        .execute(&task_type, Box::pin(async move { dispatch_result }))
                         .await;
 
                     match result {

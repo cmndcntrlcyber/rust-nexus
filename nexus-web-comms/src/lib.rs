@@ -8,12 +8,12 @@
 
 use base64::{engine::general_purpose, Engine as _};
 use futures_util::{SinkExt, StreamExt};
-use tracing::{debug, error, info, warn};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tokio::net::TcpStream;
 use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
+use tracing::{debug, error, info, warn};
 
 pub mod domain_fronting;
 pub mod http_fallback;

@@ -52,8 +52,8 @@ fn bench_ferry_grpc_latency(c: &mut Criterion) {
         let addr = listener.local_addr().expect("local_addr");
         let url = format!("http://{addr}");
 
-        let server = A2aServer::new(agent_card(), EchoShellHandler)
-            .with_ferry_handler(NoOpFerryHandler);
+        let server =
+            A2aServer::new(agent_card(), EchoShellHandler).with_ferry_handler(NoOpFerryHandler);
 
         let task = tokio::spawn(async move {
             use tonic::transport::server::TcpIncoming;
@@ -70,7 +70,9 @@ fn bench_ferry_grpc_latency(c: &mut Criterion) {
         (url, task)
     });
 
-    let mut client = rt.block_on(A2aClient::connect(&url, false)).expect("connect");
+    let mut client = rt
+        .block_on(A2aClient::connect(&url, false))
+        .expect("connect");
 
     let counter = AtomicU64::new(0);
 

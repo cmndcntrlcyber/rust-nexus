@@ -6,7 +6,9 @@
 //! the agent lacks write access to `/sys/fs/cgroup/`.
 
 use async_trait::async_trait;
-use nexus_common::kernel_context::{KernelContext, KernelContextBuilder, SandboxConfig, SandboxVerdict};
+use nexus_common::kernel_context::{
+    KernelContext, KernelContextBuilder, SandboxConfig, SandboxVerdict,
+};
 use std::future::Future;
 use std::path::PathBuf;
 use std::pin::Pin;
@@ -145,8 +147,13 @@ impl ExecutionBoundary for LinuxBoundary {
         &self,
         _task_type: &str,
         f: Pin<Box<dyn Future<Output = Result<String, nexus_common::NexusError>> + Send>>,
-    ) -> Result<(Result<String, nexus_common::NexusError>, Option<KernelContext>), SandboxError>
-    {
+    ) -> Result<
+        (
+            Result<String, nexus_common::NexusError>,
+            Option<KernelContext>,
+        ),
+        SandboxError,
+    > {
         let builder = KernelContextBuilder::new();
         let pid = std::process::id();
 
@@ -209,8 +216,13 @@ impl ExecutionBoundary for NoopBoundary {
         &self,
         _task_type: &str,
         f: Pin<Box<dyn Future<Output = Result<String, nexus_common::NexusError>> + Send>>,
-    ) -> Result<(Result<String, nexus_common::NexusError>, Option<KernelContext>), SandboxError>
-    {
+    ) -> Result<
+        (
+            Result<String, nexus_common::NexusError>,
+            Option<KernelContext>,
+        ),
+        SandboxError,
+    > {
         let result = f.await;
         Ok((result, None))
     }

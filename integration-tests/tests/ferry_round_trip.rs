@@ -73,8 +73,7 @@ async fn ferry_grpc_round_trip_unary() {
     let url = format!("http://{addr}");
 
     let handler = TestFerryHandler::new();
-    let server = A2aServer::new(agent_card(), EchoShellHandler)
-        .with_ferry_handler(handler);
+    let server = A2aServer::new(agent_card(), EchoShellHandler).with_ferry_handler(handler);
 
     let _server_task = tokio::spawn(async move {
         use tonic::transport::server::TcpIncoming;
@@ -123,8 +122,8 @@ async fn ferry_grpc_round_trip_streaming() {
     let addr = listener.local_addr().expect("local_addr");
     let url = format!("http://{addr}");
 
-    let server = A2aServer::new(agent_card(), EchoShellHandler)
-        .with_ferry_handler(TestFerryHandler::new());
+    let server =
+        A2aServer::new(agent_card(), EchoShellHandler).with_ferry_handler(TestFerryHandler::new());
 
     let _server_task = tokio::spawn(async move {
         use tonic::transport::server::TcpIncoming;
@@ -199,8 +198,7 @@ async fn ferry_error_propagation() {
     let addr = listener.local_addr().expect("local_addr");
     let url = format!("http://{addr}");
 
-    let server = A2aServer::new(agent_card(), EchoShellHandler)
-        .with_ferry_handler(FailingHandler);
+    let server = A2aServer::new(agent_card(), EchoShellHandler).with_ferry_handler(FailingHandler);
 
     let _server_task = tokio::spawn(async move {
         use tonic::transport::server::TcpIncoming;

@@ -97,9 +97,7 @@ impl WindowsBoundary {
     fn create(config: &SandboxConfig) -> Result<Self, SandboxError> {
         let job_handle = unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) };
         if job_handle == 0 || job_handle == INVALID_HANDLE_VALUE {
-            return Err(SandboxError::Setup(
-                "CreateJobObjectW failed".into(),
-            ));
+            return Err(SandboxError::Setup("CreateJobObjectW failed".into()));
         }
 
         let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { std::mem::zeroed() };
@@ -128,12 +126,13 @@ impl WindowsBoundary {
 
         if ok == 0 {
             unsafe { CloseHandle(job_handle) };
-            return Err(SandboxError::Setup(
-                "SetInformationJobObject failed".into(),
-            ));
+            return Err(SandboxError::Setup("SetInformationJobObject failed".into()));
         }
 
-        debug!("Job Object created with limits: mem={:?} procs={:?}", config.memory_limit_bytes, config.process_limit);
+        debug!(
+            "Job Object created with limits: mem={:?} procs={:?}",
+            config.memory_limit_bytes, config.process_limit
+        );
 
         Ok(Self {
             job_handle,
@@ -143,9 +142,7 @@ impl WindowsBoundary {
     }
 
     fn assign_current_process(&mut self) -> Result<(), SandboxError> {
-        let ok = unsafe {
-            AssignProcessToJobObject(self.job_handle, GetCurrentProcess())
-        };
+        let ok = unsafe { AssignProcessToJobObject(self.job_handle, GetCurrentProcess()) };
         if ok == 0 {
             warn!("AssignProcessToJobObject failed; running uncontained");
             return Err(SandboxError::Setup(
@@ -171,15 +168,23 @@ impl ExecutionBoundary for WindowsBoundary {
         &self,
         task_type: &str,
         f: Pin<Box<dyn Future<Output = Result<String, nexus_common::NexusError>> + Send>>,
-    ) -> Result<(Result<String, nexus_common::NexusError>, Option<KernelContext>), SandboxError>
-    {
+    ) -> Result<
+        (
+            Result<String, nexus_common::NexusError>,
+            Option<KernelContext>,
+        ),
+        SandboxError,
+    > {
         let builder = KernelContextBuilder::new();
 
         // Start ETW observer if configured for this task type.
         let pid = std::process::id();
         let etw = EtwObserver::start(pid);
         if etw.is_none() {
-            debug!(task_type, "ETW observer not available; proceeding without kernel telemetry");
+            debug!(
+                task_type,
+                "ETW observer not available; proceeding without kernel telemetry"
+            );
         }
 
         let start = Instant::now();
@@ -248,8 +253,13 @@ impl ExecutionBoundary for NoopBoundary {
         &self,
         _task_type: &str,
         f: Pin<Box<dyn Future<Output = Result<String, nexus_common::NexusError>> + Send>>,
-    ) -> Result<(Result<String, nexus_common::NexusError>, Option<KernelContext>), SandboxError>
-    {
+    ) -> Result<
+        (
+            Result<String, nexus_common::NexusError>,
+            Option<KernelContext>,
+        ),
+        SandboxError,
+    > {
         let result = f.await;
         Ok((result, None))
     }

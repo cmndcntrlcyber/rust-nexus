@@ -144,7 +144,9 @@ impl SandboxConfig {
                 observation_level: ObservationLevel::Minimal,
             },
             // Read-only recon — no containment or observation
-            "directory_listing" | "process_list" | "system_info" | "network_info" => Self::default(),
+            "directory_listing" | "process_list" | "system_info" | "network_info" => {
+                Self::default()
+            }
             // Registry/service — quick operations, full OS access needed
             "registry_query" | "registry_set" | "service_control" => Self {
                 observation_level: ObservationLevel::Minimal,

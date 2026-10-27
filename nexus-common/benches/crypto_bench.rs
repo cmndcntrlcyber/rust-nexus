@@ -38,5 +38,9 @@ fn bench_sealed_envelope(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, bench_aes256gcm_encrypt_decrypt, bench_sealed_envelope);
+criterion_group!(
+    benches,
+    bench_aes256gcm_encrypt_decrypt,
+    bench_sealed_envelope
+);
 criterion_main!(benches);
