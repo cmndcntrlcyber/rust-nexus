@@ -178,9 +178,9 @@ async fn live_get_task_returns_unimplemented_to_upstream_client() {
     // drift even if the schema happens to compile).
     let req_bytes = upstream_req.encode_to_vec();
     let our_req = pb::GetTaskRequest::decode(req_bytes.as_slice()).expect("decode req");
-    // Our GetTaskRequest uses `task_id` at field 1; upstream uses `name` at field 1.
-    // Wire-compatible: the bytes at field 1 decode into our `task_id`.
-    assert_eq!(our_req.task_id, "tasks/upstream-task-1");
+    // Our GetTaskRequest uses `task_id` at field 1; upstream uses `task_id` at field 1.
+    // Wire-compatible: the bytes at field 1 decode into our `task_id` as-is.
+    assert_eq!(our_req.task_id, "upstream-task-1");
 
     let err = client
         .get_task(tonic::Request::new(our_req))
