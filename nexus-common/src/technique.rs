@@ -106,6 +106,7 @@ pub struct ExecutionContext {
 /// Each technique maps to a MITRE ATT&CK technique ID (e.g., T1059 Command and Scripting Interpreter).
 /// Technique crates register implementations of this trait, which the agent's
 /// TechniqueRegistry uses for dispatch.
+#[allow(clippy::double_must_use)]
 #[async_trait::async_trait]
 pub trait AttackTechnique: Send + Sync {
     /// MITRE ATT&CK technique ID (e.g., "T1059", "T1055.001")

@@ -1,0 +1,157 @@
+// Vendored upstream A2A v0.3.x proto stub.
+//
+// This is a best-effort match against the upstream `a2aproject/A2A` v0.3
+// spec, compiled into the `a2a.upstream.v1` package so the two protos
+// live side-by-side in Rust without module-path collisions.
+//
+// Full vendoring with the exact upstream proto file is a follow-up that
+// needs network access to fetch the upstream tag.
+
+syntax = "proto3";
+
+package a2a.upstream.v1;
+
+message Part {
+    oneof part {
+        string text = 1;
+        bytes file = 2;
+    }
+}
+
+message Message {
+    string message_id = 1;
+    string role = 2;
+    repeated Part parts = 3;
+    string task_id = 4;
+}
+
+message AgentCard {
+    string name = 1;
+    string description = 2;
+    string version = 3;
+    repeated AgentSkill skills = 4;
+    bytes signature = 5;
+    bytes signer_peer_id = 6;
+}
+
+message AgentSkill {
+    string id = 1;
+    string name = 2;
+    string description = 3;
+    repeated string tags = 4;
+}
+
+enum TaskState {
+    TASK_STATE_UNSPECIFIED = 0;
+    TASK_STATE_SUBMITTED = 1;
+    TASK_STATE_WORKING = 2;
+    TASK_STATE_COMPLETED = 3;
+    TASK_STATE_FAILED = 4;
+    TASK_STATE_CANCELED = 5;
+}
+
+message StreamResponse {
+    oneof payload {
+        Message message = 1;
+        TaskStatus task = 2;
+    }
+}
+
+message TaskStatus {
+    string task_id = 1;
+    TaskState state = 2;
+}
+
+message Empty {}
+
+message RegisteredAgents {
+    repeated RegisteredAgent agents = 1;
+}
+
+message RegisteredAgent {
+    bytes peer_id = 1;
+    string os = 2;
+    string version = 3;
+    string tag = 4;
+    uint64 last_seen_unix = 5;
+}
+
+message Task {
+    string task_id = 1;
+    string context_id = 2;
+    TaskState state = 3;
+}
+
+message GetTaskRequest {
+    string task_id = 1;
+}
+
+message CancelTaskRequest {
+    string task_id = 1;
+}
+
+message TaskSubscriptionRequest {
+    string task_id = 1;
+}
+
+message PushNotificationConfig {
+    string task_id = 1;
+    string url = 2;
+    string token = 3;
+}
+
+message CreateTaskPushNotificationConfigRequest {
+    PushNotificationConfig config = 1;
+}
+
+message ListTaskRequest {
+    string context_id = 1;
+    uint32 page_size = 2;
+    string page_token = 3;
+}
+
+message ListTaskResponse {
+    repeated Task tasks = 1;
+    string next_page_token = 2;
+}
+
+message AuditRecordEvent {
+    uint64 timestamp_unix = 1;
+    string actor = 2;
+    string action = 3;
+    string resource = 4;
+    string prev_hash = 5;
+    string record_hash = 6;
+}
+
+message StreamAuditRecordsRequest {
+    string actor_filter = 1;
+    string action_filter = 2;
+    uint64 since_unix = 3;
+}
+
+message IssueOperatorTokenRequest {
+    bytes operator_id = 1;
+    uint64 lifetime_seconds = 2;
+}
+
+message OperatorTokenReply {
+    bytes token = 1;
+    uint64 issued_unix = 2;
+    uint64 expires_unix = 3;
+}
+
+service A2aService {
+    rpc SendMessage(Message) returns (Message);
+    rpc SendStreamingMessage(stream Message) returns (stream StreamResponse);
+    rpc GetAgentCard(Empty) returns (AgentCard);
+    rpc ListRegisteredAgents(Empty) returns (RegisteredAgents);
+    rpc GetTask(GetTaskRequest) returns (Task);
+    rpc CancelTask(CancelTaskRequest) returns (Task);
+    rpc TaskSubscription(TaskSubscriptionRequest) returns (stream StreamResponse);
+    rpc CreateTaskPushNotificationConfig(CreateTaskPushNotificationConfigRequest) returns (PushNotificationConfig);
+    rpc ListTask(ListTaskRequest) returns (ListTaskResponse);
+    rpc GetAuthenticatedExtendedAgentCard(Empty) returns (AgentCard);
+    rpc StreamAuditRecords(StreamAuditRecordsRequest) returns (stream AuditRecordEvent);
+    rpc IssueOperatorToken(IssueOperatorTokenRequest) returns (OperatorTokenReply);
+}
