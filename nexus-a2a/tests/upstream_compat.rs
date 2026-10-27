@@ -151,10 +151,7 @@ async fn live_get_agent_card_via_upstream_encoding() {
     let as_upstream =
         pb_upstream::AgentCard::decode(bytes.as_slice()).expect("decode as upstream AgentCard");
     assert_eq!(as_upstream.name, "upstream-interop");
-    // version is at field 3 in ours but field 5 in upstream — known divergence
-    // upstream sees our version bytes at field 3 as `url` (both are strings, so
-    // it decodes but into the wrong semantic field).
-    assert_eq!(as_upstream.url, "0.1.0"); // our version decoded as upstream's url
+    assert_eq!(as_upstream.version, "0.1.0");
 }
 
 /// Live RPC: confirm `GetTask` (v1.3 stub RPC) returns Unimplemented
@@ -174,8 +171,7 @@ async fn live_get_task_returns_unimplemented_to_upstream_client() {
     // Encode the request from upstream-side, ship via our client,
     // and assert the upstream side sees the right gRPC code.
     let upstream_req = pb_upstream::GetTaskRequest {
-        name: "tasks/upstream-task-1".into(),
-        history_length: 0,
+        task_id: "upstream-task-1".into(),
     };
     // Round-trip via prost so the byte-level compatibility is in the
     // critical path of the test (catches accidental field-number
