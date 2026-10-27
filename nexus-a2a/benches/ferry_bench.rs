@@ -38,6 +38,9 @@ impl HarnessFerryHandler for NoOpFerryHandler {
             bytes_recv: 0,
             commands_run: 1,
             kernel_context: None,
+            progress_percent: None,
+            stage: None,
+            intermediate_output: None,
         })
     }
 }
@@ -84,8 +87,8 @@ fn bench_ferry_grpc_latency(c: &mut Criterion) {
                 tool_name: "noop".into(),
                 json_arguments: "{}".into(),
                 session_id: String::new(),
-                engagement_scope_hash: String::new(),
-                operator_signature: String::new(),
+                engagement_scope_hash: Vec::new(),
+                operator_signature: Vec::new(),
                 target_agent_id: String::new(),
             };
             let result = rt
@@ -104,8 +107,8 @@ fn bench_ferry_grpc_latency(c: &mut Criterion) {
                 tool_name: "noop".into(),
                 json_arguments: big_args.clone(),
                 session_id: String::new(),
-                engagement_scope_hash: String::new(),
-                operator_signature: String::new(),
+                engagement_scope_hash: Vec::new(),
+                operator_signature: Vec::new(),
                 target_agent_id: String::new(),
             };
             let result = rt

@@ -58,6 +58,9 @@ impl HarnessFerryHandler for TestFerryHandler {
             bytes_recv: task.json_arguments.len() as u64,
             commands_run: 1,
             kernel_context: None,
+            progress_percent: None,
+            stage: None,
+            intermediate_output: None,
         })
     }
 }
@@ -188,6 +191,9 @@ async fn ferry_error_propagation() {
                 bytes_recv: 0,
                 commands_run: 0,
                 kernel_context: None,
+                progress_percent: None,
+                stage: None,
+                intermediate_output: None,
             })
         }
     }
