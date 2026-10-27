@@ -26,6 +26,12 @@ pub struct LinuxSandbox {
     cgroup_available: bool,
 }
 
+impl Default for LinuxSandbox {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LinuxSandbox {
     /// Probe the cgroup v2 filesystem and return a new sandbox.
     pub fn new() -> Self {

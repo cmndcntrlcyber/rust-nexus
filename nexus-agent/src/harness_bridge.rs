@@ -23,6 +23,7 @@ pub struct TechniqueBridge {
 }
 
 impl TechniqueBridge {
+    /// Create a new harness bridge client.
     pub fn new(
         techniques: Vec<Arc<dyn AttackTechnique>>,
         execution_context: Arc<ExecutionContext>,

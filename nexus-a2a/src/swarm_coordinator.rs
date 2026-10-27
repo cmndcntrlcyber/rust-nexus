@@ -3,7 +3,6 @@
 //! bidi streaming RPC (WS1 Phase 1c).
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use tokio::sync::{broadcast, Mutex};
 use tracing::{debug, info};

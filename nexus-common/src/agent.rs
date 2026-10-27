@@ -36,6 +36,7 @@ pub enum AgentStatus {
 }
 
 impl Agent {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         hostname: String,
         os_type: String,

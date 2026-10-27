@@ -694,7 +694,7 @@ impl<H: ShellHandler> A2aService for A2aServer<H> {
             let mut ticker = tokio::time::interval(std::time::Duration::from_millis(interval_ms));
             loop {
                 ticker.tick().await;
-                let mut sub = topology.subscribe();
+                let _sub = topology.subscribe();
                 // Trigger a build manually via the subscribe + run pattern
                 // For now, build inline:
                 let snapshot = topology.build_snapshot_public().await;

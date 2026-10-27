@@ -54,12 +54,16 @@ pub trait ExecutionBoundary: Send + Sync {
 /// Errors from the sandbox subsystem.
 #[derive(Debug, thiserror::Error)]
 pub enum SandboxError {
+    /// Containment setup failed.
     #[error("containment setup failed: {0}")]
     Setup(String),
+    /// Observation attachment failed.
     #[error("observation attachment failed: {0}")]
     Observer(String),
+    /// Containment sandbox was breached.
     #[error("containment breach detected")]
     Breach,
+    /// I/O error during sandbox operation.
     #[error("sandbox I/O: {0}")]
     Io(#[from] std::io::Error),
 }
