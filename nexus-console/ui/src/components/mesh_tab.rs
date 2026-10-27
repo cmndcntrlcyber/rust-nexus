@@ -13,6 +13,8 @@ pub fn MeshTab() -> impl IntoView {
                     <p class="hint">"v3.10.1 — React/three.js component mounts here"</p>
                 </div>
             </div>
+            // WS9 Phase 9i — load the React/three.js mesh-viz bundle
+            <script type="module" src="/dist/mesh-viz.js"></script>
         </div>
     }
 }
