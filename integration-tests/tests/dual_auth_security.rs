@@ -4,7 +4,7 @@
 //! Validates the `DualAuthGate` enforces both authentication paths when
 //! `require_dual` is true, and relaxes to gRPC-only when false (dev mode).
 
-use nexus_a2a::{DualAuthGate, DualAuthResult};
+use nexus_a2a::DualAuthGate;
 
 #[test]
 fn dual_auth_both_paths_succeeds() {

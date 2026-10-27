@@ -85,11 +85,11 @@ async fn mesh_ferry_publish_subscribe_round_trip() {
     // Agent should receive the task on the gossipsub topic.
     let received = timeout(Duration::from_secs(5), async {
         loop {
-            if let Some(event) = agent_handle.next_event().await {
-                if let MeshEvent::GossipMessage { data, topic, .. } = event {
-                    if topic == task_topic.hash() {
-                        return data;
-                    }
+            if let Some(MeshEvent::GossipMessage { data, topic, .. }) =
+                agent_handle.next_event().await
+            {
+                if topic == task_topic.hash() {
+                    return data;
                 }
             }
         }
@@ -109,11 +109,11 @@ async fn mesh_ferry_publish_subscribe_round_trip() {
     // Operator should receive the result.
     let received_result = timeout(Duration::from_secs(5), async {
         loop {
-            if let Some(event) = operator_handle.next_event().await {
-                if let MeshEvent::GossipMessage { data, topic, .. } = event {
-                    if topic == result_topic.hash() {
-                        return data;
-                    }
+            if let Some(MeshEvent::GossipMessage { data, topic, .. }) =
+                operator_handle.next_event().await
+            {
+                if topic == result_topic.hash() {
+                    return data;
                 }
             }
         }

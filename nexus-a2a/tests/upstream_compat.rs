@@ -104,7 +104,6 @@ fn agent_skill_fields_compatible() {
         name: "shell-session".into(),
         description: "x".into(),
         tags: vec!["t1".into()],
-        ..Default::default()
     };
     let bytes = upstream.encode_to_vec();
     let ours = pb::AgentSkill::decode(bytes.as_slice()).expect("decode as our pb");

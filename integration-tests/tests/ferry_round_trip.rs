@@ -3,9 +3,7 @@
 //! Proves: HarnessTask → SubmitHarnessTask RPC → ferry handler → TaskExecutor
 //! → HarnessTaskResult round-trip over loopback gRPC.
 
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
 use std::time::Duration;
 
 use nexus_a2a::mock::EchoShellHandler;
@@ -112,7 +110,7 @@ async fn ferry_grpc_round_trip_unary() {
     assert!(!result.is_error);
     assert!(result.output.starts_with("echo:shell:"));
     assert!(result.output.contains("whoami"));
-    assert!(result.execution_duration_ms >= 0);
+    let _ = result.execution_duration_ms;
 }
 
 #[tokio::test]
