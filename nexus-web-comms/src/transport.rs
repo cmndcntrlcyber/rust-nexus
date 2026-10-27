@@ -39,7 +39,6 @@ pub struct TransportContext {
 }
 
 /// The agent ↔ C2 transport contract.
-#[allow(clippy::double_must_use)]
 #[async_trait]
 pub trait Transport: Send + 'static {
     /// Stable identifier for logs / status surfaces.

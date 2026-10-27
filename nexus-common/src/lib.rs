@@ -1,3 +1,4 @@
+#![allow(clippy::double_must_use)]
 //! Shared library for the rust-nexus C2 framework: crypto, message types, identity, and error handling.
 
 // v1.5: both v1.4 module-level allows removed.

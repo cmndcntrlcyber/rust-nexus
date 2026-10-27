@@ -1,3 +1,4 @@
+#![allow(clippy::double_must_use)]
 //! Nexus Web Communications Module
 //!
 //! Provides HTTP/WebSocket fallback communication methods integrating catch system's

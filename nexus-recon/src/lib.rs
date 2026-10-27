@@ -1,3 +1,4 @@
+#![allow(clippy::double_must_use)]
 //! Nexus Reconnaissance Module
 //!
 //! Integrates the browser fingerprinting and reconnaissance capabilities from the catch system
