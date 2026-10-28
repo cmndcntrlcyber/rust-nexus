@@ -12,6 +12,5 @@ pub mod service_tab;
 pub mod shell_tab;
 pub mod status_bar;
 pub mod tab_bar;
-pub mod tab_container;
 pub mod terminal;
 pub mod transfer_tab;

@@ -4,12 +4,11 @@
 
 //! `nexus-console` — Tauri v2 operator console entry point.
 
-mod tray;
-
 use tauri::Manager;
 
 use nexus_console::commands;
 use nexus_console::state::ConsoleState;
+use nexus_console::tray;
 use tracing_subscriber::EnvFilter;
 
 fn main() {
@@ -42,6 +41,10 @@ fn main() {
             commands::load_tunnel_config,
             commands::get_tunnel_services,
             commands::open_tunnel_url,
+            // Stub commands — UI-side components pending backend implementation.
+            commands::submit_approval,
+            commands::steer_agent,
+            commands::send_chat_message,
         ])
         .setup(|app| {
             tray::setup_tray(app)?;

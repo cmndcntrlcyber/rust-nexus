@@ -79,6 +79,62 @@ mkdir -p "$(dirname "$VENDOR_FILE")"
 mv "$TMP" "$VENDOR_FILE"
 trap - EXIT
 
+# Append Nexus-specific types that our interop tests exercise.
+# These mirror the definitions in proto/a2a/v1/a2a.proto and let
+# kernel_context_proto_upstream_compat_round_trip verify byte-level
+# compatibility between the two generated Rust modules.
+cat >> "$VENDOR_FILE" <<'NEXUS_ADDITIONS'
+
+// ── Nexus-specific additions (appended by vendor-a2a-proto.sh) ──
+
+enum SandboxVerdict {
+    SANDBOX_VERDICT_UNSPECIFIED = 0;
+    SANDBOX_VERDICT_NOMINAL = 1;
+    SANDBOX_VERDICT_RESOURCE_EXCEEDED = 2;
+    SANDBOX_VERDICT_TIMEOUT = 3;
+    SANDBOX_VERDICT_CONTAINMENT_BREACH = 4;
+}
+
+message ProcessEvent {
+    uint32 pid = 1;
+    uint32 parent_pid = 2;
+    string image_name = 3;
+    uint64 timestamp_unix = 4;
+    string event_type = 5;
+}
+
+message FileEvent {
+    string path = 1;
+    string operation = 2;
+    uint64 bytes_affected = 3;
+    uint64 timestamp_unix = 4;
+}
+
+message NetworkEvent {
+    string src_addr = 1;
+    string dst_addr = 2;
+    uint32 dst_port = 3;
+    string protocol = 4;
+    string direction = 5;
+    uint64 timestamp_unix = 6;
+}
+
+message KernelContextProto {
+    uint64 execution_duration_ns = 1;
+    uint64 syscall_count = 2;
+    uint64 memory_allocated_bytes = 3;
+    uint32 processes_spawned = 4;
+    uint32 files_touched = 5;
+    uint32 network_connections = 6;
+    uint32 threads_created = 7;
+    SandboxVerdict sandbox_verdict = 8;
+    repeated ProcessEvent process_events = 9;
+    repeated FileEvent file_events = 10;
+    repeated NetworkEvent network_events = 11;
+}
+NEXUS_ADDITIONS
+echo "[vendor-a2a] appended Nexus-specific types (KernelContextProto, etc.)"
+
 SHA256=$(sha256sum "$VENDOR_FILE" | cut -d' ' -f1)
 DATE=$(date -u +%Y-%m-%d)
 
