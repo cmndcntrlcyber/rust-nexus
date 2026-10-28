@@ -5,7 +5,6 @@ use crate::{
 };
 use chrono::{DateTime, Duration, Utc};
 use hickory_resolver::{config::*, TokioAsyncResolver};
-use tracing::{debug, info, warn};
 use rand::Rng;
 use std::collections::HashMap;
 use std::net::IpAddr;
@@ -13,6 +12,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::time::{timeout, Duration as TokioDuration};
+use tracing::{debug, info, warn};
 
 /// Domain status information
 #[derive(Debug, Clone, PartialEq)]

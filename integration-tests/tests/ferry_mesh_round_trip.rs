@@ -22,25 +22,23 @@ async fn mesh_ferry_publish_subscribe_round_trip() {
     let agent_identity = NodeIdentity::generate();
 
     // Spawn operator mesh node.
-    let operator_handle = MeshNode::spawn(
-        &operator_identity,
-        "/ip4/127.0.0.1/tcp/0".parse().unwrap(),
-    )
-    .expect("operator mesh spawn");
+    let operator_handle =
+        MeshNode::spawn(&operator_identity, "/ip4/127.0.0.1/tcp/0".parse().unwrap())
+            .expect("operator mesh spawn");
 
     // Wait for operator to start listening.
     tokio::time::sleep(Duration::from_millis(200)).await;
 
     // Get operator's listen address for the agent to dial.
     let operator_addrs = operator_handle.listen_addrs().await;
-    assert!(!operator_addrs.is_empty(), "operator should have at least one listen address");
+    assert!(
+        !operator_addrs.is_empty(),
+        "operator should have at least one listen address"
+    );
 
     // Spawn agent mesh node.
-    let agent_handle = MeshNode::spawn(
-        &agent_identity,
-        "/ip4/127.0.0.1/tcp/0".parse().unwrap(),
-    )
-    .expect("agent mesh spawn");
+    let agent_handle = MeshNode::spawn(&agent_identity, "/ip4/127.0.0.1/tcp/0".parse().unwrap())
+        .expect("agent mesh spawn");
 
     // Agent dials operator.
     for addr in &operator_addrs {
@@ -51,21 +49,34 @@ async fn mesh_ferry_publish_subscribe_round_trip() {
 
     // Both subscribe to the ferry result topic.
     let result_topic = libp2p::gossipsub::IdentTopic::new(topics::harness_result());
-    operator_handle.subscribe(&result_topic).await.expect("operator sub");
-    agent_handle.subscribe(&result_topic).await.expect("agent sub");
+    operator_handle
+        .subscribe(&result_topic)
+        .await
+        .expect("operator sub");
+    agent_handle
+        .subscribe(&result_topic)
+        .await
+        .expect("agent sub");
 
     // Agent subscribes to its own task topic.
     let agent_peer_id = agent_handle.local_peer_id().to_string();
     let task_topic = libp2p::gossipsub::IdentTopic::new(topics::harness_task(&agent_peer_id));
-    agent_handle.subscribe(&task_topic).await.expect("agent task sub");
+    agent_handle
+        .subscribe(&task_topic)
+        .await
+        .expect("agent task sub");
 
     // Operator subscribes to the task topic to verify publish worked.
-    operator_handle.subscribe(&task_topic).await.expect("operator task sub");
+    operator_handle
+        .subscribe(&task_topic)
+        .await
+        .expect("operator task sub");
 
     tokio::time::sleep(Duration::from_millis(500)).await;
 
     // Operator publishes a harness task via mesh.
-    let task_payload = br#"{"task_id":"mesh-001","tool_name":"shell","json_arguments":"{\"command\":\"id\"}"}"#;
+    let task_payload =
+        br#"{"task_id":"mesh-001","tool_name":"shell","json_arguments":"{\"command\":\"id\"}"}"#;
     operator_handle
         .publish(&task_topic, task_payload.to_vec())
         .await
@@ -74,11 +85,11 @@ async fn mesh_ferry_publish_subscribe_round_trip() {
     // Agent should receive the task on the gossipsub topic.
     let received = timeout(Duration::from_secs(5), async {
         loop {
-            if let Some(event) = agent_handle.next_event().await {
-                if let MeshEvent::GossipMessage { data, topic, .. } = event {
-                    if topic == task_topic.hash() {
-                        return data;
-                    }
+            if let Some(MeshEvent::GossipMessage { data, topic, .. }) =
+                agent_handle.next_event().await
+            {
+                if topic == task_topic.hash() {
+                    return data;
                 }
             }
         }
@@ -98,11 +109,11 @@ async fn mesh_ferry_publish_subscribe_round_trip() {
     // Operator should receive the result.
     let received_result = timeout(Duration::from_secs(5), async {
         loop {
-            if let Some(event) = operator_handle.next_event().await {
-                if let MeshEvent::GossipMessage { data, topic, .. } = event {
-                    if topic == result_topic.hash() {
-                        return data;
-                    }
+            if let Some(MeshEvent::GossipMessage { data, topic, .. }) =
+                operator_handle.next_event().await
+            {
+                if topic == result_topic.hash() {
+                    return data;
                 }
             }
         }
@@ -120,13 +131,11 @@ async fn mesh_telemetry_snapshot_publish() {
     let id1 = NodeIdentity::generate();
     let id2 = NodeIdentity::generate();
 
-    let h1 = MeshNode::spawn(&id1, "/ip4/127.0.0.1/tcp/0".parse().unwrap())
-        .expect("spawn 1");
+    let h1 = MeshNode::spawn(&id1, "/ip4/127.0.0.1/tcp/0".parse().unwrap()).expect("spawn 1");
     tokio::time::sleep(Duration::from_millis(200)).await;
 
     let addrs = h1.listen_addrs().await;
-    let h2 = MeshNode::spawn(&id2, "/ip4/127.0.0.1/tcp/0".parse().unwrap())
-        .expect("spawn 2");
+    let h2 = MeshNode::spawn(&id2, "/ip4/127.0.0.1/tcp/0".parse().unwrap()).expect("spawn 2");
 
     for addr in &addrs {
         let _ = h2.dial(addr.clone()).await;

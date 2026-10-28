@@ -1,7 +1,6 @@
 //! gRPC server implementation with enhanced TLS and agent management
 
 use crate::{proto::*, CertManager, GrpcServerConfig, InfraError, InfraResult};
-use tracing::{debug, error, info, warn};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -12,6 +11,7 @@ use tonic::{
     transport::{Identity, Server, ServerTlsConfig},
     Request, Response, Status, Streaming,
 };
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 /// Agent session information

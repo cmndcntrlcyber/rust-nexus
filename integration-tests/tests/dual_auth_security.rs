@@ -4,7 +4,7 @@
 //! Validates the `DualAuthGate` enforces both authentication paths when
 //! `require_dual` is true, and relaxes to gRPC-only when false (dev mode).
 
-use nexus_a2a::{DualAuthGate, DualAuthResult};
+use nexus_a2a::DualAuthGate;
 
 #[test]
 fn dual_auth_both_paths_succeeds() {
@@ -22,12 +22,7 @@ fn dual_auth_both_paths_succeeds() {
 #[test]
 fn single_auth_grpc_only_fails_when_dual_required() {
     let gate = DualAuthGate::new(true);
-    let result = DualAuthGate::build_result(
-        true,
-        Some("operator-1".into()),
-        false,
-        None,
-    );
+    let result = DualAuthGate::build_result(true, Some("operator-1".into()), false, None);
     assert!(!result.is_fully_authenticated());
     let err = gate.validate(&result);
     assert!(err.is_err());
@@ -39,12 +34,7 @@ fn single_auth_grpc_only_fails_when_dual_required() {
 #[test]
 fn single_auth_mesh_only_fails() {
     let gate = DualAuthGate::new(true);
-    let result = DualAuthGate::build_result(
-        false,
-        None,
-        true,
-        Some("12D3KooW...".into()),
-    );
+    let result = DualAuthGate::build_result(false, None, true, Some("12D3KooW...".into()));
     assert!(!result.is_fully_authenticated());
     let err = gate.validate(&result);
     assert!(err.is_err());
@@ -64,12 +54,7 @@ fn no_auth_fails() {
 #[test]
 fn dev_mode_allows_grpc_only() {
     let gate = DualAuthGate::new(false);
-    let result = DualAuthGate::build_result(
-        true,
-        Some("dev-operator".into()),
-        false,
-        None,
-    );
+    let result = DualAuthGate::build_result(true, Some("dev-operator".into()), false, None);
     assert!(!result.is_fully_authenticated());
     assert!(gate.validate(&result).is_ok());
 }

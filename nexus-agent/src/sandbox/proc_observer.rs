@@ -138,10 +138,7 @@ impl Default for ProcObserver {
 fn parse_kb_value(s: &str) -> u64 {
     let trimmed = s.trim();
     // Strip trailing "kB" or "KB" and parse.
-    let numeric = trimmed
-        .trim_end_matches("kB")
-        .trim_end_matches("KB")
-        .trim();
+    let numeric = trimmed.trim_end_matches("kB").trim_end_matches("KB").trim();
     match numeric.parse::<u64>() {
         Ok(kb) => kb * 1024,
         Err(_) => 0,

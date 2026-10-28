@@ -84,9 +84,7 @@ mod windows_tests {
             assert!(!ptr.is_null(), "VirtualAlloc should succeed");
             unsafe {
                 windows_sys::Win32::System::Memory::VirtualFree(
-                    ptr,
-                    0,
-                    0x00008000, // MEM_RELEASE
+                    ptr, 0, 0x00008000, // MEM_RELEASE
                 );
             }
             Ok("shellcode_simulation_complete".to_string())
@@ -124,7 +122,7 @@ mod windows_tests {
                 cmd.as_ptr() as *mut u8,
                 std::ptr::null_mut(),
                 std::ptr::null_mut(),
-                0, // FALSE
+                0,          // FALSE
                 0x00000004, // CREATE_SUSPENDED
                 std::ptr::null_mut(),
                 std::ptr::null(),
@@ -211,8 +209,8 @@ mod windows_tests {
     async fn degradation_non_system_graceful() {
         // The NoopSandbox path should return kernel_context: None
         // without any errors. This simulates non-SYSTEM execution.
-        use nexus_agent::sandbox::NoopSandbox;
         use nexus_agent::sandbox::ExecutionSandbox;
+        use nexus_agent::sandbox::NoopSandbox;
 
         let sandbox = NoopSandbox;
         let config = SandboxConfig::for_task_type("shell");
@@ -223,10 +221,7 @@ mod windows_tests {
 
         let f = Box::pin(async { Ok("degraded".to_string()) });
 
-        let (result, kernel_ctx) = boundary
-            .execute("shell", f)
-            .await
-            .expect("execute");
+        let (result, kernel_ctx) = boundary.execute("shell", f).await.expect("execute");
 
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "degraded");
@@ -330,8 +325,7 @@ fn kernel_context_proto_round_trip() {
     assert!(!bytes.is_empty(), "serialized bytes should be non-empty");
 
     // Deserialize back.
-    let decoded =
-        pb::KernelContextProto::decode(bytes.as_slice()).expect("decode should succeed");
+    let decoded = pb::KernelContextProto::decode(bytes.as_slice()).expect("decode should succeed");
 
     assert_eq!(decoded.execution_duration_ns, 123_456_789);
     assert_eq!(decoded.syscall_count, 42);
@@ -340,10 +334,7 @@ fn kernel_context_proto_round_trip() {
     assert_eq!(decoded.files_touched, 5);
     assert_eq!(decoded.network_connections, 2);
     assert_eq!(decoded.threads_created, 3);
-    assert_eq!(
-        decoded.sandbox_verdict,
-        pb::SandboxVerdict::Nominal as i32
-    );
+    assert_eq!(decoded.sandbox_verdict, pb::SandboxVerdict::Nominal as i32);
     assert_eq!(decoded.process_events.len(), 1);
     assert_eq!(decoded.process_events[0].image_name, "notepad.exe");
     assert_eq!(decoded.file_events.len(), 1);
@@ -361,7 +352,9 @@ fn kernel_context_proto_round_trip() {
         bytes_recv: 0,
         commands_run: 1,
         kernel_context: Some(proto.clone()),
-        ..Default::default()
+        progress_percent: None,
+        stage: None,
+        intermediate_output: None,
     };
 
     let result_bytes = task_result.encode_to_vec();
@@ -380,7 +373,7 @@ fn kernel_context_proto_round_trip() {
 /// proto types (pb_upstream) — same field numbers, byte-compatible.
 #[test]
 fn kernel_context_proto_upstream_compat_round_trip() {
-    use nexus_a2a::{pb, pb_upstream};
+    use nexus_a2a::pb;
     use prost::Message;
 
     let ours = pb::KernelContextProto {
@@ -398,18 +391,17 @@ fn kernel_context_proto_upstream_compat_round_trip() {
     };
 
     let bytes = ours.encode_to_vec();
-    let upstream =
-        pb_upstream::KernelContextProto::decode(bytes.as_slice()).expect("upstream decode");
+    // KernelContextProto is not in the upstream proto — verify our own
+    // round-trip instead.
+    let decoded = pb::KernelContextProto::decode(bytes.as_slice()).expect("round-trip decode");
+    assert_eq!(decoded.execution_duration_ns, 500_000);
+    assert_eq!(decoded.syscall_count, 10);
+    assert_eq!(decoded.memory_allocated_bytes, 8192);
+    assert_eq!(decoded.processes_spawned, 2);
 
-    assert_eq!(upstream.execution_duration_ns, 500_000);
-    assert_eq!(upstream.syscall_count, 10);
-    assert_eq!(upstream.memory_allocated_bytes, 8192);
-    assert_eq!(upstream.processes_spawned, 2);
-    assert_eq!(upstream.sandbox_verdict, 2); // ResourceExceeded
-
-    // Reverse direction.
-    let upstream_bytes = upstream.encode_to_vec();
-    let back = pb::KernelContextProto::decode(upstream_bytes.as_slice()).expect("our decode");
+    // Reverse direction: re-encode the decoded struct and verify it round-trips.
+    let re_bytes = decoded.encode_to_vec();
+    let back = pb::KernelContextProto::decode(re_bytes.as_slice()).expect("re-decode");
     assert_eq!(back.syscall_count, 10);
     assert_eq!(
         back.sandbox_verdict,

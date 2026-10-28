@@ -3,7 +3,6 @@
 //! bidi streaming RPC (WS1 Phase 1c).
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use tokio::sync::{broadcast, Mutex};
 use tracing::{debug, info};
@@ -75,7 +74,11 @@ impl SwarmCoordinator {
             for key in keys {
                 rounds.remove(&key);
             }
-            info!(pruned = excess, remaining = rounds.len(), "swarm coordinator: pruned old rounds");
+            info!(
+                pruned = excess,
+                remaining = rounds.len(),
+                "swarm coordinator: pruned old rounds"
+            );
         }
     }
 }

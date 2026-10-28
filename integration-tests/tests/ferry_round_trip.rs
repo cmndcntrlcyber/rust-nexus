@@ -3,9 +3,7 @@
 //! Proves: HarnessTask → SubmitHarnessTask RPC → ferry handler → TaskExecutor
 //! → HarnessTaskResult round-trip over loopback gRPC.
 
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
 use std::time::Duration;
 
 use nexus_a2a::mock::EchoShellHandler;
@@ -58,7 +56,9 @@ impl HarnessFerryHandler for TestFerryHandler {
             bytes_recv: task.json_arguments.len() as u64,
             commands_run: 1,
             kernel_context: None,
-            ..Default::default()
+            progress_percent: None,
+            stage: None,
+            intermediate_output: None,
         })
     }
 }
@@ -74,8 +74,7 @@ async fn ferry_grpc_round_trip_unary() {
     let url = format!("http://{addr}");
 
     let handler = TestFerryHandler::new();
-    let server = A2aServer::new(agent_card(), EchoShellHandler)
-        .with_ferry_handler(handler);
+    let server = A2aServer::new(agent_card(), EchoShellHandler).with_ferry_handler(handler);
 
     let _server_task = tokio::spawn(async move {
         use tonic::transport::server::TcpIncoming;
@@ -111,7 +110,7 @@ async fn ferry_grpc_round_trip_unary() {
     assert!(!result.is_error);
     assert!(result.output.starts_with("echo:shell:"));
     assert!(result.output.contains("whoami"));
-    assert!(result.execution_duration_ms >= 0);
+    let _ = result.execution_duration_ms;
 }
 
 #[tokio::test]
@@ -124,8 +123,8 @@ async fn ferry_grpc_round_trip_streaming() {
     let addr = listener.local_addr().expect("local_addr");
     let url = format!("http://{addr}");
 
-    let server = A2aServer::new(agent_card(), EchoShellHandler)
-        .with_ferry_handler(TestFerryHandler::new());
+    let server =
+        A2aServer::new(agent_card(), EchoShellHandler).with_ferry_handler(TestFerryHandler::new());
 
     let _server_task = tokio::spawn(async move {
         use tonic::transport::server::TcpIncoming;
@@ -190,7 +189,9 @@ async fn ferry_error_propagation() {
                 bytes_recv: 0,
                 commands_run: 0,
                 kernel_context: None,
-                ..Default::default()
+                progress_percent: None,
+                stage: None,
+                intermediate_output: None,
             })
         }
     }
@@ -201,8 +202,7 @@ async fn ferry_error_propagation() {
     let addr = listener.local_addr().expect("local_addr");
     let url = format!("http://{addr}");
 
-    let server = A2aServer::new(agent_card(), EchoShellHandler)
-        .with_ferry_handler(FailingHandler);
+    let server = A2aServer::new(agent_card(), EchoShellHandler).with_ferry_handler(FailingHandler);
 
     let _server_task = tokio::spawn(async move {
         use tonic::transport::server::TcpIncoming;

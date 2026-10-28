@@ -10,18 +10,13 @@ use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 
 /// OS-level containment outcome for a sandboxed task execution.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum SandboxVerdict {
+    #[default]
     Nominal,
     ResourceExceeded,
     Timeout,
     ContainmentBreach,
-}
-
-impl Default for SandboxVerdict {
-    fn default() -> Self {
-        Self::Nominal
-    }
 }
 
 /// Process lifecycle event observed during task execution.
@@ -95,18 +90,13 @@ impl Default for SandboxConfig {
 }
 
 /// How much kernel-level observation to capture.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum ObservationLevel {
     Full,
     ProcessAndNetwork,
     Minimal,
+    #[default]
     None,
-}
-
-impl Default for ObservationLevel {
-    fn default() -> Self {
-        Self::None
-    }
 }
 
 impl SandboxConfig {
@@ -144,7 +134,9 @@ impl SandboxConfig {
                 observation_level: ObservationLevel::Minimal,
             },
             // Read-only recon — no containment or observation
-            "directory_listing" | "process_list" | "system_info" | "network_info" => Self::default(),
+            "directory_listing" | "process_list" | "system_info" | "network_info" => {
+                Self::default()
+            }
             // Registry/service — quick operations, full OS access needed
             "registry_query" | "registry_set" | "service_control" => Self {
                 observation_level: ObservationLevel::Minimal,

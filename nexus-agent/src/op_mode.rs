@@ -12,17 +12,13 @@ use serde::{Deserialize, Serialize};
 /// * **Field** — minimal logging, jittered heartbeat, evasion enabled.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum OpMode {
     /// Development / lab environment.
+    #[default]
     Lab,
     /// Operational / field deployment.
     Field,
-}
-
-impl Default for OpMode {
-    fn default() -> Self {
-        OpMode::Lab
-    }
 }
 
 impl OpMode {

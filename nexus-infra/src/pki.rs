@@ -146,9 +146,9 @@ impl PkiManager {
         let server_key_pem = server_tmpl.serialize_private_key_pem();
         let (server_cert_pem, server_ca_label) = match cf_token {
             Some(token) => {
-                let csr = server_tmpl.serialize_request_pem().map_err(|e| {
-                    InfraError::CertificateError(format!("server CSR: {e}"))
-                })?;
+                let csr = server_tmpl
+                    .serialize_request_pem()
+                    .map_err(|e| InfraError::CertificateError(format!("server CSR: {e}")))?;
                 let cert = call_cf_origin_ca_api(token, &csr, &[domain.to_string()])?;
                 (cert, "server-ca")
             }
@@ -159,25 +159,26 @@ impl PkiManager {
         };
 
         // -- Internal CA (always built for self-signed mode; skipped for client certs in CF mode).
-        let (internal_ca, internal_ca_crt_pem, internal_ca_key_pem) = if !use_cf_clients || cf_token.is_none() {
-            let ca = generate_ca("Nexus C2 CA")?;
-            let crt = ca.serialize_pem().map_err(|e| {
-                InfraError::CertificateError(format!("CA serialize_pem: {e}"))
-            })?;
-            let key = ca.serialize_private_key_pem();
-            (Some(ca), crt, key)
-        } else {
-            (None, String::new(), String::new())
-        };
+        let (internal_ca, internal_ca_crt_pem, internal_ca_key_pem) =
+            if !use_cf_clients || cf_token.is_none() {
+                let ca = generate_ca("Nexus C2 CA")?;
+                let crt = ca
+                    .serialize_pem()
+                    .map_err(|e| InfraError::CertificateError(format!("CA serialize_pem: {e}")))?;
+                let key = ca.serialize_private_key_pem();
+                (Some(ca), crt, key)
+            } else {
+                (None, String::new(), String::new())
+            };
 
         // Resolve server cert for self-signed path.
         let (server_cert_pem, server_ca_label) = if cf_token.is_some() {
             (server_cert_pem, server_ca_label)
         } else {
             let ca = internal_ca.as_ref().unwrap();
-            let cert = server_tmpl.serialize_pem_with_signer(ca).map_err(|e| {
-                InfraError::CertificateError(format!("server serialize_pem: {e}"))
-            })?;
+            let cert = server_tmpl
+                .serialize_pem_with_signer(ca)
+                .map_err(|e| InfraError::CertificateError(format!("server serialize_pem: {e}")))?;
             (cert, "ca")
         };
 
@@ -191,13 +192,15 @@ impl PkiManager {
         }
 
         // Helper: sign one client cert template.
-        let sign_client = |tmpl: &Certificate, cn: &str, token: Option<&str>, zone: Option<&str>|
-            -> InfraResult<String>
-        {
+        let sign_client = |tmpl: &Certificate,
+                           cn: &str,
+                           token: Option<&str>,
+                           zone: Option<&str>|
+         -> InfraResult<String> {
             if let (Some(tok), Some(zid)) = (token, zone) {
-                let csr = tmpl.serialize_request_pem().map_err(|e| {
-                    InfraError::CertificateError(format!("{cn} CSR: {e}"))
-                })?;
+                let csr = tmpl
+                    .serialize_request_pem()
+                    .map_err(|e| InfraError::CertificateError(format!("{cn} CSR: {e}")))?;
                 call_cf_client_cert_api(tok, zid, &csr, 3650)
             } else {
                 tmpl.serialize_pem_with_signer(internal_ca.as_ref().unwrap())
@@ -233,9 +236,8 @@ impl PkiManager {
         // Client CA cert (what server uses to verify client certs).
         if use_cf_clients {
             // Copy CF zone CA cert from the path the user provided.
-            let cf_ca_pem = std::fs::read_to_string(cf_client_ca.unwrap()).map_err(|e| {
-                InfraError::CertificateError(format!("read --cf-client-ca: {e}"))
-            })?;
+            let cf_ca_pem = std::fs::read_to_string(cf_client_ca.unwrap())
+                .map_err(|e| InfraError::CertificateError(format!("read --cf-client-ca: {e}")))?;
             write_cert(tmp, "ca", &cf_ca_pem)?;
         } else {
             // Self-signed: internal CA serves as both server CA and client CA.
@@ -326,18 +328,18 @@ impl PkiManager {
         use x509_parser::prelude::FromDer as _;
         use x509_parser::prelude::X509Certificate;
 
-        let key_str = std::str::from_utf8(key_pem).map_err(|e| {
-            InfraError::CertificateError(format!("key PEM not UTF-8: {e}"))
-        })?;
+        let key_str = std::str::from_utf8(key_pem)
+            .map_err(|e| InfraError::CertificateError(format!("key PEM not UTF-8: {e}")))?;
         let key_spki = KeyPair::from_pem(key_str)
             .map_err(|e| InfraError::CertificateError(format!("parse private key: {e}")))?
             .public_key_der();
 
         let cert_ders = certs(&mut std::io::Cursor::new(cert_pem))
             .map_err(|e| InfraError::CertificateError(format!("parse cert PEM: {e}")))?;
-        let cert_der = cert_ders.into_iter().next().ok_or_else(|| {
-            InfraError::CertificateError("no certificate in PEM".to_string())
-        })?;
+        let cert_der = cert_ders
+            .into_iter()
+            .next()
+            .ok_or_else(|| InfraError::CertificateError("no certificate in PEM".to_string()))?;
         let (_, cert) = X509Certificate::from_der(&cert_der)
             .map_err(|e| InfraError::CertificateError(format!("parse cert DER: {e}")))?;
 
@@ -389,9 +391,7 @@ fn call_cf_client_cert_api(
 ) -> InfraResult<String> {
     use serde_json::{json, Value};
     let client = reqwest::blocking::Client::new();
-    let url = format!(
-        "https://api.cloudflare.com/client/v4/zones/{zone_id}/client_certificates"
-    );
+    let url = format!("https://api.cloudflare.com/client/v4/zones/{zone_id}/client_certificates");
     let resp: Value = client
         .post(&url)
         .header("Authorization", format!("Bearer {api_token}"))
@@ -422,7 +422,9 @@ fn check_cf_success(resp: &serde_json::Value, label: &str) -> InfraResult<()> {
                     .join("; ")
             })
             .unwrap_or_else(|| resp["errors"].to_string());
-        return Err(InfraError::CertificateError(format!("{label} API error: {errs}")));
+        return Err(InfraError::CertificateError(format!(
+            "{label} API error: {errs}"
+        )));
     }
     Ok(())
 }
@@ -462,10 +464,7 @@ fn generate_server_cert_template(domain: &str, ip: IpAddr) -> InfraResult<Certif
     let mut dn = DistinguishedName::new();
     dn.push(DnType::CommonName, domain);
     params.distinguished_name = dn;
-    params.subject_alt_names = vec![
-        SanType::DnsName(domain.to_string()),
-        SanType::IpAddress(ip),
-    ];
+    params.subject_alt_names = vec![SanType::DnsName(domain.to_string()), SanType::IpAddress(ip)];
     params.extended_key_usages = vec![ExtendedKeyUsagePurpose::ServerAuth];
     params.alg = &PKCS_ECDSA_P256_SHA256;
     params.key_pair = Some(
@@ -583,9 +582,16 @@ mod tests {
     use tempfile::tempdir;
 
     fn init_self_signed(out: &Path, agents: u8) -> PkiBundle {
-        PkiManager::init("test.example.com", "127.0.0.1".parse().unwrap(), agents, out,
-                         None, None, None)
-            .expect("init self-signed")
+        PkiManager::init(
+            "test.example.com",
+            "127.0.0.1".parse().unwrap(),
+            agents,
+            out,
+            None,
+            None,
+            None,
+        )
+        .expect("init self-signed")
     }
 
     #[test]
@@ -595,10 +601,14 @@ mod tests {
         let b = init_self_signed(&out, 2);
 
         for p in [
-            &b.server_ca_cert, &b.client_ca_cert,
-            &b.server_cert, &b.server_key,
-            &b.console_cert, &b.console_key,
-            &b.operator_cert, &b.operator_key,
+            &b.server_ca_cert,
+            &b.client_ca_cert,
+            &b.server_cert,
+            &b.server_key,
+            &b.console_cert,
+            &b.console_key,
+            &b.operator_cert,
+            &b.operator_key,
         ] {
             assert!(p.exists(), "missing: {}", p.display());
         }
@@ -616,9 +626,15 @@ mod tests {
         let dir = tempdir().unwrap();
         let out = dir.path().join("certs");
         let err = PkiManager::init(
-            "test.example.com", "127.0.0.1".parse().unwrap(), 0, &out,
-            Some("tok"), Some("zone"), None,
-        ).unwrap_err();
+            "test.example.com",
+            "127.0.0.1".parse().unwrap(),
+            0,
+            &out,
+            Some("tok"),
+            Some("zone"),
+            None,
+        )
+        .unwrap_err();
         assert!(err.to_string().contains("--cf-client-ca"), "{err}");
     }
 
@@ -628,9 +644,15 @@ mod tests {
         let out = dir.path().join("certs");
         init_self_signed(&out, 0);
         let err = PkiManager::init(
-            "test.example.com", "127.0.0.1".parse().unwrap(), 0, &out,
-            None, None, None,
-        ).unwrap_err();
+            "test.example.com",
+            "127.0.0.1".parse().unwrap(),
+            0,
+            &out,
+            None,
+            None,
+            None,
+        )
+        .unwrap_err();
         assert!(err.to_string().contains("already initialized"), "{err}");
     }
 

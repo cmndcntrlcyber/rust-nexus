@@ -2,8 +2,6 @@
 
 use crate::{InfraError, InfraResult, OriginCertConfig};
 use chrono::{DateTime, Duration, Utc};
-use std::collections::HashMap;
-use tracing::info;
 use rcgen::{
     Certificate, CertificateParams, DistinguishedName, DnType, KeyPair, PKCS_ECDSA_P256_SHA256,
 };
@@ -11,11 +9,13 @@ use rustls::server::{ClientHello, ResolvesServerCert};
 use rustls::sign::{any_supported_type, CertifiedKey};
 use rustls::{Certificate as RustlsCert, ClientConfig, PrivateKey, ServerConfig};
 use rustls_pemfile::{certs, ec_private_keys, pkcs8_private_keys, rsa_private_keys};
+use std::collections::HashMap;
 use std::fs;
 use std::io::BufReader;
 use std::path::Path;
 use std::sync::Arc;
 use tokio_rustls::{TlsAcceptor, TlsConnector};
+use tracing::info;
 use x509_parser::prelude::*;
 
 /// Certificate validation result
@@ -516,10 +516,8 @@ impl CertManager {
                     name
                 ))
             })?;
-            let certified_key = Arc::new(CertifiedKey::new(
-                profile.cert_chain.clone(),
-                signing_key,
-            ));
+            let certified_key =
+                Arc::new(CertifiedKey::new(profile.cert_chain.clone(), signing_key));
             resolver_profiles.insert(name.clone(), certified_key);
             for domain in &profile.domains {
                 resolver_domain_index.insert(domain.clone(), name.clone());
@@ -537,17 +535,16 @@ impl CertManager {
         let config = if mutual_tls {
             let mut root_store = rustls::RootCertStore::empty();
             for ca_cert in &self.ca_certificates {
-                root_store.add(ca_cert).map_err(|e| {
-                    InfraError::TlsError(format!("Failed to add CA cert: {:?}", e))
-                })?;
+                root_store
+                    .add(ca_cert)
+                    .map_err(|e| InfraError::TlsError(format!("Failed to add CA cert: {:?}", e)))?;
             }
             for profile in self.profiles.values() {
                 for ca_cert in &profile.ca_certificates {
                     let _ = root_store.add(ca_cert);
                 }
             }
-            let verifier =
-                rustls::server::AllowAnyAuthenticatedClient::new(root_store).boxed();
+            let verifier = rustls::server::AllowAnyAuthenticatedClient::new(root_store).boxed();
             builder
                 .with_client_cert_verifier(verifier)
                 .with_cert_resolver(Arc::new(resolver))
@@ -561,10 +558,7 @@ impl CertManager {
     }
 
     /// Create a TLS acceptor with multi-profile SNI-based cert resolution
-    pub fn create_multi_profile_tls_acceptor(
-        &self,
-        mutual_tls: bool,
-    ) -> InfraResult<TlsAcceptor> {
+    pub fn create_multi_profile_tls_acceptor(&self, mutual_tls: bool) -> InfraResult<TlsAcceptor> {
         let config = self.create_multi_profile_server_config(mutual_tls)?;
         Ok(TlsAcceptor::from(Arc::new(config)))
     }

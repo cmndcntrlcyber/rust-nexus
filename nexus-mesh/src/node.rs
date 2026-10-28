@@ -22,7 +22,7 @@ use tokio::sync::{mpsc, oneshot, Mutex};
 use tracing::{debug, info, warn};
 
 use crate::discovery::{build_kad, build_mdns};
-use crate::telemetry::{TelemetryAggregator, Direction};
+use crate::telemetry::{Direction, TelemetryAggregator};
 
 const GOSSIPSUB_HEARTBEAT_INTERVAL: Duration = Duration::from_millis(1000);
 const CMD_CHANNEL_CAPACITY: usize = 64;
@@ -327,11 +327,11 @@ async fn run_swarm(
             // Serialize and publish the snapshot to the telemetry topic.
             if let Ok(data) = serde_json::to_vec(&snapshot) {
                 let topic = crate::topics::telemetry_snapshot_topic();
-                let _ = swarm
-                    .behaviour_mut()
-                    .gossipsub
-                    .publish(topic, data);
-                debug!("mesh: telemetry snapshot flushed ({} peers)", snapshot.node_features.len());
+                let _ = swarm.behaviour_mut().gossipsub.publish(topic, data);
+                debug!(
+                    "mesh: telemetry snapshot flushed ({} peers)",
+                    snapshot.node_features.len()
+                );
             }
         }
     }

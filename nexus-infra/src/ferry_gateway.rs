@@ -895,7 +895,11 @@ async fn post_ferry_token(
 
     match client.issue_operator_token(grpc_req).await {
         Ok(reply) => Json(TokenResponse {
-            token: reply.token.iter().map(|b| format!("{b:02x}")).collect::<String>(),
+            token: reply
+                .token
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect::<String>(),
             issued_unix: reply.issued_unix,
             expires_unix: reply.expires_unix,
         })
@@ -918,9 +922,7 @@ async fn post_ferry_token(
 // WS5 — Situational Awareness SSE endpoint
 // ---------------------------------------------------------------------------
 
-async fn get_ferry_situational(
-    State(state): State<FerryState>,
-) -> impl IntoResponse {
+async fn get_ferry_situational(State(state): State<FerryState>) -> impl IntoResponse {
     let sa = state.situational_awareness.clone();
     let gml = state.gml.clone();
 

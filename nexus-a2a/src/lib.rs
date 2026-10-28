@@ -1,3 +1,4 @@
+#![allow(clippy::double_must_use, clippy::result_large_err)]
 //! `nexus-a2a` — A2A gRPC plane (v1.1 simple-mesh integration layer).
 //!
 //! Provides Linux Foundation A2A-protocol-compatible types + a `shell-session`
@@ -26,9 +27,9 @@ pub mod otel;
 pub mod server;
 pub mod situational_awareness;
 pub mod swarm_coordinator;
-pub mod topology_stream;
 pub mod tls;
 pub mod tokens;
+pub mod topology_stream;
 
 /// Protobuf-generated types + Tonic stubs for `a2a.v1`.
 pub mod pb {
@@ -52,12 +53,10 @@ pub mod pb_upstream {
     tonic::include_proto!("a2a.upstream.v1");
 }
 
+pub use chat_dispatcher::{ChatDispatcher, NullChatDispatcher};
 pub use client::A2aClient;
 pub use dual_auth::{DualAuthGate, DualAuthResult};
-pub use chat_dispatcher::{ChatDispatcher, NullChatDispatcher};
 pub use ferry_handler::HarnessFerryHandler;
-pub use situational_awareness::{AgentSnapshot, SituationalAwareness};
-pub use swarm_coordinator::SwarmCoordinator;
 pub use framing::{
     ShellControl, AGENT_REGISTER_KIND, SHELL_EXIT_KIND, SHELL_OPEN_KIND, SHELL_RESIZE_KIND,
 };
@@ -66,3 +65,5 @@ pub use handler::{
     ShellOpenParams,
 };
 pub use server::A2aServer;
+pub use situational_awareness::{AgentSnapshot, SituationalAwareness};
+pub use swarm_coordinator::SwarmCoordinator;

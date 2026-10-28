@@ -623,7 +623,10 @@ mod tests {
         assert_eq!(profiles[0].name, "primary");
         assert_eq!(profiles[0].domains, vec!["c2.example.com"]);
         assert_eq!(profiles[1].name, "fallback");
-        assert_eq!(profiles[1].domains, vec!["backup.example.com", "cdn.example.com"]);
+        assert_eq!(
+            profiles[1].domains,
+            vec!["backup.example.com", "cdn.example.com"]
+        );
     }
 
     #[test]

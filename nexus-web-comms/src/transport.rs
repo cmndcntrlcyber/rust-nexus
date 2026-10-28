@@ -22,7 +22,6 @@ use serde::{Deserialize, Serialize};
 pub type ShutdownFuture = Pin<Box<dyn Future<Output = ()> + Send + 'static>>;
 
 /// Convenience constructor for a [`ShutdownFuture`].
-#[must_use]
 pub fn shutdown_from<F>(f: F) -> ShutdownFuture
 where
     F: Future<Output = ()> + Send + 'static,

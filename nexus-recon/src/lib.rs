@@ -1,3 +1,4 @@
+#![allow(clippy::double_must_use)]
 //! Nexus Reconnaissance Module
 //!
 //! Integrates the browser fingerprinting and reconnaissance capabilities from the catch system
@@ -6,10 +7,10 @@
 // v1.4: stub/overlay module — config fields are declared for future wiring.
 // Per-item #[allow(dead_code)] is used on specific unused items below.
 
-use tracing::info;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use tracing::info;
 
 pub mod browser_fingerprint;
 pub mod javascript_engine;

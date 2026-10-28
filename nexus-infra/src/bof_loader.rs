@@ -2,9 +2,9 @@
 
 use crate::{InfraError, InfraResult};
 use goblin::pe::Coff;
-use tracing::{debug, info, warn};
 use std::collections::HashMap;
 use std::ptr;
+use tracing::{debug, info, warn};
 
 #[cfg(target_os = "windows")]
 use std::ffi::CString;

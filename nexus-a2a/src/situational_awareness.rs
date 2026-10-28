@@ -2,7 +2,6 @@
 //! capabilities, task load, and health (WS1 Phase 1c).
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use tokio::sync::Mutex;
 use tracing::debug;
@@ -39,6 +38,7 @@ pub struct SituationalAwareness {
 }
 
 impl SituationalAwareness {
+    /// Create a new empty situational awareness store.
     pub fn new() -> Self {
         Self {
             agents: Mutex::new(HashMap::new()),

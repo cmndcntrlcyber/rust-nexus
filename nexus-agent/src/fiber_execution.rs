@@ -7,11 +7,11 @@ use std::ptr::{null, null_mut};
 
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::{
-    Foundation::{CloseHandle, GetLastError, HANDLE, FALSE},
+    Foundation::{CloseHandle, GetLastError, FALSE, HANDLE},
     System::Diagnostics::Debug::WriteProcessMemory,
     System::JobObjects::{
-        AssignProcessToJobObject, CreateJobObjectW, SetInformationJobObject,
-        JobObjectExtendedLimitInformation, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+        AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
+        SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
         JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
     },
     System::Memory::{
@@ -285,7 +285,9 @@ impl FiberExecutor {
         // Resume thread to execute our fiber code
         if ResumeThread(process_info.hThread) == 0xFFFFFFFF {
             let error = GetLastError();
-            if let Some(jh) = job_handle { CloseHandle(jh); }
+            if let Some(jh) = job_handle {
+                CloseHandle(jh);
+            }
             CloseHandle(process_info.hProcess);
             CloseHandle(process_info.hThread);
             return Err(NexusError::TaskExecutionError(format!(
@@ -295,7 +297,9 @@ impl FiberExecutor {
         }
 
         // Cleanup handles
-        if let Some(jh) = job_handle { CloseHandle(jh); }
+        if let Some(jh) = job_handle {
+            CloseHandle(jh);
+        }
         CloseHandle(process_info.hProcess);
         CloseHandle(process_info.hThread);
 
@@ -446,7 +450,9 @@ impl FiberExecutor {
         // Resume the process - our code will execute as part of process initialization
         if ResumeThread(process_info.hThread) == 0xFFFFFFFF {
             let error = GetLastError();
-            if let Some(jh) = job_handle { CloseHandle(jh); }
+            if let Some(jh) = job_handle {
+                CloseHandle(jh);
+            }
             CloseHandle(process_info.hProcess);
             CloseHandle(process_info.hThread);
             return Err(NexusError::TaskExecutionError(format!(
@@ -455,7 +461,9 @@ impl FiberExecutor {
             )));
         }
 
-        if let Some(jh) = job_handle { CloseHandle(jh); }
+        if let Some(jh) = job_handle {
+            CloseHandle(jh);
+        }
         CloseHandle(process_info.hProcess);
         CloseHandle(process_info.hThread);
 

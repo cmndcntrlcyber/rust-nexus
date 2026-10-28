@@ -83,7 +83,67 @@ export class BarometerOverlay {
     this.scoreSpan.style.color = this.bar.style.background;
   }
 
+  // WS9 Phase 9g — hysteresis state badges
+  private badgeContainer: HTMLDivElement | null = null;
+
+  /** Render per-node hysteresis badges (shadow/active/killed) next to 3D nodes */
+  updateNodeBadges(
+    nodes: Array<{ id: string; state: string; screenX: number; screenY: number }>,
+    containerRect: DOMRect,
+  ): void {
+    if (!this.badgeContainer) {
+      this.badgeContainer = document.createElement('div');
+      Object.assign(this.badgeContainer.style, {
+        position: 'absolute',
+        top: '0',
+        left: '0',
+        width: '100%',
+        height: '100%',
+        pointerEvents: 'none',
+        zIndex: '5',
+      });
+      this.element.parentElement?.appendChild(this.badgeContainer);
+    }
+
+    this.badgeContainer.innerHTML = '';
+
+    for (const node of nodes) {
+      const badge = document.createElement('span');
+      const { bg, label } = stateStyle(node.state);
+      Object.assign(badge.style, {
+        position: 'absolute',
+        left: `${node.screenX}px`,
+        top: `${node.screenY - 20}px`,
+        background: bg,
+        color: '#fff',
+        fontSize: '9px',
+        fontFamily: 'monospace',
+        padding: '1px 5px',
+        borderRadius: '3px',
+        whiteSpace: 'nowrap',
+      });
+      badge.textContent = label;
+      this.badgeContainer.appendChild(badge);
+    }
+  }
+
   dispose(): void {
+    this.badgeContainer?.remove();
     this.element.remove();
+  }
+}
+
+function stateStyle(state: string): { bg: string; label: string } {
+  switch (state.toLowerCase()) {
+    case 'shadow':
+      return { bg: 'rgba(59,130,246,0.8)', label: '🔵 shadow' };
+    case 'active':
+      return { bg: 'rgba(34,197,94,0.8)', label: '🟢 active' };
+    case 'killed':
+      return { bg: 'rgba(239,68,68,0.8)', label: '🔴 killed' };
+    case 'throttled':
+      return { bg: 'rgba(245,158,11,0.8)', label: '🟡 throttled' };
+    default:
+      return { bg: 'rgba(100,116,139,0.7)', label: state };
   }
 }

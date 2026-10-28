@@ -117,7 +117,12 @@ async fn run_agent(args: Vec<String>) -> Result<()> {
     };
     tracing::info!(%op_mode, "operational mode");
 
-    let cfg = a2a_client::A2aClientConfig { c2_addr, tag, insecure_network, op_mode };
+    let cfg = a2a_client::A2aClientConfig {
+        c2_addr,
+        tag,
+        insecure_network,
+        op_mode,
+    };
 
     let identity_path = std::env::var("NEXUS_IDENTITY_PATH")
         .unwrap_or_else(|_| "/var/lib/nexus-agent/identity.bin".to_string());
