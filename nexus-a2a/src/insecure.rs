@@ -55,12 +55,17 @@ pub fn enforce<A: ToSocketAddrs + std::fmt::Display>(
 pub enum LoopbackError {
     /// Address resolved non-loopback without opt-in.
     #[error(
-        "refusing to use non-loopback address {0} without --insecure-network \
-         and without mTLS configured (D-V1-E)"
+        "non-loopback address `{0}` requires either mTLS certificates \
+         (set NEXUS_CA_CERT, NEXUS_CLIENT_CERT, NEXUS_CLIENT_KEY) or \
+         the \"Allow non-loopback address\" checkbox (--insecure-network). \
+         Loopback addresses (127.0.0.1, ::1) work without either. (D-V1-E)"
     )]
     NonLoopback(String),
     /// Address unresolvable.
-    #[error("address {0} could not be resolved")]
+    #[error(
+        "address `{0}` could not be resolved \u{2014} check the hostname spelling, \
+         DNS configuration, and network connectivity"
+    )]
     Unresolvable(String),
 }
 

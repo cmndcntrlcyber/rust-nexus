@@ -1,5 +1,7 @@
 //! `A2aClient` — thin async wrapper around the generated Tonic client.
 
+use std::time::Duration;
+
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::{Channel, Endpoint};
@@ -8,6 +10,33 @@ use tonic::Streaming;
 use crate::insecure;
 use crate::pb;
 use crate::pb::a2a_service_client::A2aServiceClient;
+
+/// Configuration for A2A client connection behavior.
+#[derive(Debug, Clone)]
+pub struct ConnectConfig {
+    /// Timeout for the initial TCP+TLS connection. Default: 10s.
+    pub connect_timeout: Duration,
+    /// TCP keepalive interval. Default: 20s.
+    pub tcp_keepalive: Duration,
+    /// HTTP/2 keepalive ping interval. Default: 30s.
+    pub http2_keepalive_interval: Duration,
+    /// HTTP/2 keepalive ping timeout. Default: 10s.
+    pub http2_keepalive_timeout: Duration,
+    /// Send HTTP/2 keepalive pings even when idle. Default: true.
+    pub http2_keepalive_while_idle: bool,
+}
+
+impl Default for ConnectConfig {
+    fn default() -> Self {
+        Self {
+            connect_timeout: Duration::from_secs(10),
+            tcp_keepalive: Duration::from_secs(20),
+            http2_keepalive_interval: Duration::from_secs(30),
+            http2_keepalive_timeout: Duration::from_secs(10),
+            http2_keepalive_while_idle: true,
+        }
+    }
+}
 
 /// Default mpsc channel capacity for outbound shell-session frames.
 pub const CLIENT_TX_CAPACITY: usize = 64;
@@ -45,6 +74,40 @@ impl A2aClient {
         if let Some(t) = tls {
             endpoint = endpoint.tls_config(t)?;
         }
+        let channel = endpoint.connect().await?;
+        Ok(Self {
+            inner: A2aServiceClient::new(channel),
+        })
+    }
+
+    /// Connect with full configuration: TLS, keepalive, and timeouts.
+    /// Recommended entry point for production use.
+    pub async fn connect_with_config(
+        addr: &str,
+        insecure_network: bool,
+        tls: Option<tonic::transport::ClientTlsConfig>,
+        config: ConnectConfig,
+    ) -> anyhow::Result<Self> {
+        let mut endpoint = Endpoint::from_shared(addr.to_string())?;
+        let uri = endpoint.uri().clone();
+        let host = uri
+            .host()
+            .ok_or_else(|| anyhow::anyhow!("missing host in {addr}"))?;
+        let port = uri
+            .port_u16()
+            .ok_or_else(|| anyhow::anyhow!("missing port in {addr}"))?;
+        let socket = format!("{host}:{port}");
+        let tls_configured = tls.is_some();
+        insecure::enforce(socket.as_str(), insecure_network, tls_configured)?;
+        if let Some(t) = tls {
+            endpoint = endpoint.tls_config(t)?;
+        }
+        endpoint = endpoint
+            .connect_timeout(config.connect_timeout)
+            .tcp_keepalive(Some(config.tcp_keepalive))
+            .http2_keep_alive_interval(config.http2_keepalive_interval)
+            .keep_alive_timeout(config.http2_keepalive_timeout)
+            .keep_alive_while_idle(config.http2_keepalive_while_idle);
         let channel = endpoint.connect().await?;
         Ok(Self {
             inner: A2aServiceClient::new(channel),

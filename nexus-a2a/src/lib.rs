@@ -54,7 +54,7 @@ pub mod pb_upstream {
 }
 
 pub use chat_dispatcher::{ChatDispatcher, NullChatDispatcher};
-pub use client::A2aClient;
+pub use client::{A2aClient, ConnectConfig};
 pub use dual_auth::{DualAuthGate, DualAuthResult};
 pub use ferry_handler::HarnessFerryHandler;
 pub use framing::{
