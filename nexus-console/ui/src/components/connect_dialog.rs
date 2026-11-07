@@ -1,7 +1,7 @@
 //! Pre-connect form with retry, cancel, and address validation.
 
-use std::cell::Cell;
-use std::rc::Rc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use leptos::prelude::*;
 use leptos::task::spawn_local;
@@ -40,7 +40,7 @@ pub fn ConnectDialog(
     let (insecure, set_insecure) = signal(false);
     let (status, set_status) = signal::<Option<String>>(None);
     let (busy, set_busy) = signal(false);
-    let (cancel_token, set_cancel_token) = signal::<Option<Rc<Cell<bool>>>>(None);
+    let (cancel_token, set_cancel_token) = signal::<Option<Arc<AtomicBool>>>(None);
 
     // Pre-fill address from NEXUS_SERVER_ADDR if the deploy script set it.
     {
@@ -70,7 +70,7 @@ pub fn ConnectDialog(
         let i = insecure.get();
         set_busy.set(true);
 
-        let cancelled = Rc::new(Cell::new(false));
+        let cancelled = Arc::new(AtomicBool::new(false));
         set_cancel_token.set(Some(cancelled.clone()));
 
         spawn_local(async move {
@@ -79,7 +79,7 @@ pub fn ConnectDialog(
             let mut backoff_ms: u32 = 1000;
 
             loop {
-                if cancelled.get() {
+                if cancelled.load(Ordering::Relaxed) {
                     return;
                 }
 
@@ -109,7 +109,7 @@ pub fn ConnectDialog(
                         return;
                     }
                     Err(err) => {
-                        if cancelled.get() {
+                        if cancelled.load(Ordering::Relaxed) {
                             return;
                         }
 
@@ -142,7 +142,7 @@ pub fn ConnectDialog(
 
     let on_cancel = move |_| {
         if let Some(token) = cancel_token.get() {
-            token.set(true);
+            token.store(true, Ordering::Relaxed);
         }
         set_busy.set(false);
         set_status.set(Some("cancelled".to_string()));

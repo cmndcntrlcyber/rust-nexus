@@ -45,9 +45,8 @@ pub fn get_startup_config() -> StartupConfig {
     StartupConfig { server_addr }
 }
 
-/// Pre-flight check: validate address format and TLS configuration
-/// before attempting a network connection.
-fn preflight_check(addr: &str, insecure_network: bool) -> Result<(), String> {
+/// Pre-flight check: validate address format before attempting a connection.
+fn preflight_check(addr: &str) -> Result<(), String> {
     let uri: http::Uri = addr.parse().map_err(|e| {
         format!(
             "invalid address \"{addr}\": {e}. \
@@ -56,46 +55,29 @@ fn preflight_check(addr: &str, insecure_network: bool) -> Result<(), String> {
         )
     })?;
 
-    let scheme = uri.scheme_str().ok_or_else(|| {
+    uri.scheme_str().ok_or_else(|| {
         format!(
             "address \"{addr}\" missing scheme. Use https:// for remote \
              servers or http:// for local dev"
         )
     })?;
 
-    let host = uri.host().ok_or_else(|| {
+    uri.host().ok_or_else(|| {
         format!("address \"{addr}\" missing hostname")
     })?;
 
-    if uri.port_u16().is_none() {
-        return Err(format!(
-            "address \"{addr}\" missing port. The C2 A2A service \
-             typically runs on port 50052 (e.g. {scheme}://{host}:50052)"
-        ));
-    }
-
-    if scheme == "https" {
-        let tls_result = nexus_a2a::tls::load_client_config_from_env();
-        if tls_result.is_err() && !insecure_network {
-            return Err(
-                "https:// endpoint requires mTLS certificates but none are configured. \
-                 Set NEXUS_CA_CERT, NEXUS_CLIENT_CERT, NEXUS_CLIENT_KEY environment \
-                 variables, or check \"Allow non-loopback address\" for insecure mode."
-                    .to_string(),
-            );
-        }
-    }
-
-    if host.contains("-a2a.") || host.contains("-api.") {
-        warn!(
-            addr,
-            "address looks like a Cloudflare tunnel URL \u{2014} the C2 A2A \
-             gRPC endpoint is typically a direct connection (e.g. \
-             https://c2.example.com:50052), not a tunneled subdomain"
-        );
-    }
-
     Ok(())
+}
+
+/// Returns true if the address appears to be a Cloudflare tunnel URL
+/// (e.g. `https://c3s-a2a.onoiroi.us`), which uses standard TLS
+/// via the public CA rather than custom mTLS.
+fn is_tunnel_url(addr: &str) -> bool {
+    addr.parse::<http::Uri>()
+        .ok()
+        .and_then(|u| u.host().map(|h| h.to_string()))
+        .map(|h| h.contains("-a2a.") || h.contains("-api."))
+        .unwrap_or(false)
 }
 
 /// Connect to the C2's A2A service. Runs pre-flight validation, then
@@ -108,7 +90,7 @@ pub async fn connect_c2(
 ) -> Result<ConnectResponse, String> {
     info!(c2 = %addr, insecure_network, "console: connecting");
 
-    preflight_check(&addr, insecure_network)?;
+    preflight_check(&addr)?;
 
     let addr_for_err = addr.clone();
     let port_str = addr
@@ -138,8 +120,28 @@ async fn connect_c2_inner(
     addr: String,
     insecure_network: bool,
 ) -> Result<ConnectResponse, String> {
-    // ── Phase 1: gRPC connection ─────────────────────────────────
-    let tls = nexus_a2a::tls::load_client_config_from_env().ok();
+    // ── Phase 1: TLS + gRPC connection ────────────────────────────
+    // Tunnel URLs use system root CAs (Cloudflare terminates TLS).
+    // Direct connections use custom mTLS certs from env or well-known paths.
+    let tunnel = is_tunnel_url(&addr);
+    let tls = if tunnel {
+        info!("tunnel URL detected — using system root CAs (no custom mTLS)");
+        None
+    } else {
+        match nexus_a2a::tls::load_client_config_from_env() {
+            Ok(config) => {
+                info!("mTLS configured from environment");
+                Some(config)
+            }
+            Err(_) => match nexus_a2a::tls::load_client_config_from_well_known_paths() {
+                Some((config, path)) => {
+                    info!(path = %path, "mTLS configured from well-known path");
+                    Some(config)
+                }
+                None => None,
+            },
+        }
+    };
     let config = ConnectConfig::default();
     let addr2 = addr.clone();
 

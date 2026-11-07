@@ -65,11 +65,10 @@ impl A2aClient {
         let host = uri
             .host()
             .ok_or_else(|| anyhow::anyhow!("missing host in {addr}"))?;
-        let port = uri
-            .port_u16()
-            .ok_or_else(|| anyhow::anyhow!("missing port in {addr}"))?;
+        let scheme_is_https = uri.scheme_str() == Some("https");
+        let port = uri.port_u16().unwrap_or(if scheme_is_https { 443 } else { 80 });
         let socket = format!("{host}:{port}");
-        let tls_configured = tls.is_some();
+        let tls_configured = tls.is_some() || scheme_is_https;
         insecure::enforce(socket.as_str(), insecure_network, tls_configured)?;
         if let Some(t) = tls {
             endpoint = endpoint.tls_config(t)?;
@@ -93,11 +92,10 @@ impl A2aClient {
         let host = uri
             .host()
             .ok_or_else(|| anyhow::anyhow!("missing host in {addr}"))?;
-        let port = uri
-            .port_u16()
-            .ok_or_else(|| anyhow::anyhow!("missing port in {addr}"))?;
+        let scheme_is_https = uri.scheme_str() == Some("https");
+        let port = uri.port_u16().unwrap_or(if scheme_is_https { 443 } else { 80 });
         let socket = format!("{host}:{port}");
-        let tls_configured = tls.is_some();
+        let tls_configured = tls.is_some() || scheme_is_https;
         insecure::enforce(socket.as_str(), insecure_network, tls_configured)?;
         if let Some(t) = tls {
             endpoint = endpoint.tls_config(t)?;
