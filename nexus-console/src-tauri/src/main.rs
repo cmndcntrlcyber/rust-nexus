@@ -41,6 +41,8 @@ fn main() {
             commands::load_tunnel_config,
             commands::get_tunnel_services,
             commands::open_tunnel_url,
+            // Post-connect health monitor.
+            commands::start_health_monitor,
             // Stub commands — UI-side components pending backend implementation.
             commands::submit_approval,
             commands::steer_agent,

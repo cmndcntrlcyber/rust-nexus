@@ -1,9 +1,13 @@
-//! Pre-connect form.
+//! Pre-connect form with retry, cancel, and address validation.
+
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use serde::Serialize;
 use wasm_bindgen::JsCast;
+use wasm_bindgen_futures::JsFuture;
 
 use crate::tauri_api;
 use crate::types::{ConnectResponse, ConnectionInfo};
@@ -13,6 +17,17 @@ struct ConnectArgs<'a> {
     addr: &'a str,
     #[serde(rename = "insecureNetwork")]
     insecure_network: bool,
+}
+
+/// WASM-compatible sleep (no extra crate needed).
+async fn sleep_ms(ms: u32) {
+    let promise = js_sys::Promise::new(&mut |resolve, _| {
+        web_sys::window()
+            .unwrap()
+            .set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, ms as i32)
+            .unwrap();
+    });
+    let _ = JsFuture::from(promise).await;
 }
 
 /// Connection dialog.
@@ -25,6 +40,7 @@ pub fn ConnectDialog(
     let (insecure, set_insecure) = signal(false);
     let (status, set_status) = signal::<Option<String>>(None);
     let (busy, set_busy) = signal(false);
+    let (cancel_token, set_cancel_token) = signal::<Option<Arc<AtomicBool>>>(None);
 
     // Pre-fill address from NEXUS_SERVER_ADDR if the deploy script set it.
     {
@@ -53,27 +69,83 @@ pub fn ConnectDialog(
         let a = addr.get();
         let i = insecure.get();
         set_busy.set(true);
-        set_status.set(Some("connecting…".to_string()));
+
+        let cancelled = Arc::new(AtomicBool::new(false));
+        set_cancel_token.set(Some(cancelled.clone()));
 
         spawn_local(async move {
-            let args = ConnectArgs {
-                addr: &a,
-                insecure_network: i,
-            };
-            match tauri_api::invoke::<_, ConnectResponse>("connect_c2", &args).await {
-                Ok(resp) => {
-                    set_status.set(Some(format!(
-                        "connected to {} ({})",
-                        resp.server_name, resp.server_version
-                    )));
-                    set_connection.set(Some(resp.into()));
+            let max_retries: u32 = 3;
+            let mut attempt: u32 = 0;
+            let mut backoff_ms: u32 = 1000;
+
+            loop {
+                if cancelled.load(Ordering::Relaxed) {
+                    return;
                 }
-                Err(err) => {
-                    set_status.set(Some(format!("error: {err}")));
-                    set_busy.set(false);
+
+                attempt += 1;
+
+                if attempt == 1 {
+                    set_status.set(Some("connecting\u{2026}".to_string()));
+                } else {
+                    set_status.set(Some(format!(
+                        "retry {}/{} \u{2014} connecting\u{2026}",
+                        attempt - 1,
+                        max_retries
+                    )));
+                }
+
+                let args = ConnectArgs {
+                    addr: &a,
+                    insecure_network: i,
+                };
+                match tauri_api::invoke::<_, ConnectResponse>("connect_c2", &args).await {
+                    Ok(resp) => {
+                        set_status.set(Some(format!(
+                            "connected to {} ({})",
+                            resp.server_name, resp.server_version
+                        )));
+                        set_connection.set(Some(resp.into()));
+                        return;
+                    }
+                    Err(err) => {
+                        if cancelled.load(Ordering::Relaxed) {
+                            return;
+                        }
+
+                        let is_preflight = err.contains("invalid address")
+                            || err.contains("missing scheme")
+                            || err.contains("missing port")
+                            || err.contains("missing hostname")
+                            || err.contains("requires mTLS");
+
+                        if is_preflight || attempt > max_retries {
+                            set_status.set(Some(format!("error: {err}")));
+                            set_busy.set(false);
+                            return;
+                        }
+
+                        set_status.set(Some(format!(
+                            "attempt {} failed: {err} \u{2014} retrying in {}s\u{2026}",
+                            attempt,
+                            backoff_ms / 1000
+                        )));
+
+                        let delay = backoff_ms;
+                        backoff_ms = (backoff_ms * 2).min(30_000);
+                        sleep_ms(delay).await;
+                    }
                 }
             }
         });
+    };
+
+    let on_cancel = move |_| {
+        if let Some(token) = cancel_token.get() {
+            token.store(true, Ordering::Relaxed);
+        }
+        set_busy.set(false);
+        set_status.set(Some("cancelled".to_string()));
     };
 
     view! {
@@ -95,6 +167,22 @@ pub fn ConnectDialog(
                     placeholder="http://127.0.0.1:50052"
                 />
             </label>
+            {move || {
+                let a = addr.get();
+                if !a.is_empty() && !a.starts_with("http://") && !a.starts_with("https://") {
+                    view! {
+                        <p class="input-hint warning">"Address must start with http:// or https://"</p>
+                    }.into_any()
+                } else if a.contains("-a2a.") || a.contains("-api.") {
+                    view! {
+                        <p class="input-hint warning">
+                            "This looks like a tunnel URL. The C2 gRPC endpoint is typically a direct address (e.g. https://c2.example.com:50052)"
+                        </p>
+                    }.into_any()
+                } else {
+                    view! { <span></span> }.into_any()
+                }
+            }}
             <label class="checkbox">
                 <input
                     type="checkbox"
@@ -109,9 +197,22 @@ pub fn ConnectDialog(
                 />
                 "Allow non-loopback address"
             </label>
-            <button on:click=on_submit disabled=move || busy.get()>
-                {move || if busy.get() { "Connecting…" } else { "Connect" }}
-            </button>
+            <div class="connect-buttons">
+                <button on:click=on_submit disabled=move || busy.get()>
+                    {move || if busy.get() { "Connecting\u{2026}" } else { "Connect" }}
+                </button>
+                {move || {
+                    if busy.get() {
+                        view! {
+                            <button class="cancel-btn" on:click=on_cancel>
+                                "Cancel"
+                            </button>
+                        }.into_any()
+                    } else {
+                        view! { <span></span> }.into_any()
+                    }
+                }}
+            </div>
             <p class="status">{move || status.get().unwrap_or_default()}</p>
         </div>
     }

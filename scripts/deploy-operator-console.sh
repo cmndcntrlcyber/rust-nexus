@@ -152,13 +152,13 @@ if [[ "${DO_BUILD}" -eq 1 ]]; then
 fi
 
 # ---------- 4. build ----------
-BUNDLE_BIN="${REPO_ROOT}/target/release/nexus-console"
+BUNDLE_BIN="${TAURI_DIR}/target/release/nexus-console"
 
 if [[ "${DO_BUILD}" -eq 1 ]]; then
     if [[ "${MODE}" == "release" ]]; then
         log "building Tauri release bundle (this takes a while on first build)"
         (cd "${TAURI_DIR}" && cargo tauri build)
-        log "bundles in: ${REPO_ROOT}/target/release/bundle/"
+        log "bundles in: ${TAURI_DIR}/target/release/bundle/"
     fi
     # In dev mode the build happens at launch time via `cargo tauri dev`.
 fi

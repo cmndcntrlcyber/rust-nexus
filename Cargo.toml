@@ -57,7 +57,7 @@ x509-parser = "0.15"
 hickory-resolver = "0.24"
 
 # HTTP client for Cloudflare API
-reqwest = { version = "0.11", features = ["json", "rustls-tls", "blocking"] }
+reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls", "blocking"] }
 
 # Let's Encrypt ACME client (async, pure-Rust)
 instant-acme = "0.8"

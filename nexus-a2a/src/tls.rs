@@ -150,6 +150,56 @@ pub fn load_client_config_from_env() -> Result<ClientTlsConfig, TlsError> {
     Ok(config)
 }
 
+const WELL_KNOWN_CERT_DIRS: &[&str] = &[
+    "$HOME/.nexus/certs",
+    "/etc/nexus/certs",
+    "./certs/prod",
+    "./certs/pki/console",
+    "./certs/pki/operator",
+];
+
+const CA_CERT_NAMES: &[&str] = &["ca.crt.pem", "ca.pem"];
+const CLIENT_CERT_NAMES: &[&str] = &["operator.crt.pem", "client.crt.pem"];
+const CLIENT_KEY_NAMES: &[&str] = &["operator.key.pem", "client.key.pem"];
+
+/// Build a [`ClientTlsConfig`] by probing well-known filesystem paths when
+/// environment variables are not set. Returns the config and the directory
+/// it was loaded from, or `None` if no CA cert was found at any location.
+pub fn load_client_config_from_well_known_paths() -> Option<(ClientTlsConfig, String)> {
+    let home = env::var("HOME").unwrap_or_default();
+
+    for dir_template in WELL_KNOWN_CERT_DIRS {
+        let dir = dir_template.replace("$HOME", &home);
+        let dir_path = Path::new(&dir);
+        if !dir_path.is_dir() {
+            continue;
+        }
+
+        let ca_bytes = CA_CERT_NAMES
+            .iter()
+            .find_map(|name| std::fs::read(dir_path.join(name)).ok());
+        let Some(ca) = ca_bytes else { continue };
+
+        let mut config = ClientTlsConfig::new().ca_certificate(Certificate::from_pem(ca));
+
+        let cert = CLIENT_CERT_NAMES
+            .iter()
+            .find_map(|name| std::fs::read(dir_path.join(name)).ok());
+        let key = CLIENT_KEY_NAMES
+            .iter()
+            .find_map(|name| std::fs::read(dir_path.join(name)).ok());
+
+        if let (Some(c), Some(k)) = (cert, key) {
+            if assert_cert_key_match(&c, &k).is_ok() {
+                config = config.identity(Identity::from_pem(&c, &k));
+            }
+        }
+
+        return Some((config, dir));
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

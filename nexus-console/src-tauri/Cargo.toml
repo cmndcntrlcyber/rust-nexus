@@ -13,28 +13,26 @@ name = "nexus-console"
 path = "src/main.rs"
 
 [build-dependencies]
-tauri-build = { workspace = true }
+tauri-build = { version = "2", features = [] }
 
 [dependencies]
 nexus-common = { path = "../../nexus-common" }
-nexus-a2a = { workspace = true }
+nexus-a2a = { path = "../../nexus-a2a" }
 nexus-mesh = { path = "../../nexus-mesh" }
-# v1.4.4 — audit chain verification in `audit_log_verify` Tauri command.
-blake3 = { workspace = true }
-tauri = { workspace = true, features = ["tray-icon"] }
-tokio = { workspace = true }
-tokio-stream = { workspace = true }
-futures = { workspace = true }
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-anyhow = { workspace = true }
-thiserror = { workspace = true }
-libp2p = { workspace = true }
-# Tonic 0.14 directly (independent of the overlay's 0.10).
+blake3 = "1"
+tauri = { version = "2", features = ["tray-icon"] }
+tokio = { version = "1.35", features = ["full"] }
+tokio-stream = "0.1"
+futures = "0.3"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1"
+thiserror = "1.0"
+libp2p = { version = "0.53", features = ["tcp", "noise", "yamux", "tokio", "macros", "identify", "gossipsub", "ping"] }
 tonic = { version = "0.14", default-features = false, features = ["transport", "channel"] }
-# v4.4 — open tunnel URLs in system browser.
+http = "1"
 open = "5"
 
 [features]

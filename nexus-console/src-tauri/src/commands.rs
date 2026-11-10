@@ -1,10 +1,11 @@
 //! Tauri commands invoked by the WASM frontend.
 
 use nexus_a2a::framing::{bytes_request, control_request, ShellControl};
-use nexus_a2a::{A2aClient, DualAuthGate};
+use nexus_a2a::{A2aClient, ConnectConfig, DualAuthGate};
 use serde::Serialize;
 use tauri::{AppHandle, State};
 use tracing::{info, warn};
+use tauri::Emitter;
 
 use crate::session::open_session;
 use crate::state::{Connection, ConnectionSummary, ConsoleState, SessionHandle, TunnelConfig, TunnelService};
@@ -31,14 +32,56 @@ pub struct StartupConfig {
 /// Return environment-supplied startup config to the frontend.
 #[tauri::command]
 pub fn get_startup_config() -> StartupConfig {
-    StartupConfig {
-        server_addr: std::env::var("NEXUS_SERVER_ADDR").ok(),
+    let server_addr = std::env::var("NEXUS_SERVER_ADDR").ok();
+    if let Some(ref addr) = server_addr {
+        if addr.contains("-a2a.") || addr.contains("-api.") {
+            warn!(
+                addr,
+                "NEXUS_SERVER_ADDR looks like a Cloudflare tunnel URL \u{2014} the C2 gRPC \
+                 endpoint should be a direct address (e.g. https://c2.example.com:50052)"
+            );
+        }
     }
+    StartupConfig { server_addr }
 }
 
-/// Connect to the C2's A2A service. After gRPC connect, also attempts
-/// to establish a mesh connection via `MeshNode::spawn()` and validates
-/// both auth paths via `DualAuthGate` before returning (WS1 Phase 1d).
+/// Pre-flight check: validate address format before attempting a connection.
+fn preflight_check(addr: &str) -> Result<(), String> {
+    let uri: http::Uri = addr.parse().map_err(|e| {
+        format!(
+            "invalid address \"{addr}\": {e}. \
+             Expected format: https://host:port (e.g. https://c2.example.com:50052) \
+             or http://127.0.0.1:50052 for local dev"
+        )
+    })?;
+
+    uri.scheme_str().ok_or_else(|| {
+        format!(
+            "address \"{addr}\" missing scheme. Use https:// for remote \
+             servers or http:// for local dev"
+        )
+    })?;
+
+    uri.host().ok_or_else(|| {
+        format!("address \"{addr}\" missing hostname")
+    })?;
+
+    Ok(())
+}
+
+/// Returns true if the address appears to be a Cloudflare tunnel URL
+/// (e.g. `https://c3s-a2a.onoiroi.us`), which uses standard TLS
+/// via the public CA rather than custom mTLS.
+fn is_tunnel_url(addr: &str) -> bool {
+    addr.parse::<http::Uri>()
+        .ok()
+        .and_then(|u| u.host().map(|h| h.to_string()))
+        .map(|h| h.contains("-a2a.") || h.contains("-api."))
+        .unwrap_or(false)
+}
+
+/// Connect to the C2's A2A service. Runs pre-flight validation, then
+/// gRPC connect + mesh + dual-auth under a single timeout.
 #[tauri::command]
 pub async fn connect_c2(
     state: State<'_, ConsoleState>,
@@ -47,46 +90,114 @@ pub async fn connect_c2(
 ) -> Result<ConnectResponse, String> {
     info!(c2 = %addr, insecure_network, "console: connecting");
 
-    // ── Phase 1: gRPC connection ──────────────────────────────────
-    let tls = nexus_a2a::tls::load_client_config_from_env().ok();
-    let addr2 = addr.clone();
-    let (client, card) = tokio::time::timeout(
-        std::time::Duration::from_secs(15),
-        async move {
-            let mut c = A2aClient::connect_with_optional_tls(&addr2, insecure_network, tls)
-                .await
-                .map_err(|e| format!("connect: {e:#}"))?;
-            let card = c
-                .get_agent_card()
-                .await
-                .map_err(|e| format!("get_agent_card: {e}"))?;
-            Ok::<_, String>((c, card))
-        },
+    preflight_check(&addr)?;
+
+    let addr_for_err = addr.clone();
+    let port_str = addr
+        .parse::<http::Uri>()
+        .ok()
+        .and_then(|u| u.port_u16())
+        .map(|p| p.to_string())
+        .unwrap_or_else(|| "?".to_string());
+
+    tokio::time::timeout(
+        std::time::Duration::from_secs(20),
+        connect_c2_inner(&state, addr, insecure_network),
     )
     .await
     .map_err(|_| {
-        "timed out after 15 s — is the nexus-server A2A service running at that address?"
-            .to_string()
+        format!(
+            "connection timed out after 20s \u{2014} could not reach {addr_for_err}. \
+             Check that the nexus-server A2A service is running and reachable, \
+             and that firewall rules allow port {port_str}."
+        )
     })?
-    .map_err(|e| e)?;
+}
+
+/// Inner connection logic (all 3 phases), called under a single timeout.
+async fn connect_c2_inner(
+    state: &State<'_, ConsoleState>,
+    addr: String,
+    insecure_network: bool,
+) -> Result<ConnectResponse, String> {
+    // ── Phase 1: TLS + gRPC connection ────────────────────────────
+    // Tunnel URLs use system root CAs (Cloudflare terminates TLS).
+    // Direct connections use custom mTLS certs from env or well-known paths.
+    let tunnel = is_tunnel_url(&addr);
+    let tls = if tunnel {
+        info!("tunnel URL detected — using system root CAs (no custom mTLS)");
+        None
+    } else {
+        match nexus_a2a::tls::load_client_config_from_env() {
+            Ok(config) => {
+                info!("mTLS configured from environment");
+                Some(config)
+            }
+            Err(_) => match nexus_a2a::tls::load_client_config_from_well_known_paths() {
+                Some((config, path)) => {
+                    info!(path = %path, "mTLS configured from well-known path");
+                    Some(config)
+                }
+                None => None,
+            },
+        }
+    };
+    let config = ConnectConfig::default();
+    let addr2 = addr.clone();
+
+    let mut client = A2aClient::connect_with_config(&addr2, insecure_network, tls, config)
+        .await
+        .map_err(|e| {
+            let msg = format!("{e:#}");
+            let lower = msg.to_lowercase();
+            if lower.contains("dns") || lower.contains("resolve") || lower.contains("no such host")
+            {
+                format!(
+                    "DNS resolution failed for {addr2}: cannot resolve hostname. \
+                     Verify the address and check DNS settings."
+                )
+            } else if lower.contains("connection refused") {
+                format!(
+                    "Connection refused at {addr2}: the server may not be running \
+                     or a firewall is blocking the port."
+                )
+            } else if lower.contains("certificate")
+                || lower.contains("tls")
+                || lower.contains("ssl")
+                || lower.contains("handshake")
+            {
+                format!(
+                    "TLS handshake failed with {addr2}: {msg}. \
+                     Verify that NEXUS_CA_CERT matches the server's CA and that \
+                     client certs are valid."
+                )
+            } else {
+                format!("connect to {addr2}: {msg}")
+            }
+        })?;
+
+    let card = client
+        .get_agent_card()
+        .await
+        .map_err(|e| format!("connected but get_agent_card failed: {e}"))?;
 
     let grpc_authenticated = true;
     let operator_id = Some("console-operator".to_string());
 
-    // ── Phase 2: Mesh connection (WS1 Phase 1d) ───────────────────
-    let (mesh_authenticated, mesh_peer_id) = match try_mesh_connect(&state, insecure_network).await
-    {
-        Ok(peer_id) => {
-            info!(mesh_peer = %peer_id, "console: mesh connected");
-            (true, Some(peer_id))
-        }
-        Err(e) => {
-            warn!(error = %e, "console: mesh connection failed — continuing with gRPC only");
-            (false, None)
-        }
-    };
+    // ── Phase 2: Mesh connection (WS1 Phase 1d) ────────────────
+    let (mesh_authenticated, mesh_peer_id) =
+        match try_mesh_connect(state, insecure_network).await {
+            Ok(peer_id) => {
+                info!(mesh_peer = %peer_id, "console: mesh connected");
+                (true, Some(peer_id))
+            }
+            Err(e) => {
+                warn!(error = %e, "console: mesh connection failed \u{2014} continuing with gRPC only");
+                (false, None)
+            }
+        };
 
-    // ── Phase 3: Dual-auth validation ─────────────────────────────
+    // ── Phase 3: Dual-auth validation ────────────────────────────
     let require_dual = !insecure_network;
     let gate = DualAuthGate::new(require_dual);
     let auth_result = DualAuthGate::build_result(
@@ -643,7 +754,6 @@ pub async fn start_topology_stream(
     include_flows: Option<bool>,
     include_barometer: Option<bool>,
 ) -> Result<(), String> {
-    use tauri::Emitter;
     use tokio::sync::watch;
 
     if state.is_topology_streaming().await {
@@ -709,25 +819,51 @@ pub async fn stop_topology_stream(
     Ok(state.stop_topology().await)
 }
 
-// ── Stub commands for UI components not yet backed by a real service ─────────
+// ─── Post-connect health monitor ───────────────────────────────────
 
-/// Stub for HUD approval queue — returns a structured "not implemented" error
-/// so the UI can show a graceful message instead of crashing.
+/// Background health monitor that pings the C2 periodically and emits
+/// `c2-health` ("ok") or `c2-disconnected` events.
 #[tauri::command]
-pub async fn submit_approval(_decision_id: String, _approved: bool) -> Result<(), String> {
-    Err("Approval queue backend not yet implemented — coming in v1.5".into())
-}
+pub async fn start_health_monitor(
+    app: AppHandle,
+    state: State<'_, ConsoleState>,
+) -> Result<(), String> {
+    let mut client = state.client().await.map_err(|e| e.to_string())?;
 
-/// Stub for HUD steering panel — returns a structured "not implemented" error.
-#[tauri::command]
-pub async fn steer_agent(_action: String) -> Result<(), String> {
-    Err("Agent steering backend not yet implemented — coming in v1.5".into())
-}
+    tokio::spawn(async move {
+        let mut consecutive_failures: u32 = 0;
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(15));
+        loop {
+            interval.tick().await;
+            match tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                client.get_agent_card(),
+            )
+            .await
+            {
+                Ok(Ok(_)) => {
+                    consecutive_failures = 0;
+                    let _ = app.emit("c2-health", "ok");
+                }
+                _ => {
+                    consecutive_failures += 1;
+                    warn!(
+                        consecutive_failures,
+                        "health monitor: C2 ping failed"
+                    );
+                    if consecutive_failures >= 3 {
+                        let _ = app.emit(
+                            "c2-disconnected",
+                            "health check failed 3 consecutive times",
+                        );
+                        break;
+                    }
+                }
+            }
+        }
+    });
 
-/// Stub for chat message sending — returns a structured "not implemented" error.
-#[tauri::command]
-pub async fn send_chat_message(_mode: String, _message: String) -> Result<String, String> {
-    Err("Chat backend not yet implemented — coming in v1.5".into())
+    Ok(())
 }
 
 #[cfg(test)]
