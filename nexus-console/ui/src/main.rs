@@ -11,9 +11,13 @@ mod types;
 mod xterm;
 
 use components::agent_list::AgentList;
+use components::audit_log_viewer::AuditLogViewer;
 use components::chat::chat_tab::ChatTab;
 use components::connect_dialog::ConnectDialog;
 use components::dashboard_tab::DashboardTab;
+use components::hud::engagement_status::EngagementStatus;
+use components::hud::hud_state::HudState;
+use components::hud::notification_center::NotificationCenter;
 use components::kali_tab::KaliTab;
 use components::mesh_tab::MeshTab;
 use components::service_tab::ServiceTab;
@@ -46,6 +50,9 @@ fn App() -> impl IntoView {
     let (active_tab, set_active_tab) = signal(TabKind::Chat);
     let (_sidebar_collapsed, _set_sidebar_collapsed) = signal(false);
     let (dynamic_tabs, set_dynamic_tabs) = signal::<Vec<TabKind>>(Vec::new());
+
+    // HUD state (notifications, approvals, engagement status).
+    let hud = RwSignal::new(HudState::default());
 
     // v4.4: tunnel service discovery.
     let (tunnel_services, set_tunnel_services) = signal::<Vec<TunnelServiceInfo>>(Vec::new());
@@ -165,9 +172,7 @@ fn App() -> impl IntoView {
                                 />
                             }.into_any(),
                             TabKind::AuditLog => view! {
-                                <div class="tab-placeholder">
-                                    <p>"Audit Log"</p>
-                                </div>
+                                <AuditLogViewer />
                             }.into_any(),
                             // v4.4: dynamic tunnel service tab (Empire, Registry).
                             TabKind::TunnelService { url, label, .. } => {
@@ -176,6 +181,8 @@ fn App() -> impl IntoView {
                         }
                     }}
                 </main>
+                <NotificationCenter hud=hud />
+                <EngagementStatus hud=hud />
                 <StatusBar
                     connection=connection
                     session_id=session_id

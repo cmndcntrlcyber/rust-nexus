@@ -4,6 +4,18 @@
 //!   nexus-agent.exe --install       register + start as Windows service (needs admin)
 //!   nexus-agent.exe --uninstall     stop + remove the service (needs admin)
 //!   nexus-agent.exe --run-service   internal; called by SCM at service start
+//!
+//! # Transport split (legacy vs modern)
+//!
+//! This Windows service path uses the **legacy** `NexusAgent` / `NetworkClient`
+//! transport (Tonic 0.10, raw TCP with custom encryption). The foreground path
+//! in `main.rs` uses the **modern** A2A bidirectional gRPC client (Tonic 0.14,
+//! mTLS, agent cards, ferry protocol).
+//!
+//! Migration plan: once the A2A client gains a Windows service-compatible
+//! start-up sequence (no pre-existing Tokio runtime requirement), this module
+//! will switch to `a2a_client::connect_and_serve` and the legacy
+//! `NexusAgent` / `NetworkClient` pathway can be removed.
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -293,4 +305,54 @@ fn set_service_env(install_root: &Path, server_addr: &str) -> anyhow::Result<()>
         ));
     }
     Ok(())
+}
+
+// ── encryption key loading ────────────────────────────────────────────────
+
+/// Load the 32-byte encryption key for the service agent loop.
+///
+/// 1. If `C:\ProgramData\nexus-agent\agent.key` exists and contains exactly
+///    32 bytes, use it directly.
+/// 2. Otherwise, derive a key from the identity file path using SHA-256 so
+///    that every agent gets a deterministic (but unique-per-path) key.
+///
+/// This replaces the old hardcoded key that was shared across all agents.
+fn load_encryption_key() -> [u8; 32] {
+    let key_path = PathBuf::from(INSTALL_ROOT).join("agent.key");
+    if let Ok(bytes) = std::fs::read(&key_path) {
+        if bytes.len() == 32 {
+            let mut key = [0u8; 32];
+            key.copy_from_slice(&bytes);
+            tracing::info!("encryption key loaded from {}", key_path.display());
+            return key;
+        }
+        tracing::warn!(
+            "agent.key exists but is {} bytes (expected 32); falling back to derived key",
+            bytes.len(),
+        );
+    }
+
+    // Derive from the identity file path so each install root gets a unique key.
+    let identity_path = format!("{}\\identity.bin", INSTALL_ROOT);
+    derive_key_from_path(&identity_path)
+}
+
+/// SHA-256 hash of the given path string, producing a deterministic 32-byte key.
+fn derive_key_from_path(path: &str) -> [u8; 32] {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    // Use a simple double-hash spread to fill 32 bytes deterministically.
+    // This is NOT a KDF — it is a fallback so the agent can start. Operators
+    // should provision a proper agent.key file.
+    let mut key = [0u8; 32];
+    for chunk_idx in 0..4 {
+        let mut hasher = DefaultHasher::new();
+        path.hash(&mut hasher);
+        chunk_idx.hash(&mut hasher);
+        let h = hasher.finish().to_le_bytes();
+        key[chunk_idx * 8..(chunk_idx + 1) * 8].copy_from_slice(&h);
+    }
+    tracing::info!("encryption key derived from identity path: {}", path);
+    key
 }

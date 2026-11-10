@@ -147,14 +147,14 @@ impl HttpClient {
     }
 
     /// Send HTTP POST request with encrypted payload
-    pub async fn send_http_message(&self, encrypted_message: &str) -> Result<String> {
-        // This is a placeholder implementation
-        // In a real implementation, you would use reqwest or similar HTTP client
-        // with proper domain fronting headers and SSL configuration
-
-        // For now, return an error indicating HTTP is not implemented
+    pub async fn send_http_message(&self, _encrypted_message: &str) -> Result<String> {
+        // Stub — reqwest-based implementation with domain fronting headers and
+        // SSL configuration is planned but not yet wired up.
         Err(NexusError::NetworkError(
-            "HTTP client not yet implemented".to_string(),
+            format!(
+                "Transport '{}' not yet implemented \u{2014} use gRPC (A2A) transport",
+                "HTTP"
+            ),
         ))
     }
 
@@ -192,10 +192,13 @@ impl DnsClient {
 
     /// Send data via DNS TXT record queries
     pub async fn send_dns_message(&self, _encrypted_message: &str) -> Result<String> {
-        // Placeholder for DNS-based C2 communication
-        // This would involve crafting DNS queries with embedded data
+        // Stub — DNS-based C2 communication via crafted TXT record queries
+        // is planned but not yet wired up.
         Err(NexusError::NetworkError(
-            "DNS client not yet implemented".to_string(),
+            format!(
+                "Transport '{}' not yet implemented \u{2014} use gRPC (A2A) transport",
+                "DNS"
+            ),
         ))
     }
 }

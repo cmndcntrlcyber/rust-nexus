@@ -61,35 +61,17 @@ tonic-build = { workspace = true }
 default = []
 
 # Platform-specific features
-windows-specific = []
 linux-specific = ["libc"]
-
-# Sandboxing (WS1.5)
-sandbox = []
-etw-observer = ["sandbox"]
-ebpf-observer = ["sandbox"]
-seccomp-sandbox = ["sandbox"]
-
-# Execution capabilities
-bof-loading = []
-wmi-execution = []
-elf-loading = []
-systemd-integration = []
-
-# Communication features
-domain-fronting = []
-http-fallback = []
 
 # Ephemeral agent certificates (ECHOTRIBBLE P3) — compile-time cert
 # embedding with runtime memory-only extraction and self-destruct zeroing.
 embedded-certs = ["secrecy"]
 
-# Evasion features
-anti-debug = []
-anti-vm = []
-process-injection = []
-
-# ATT&CK techniques are now built-in via src/techniques/ (v3.8 WS4)
+# Deferred features — will be re-added when they gate actual code behind
+# #[cfg(feature = "...")] guards:
+#   windows-specific, sandbox, etw-observer, ebpf-observer, seccomp-sandbox,
+#   bof-loading, wmi-execution, elf-loading, systemd-integration,
+#   domain-fronting, http-fallback, anti-debug, anti-vm, process-injection
 
 [dev-dependencies]
 tempfile = "3"

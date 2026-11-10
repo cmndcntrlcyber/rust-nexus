@@ -1,36 +1,32 @@
-// v1.4 commit-prep: the nexus-agent binary is a v1.0 overlay that
-// pre-dates the `-D warnings` CI gate. Suppress the accumulated
-// dead-code + unused-import patterns at the binary root so the gate
-// doesn't block new work. The v1.5 overlay cleanup pass will address
-// these properly.
-#![allow(
-    dead_code,
-    unused_imports,
-    unused_variables,
-    unused_mut,
-    ambiguous_glob_imports,
-    clippy::all
-)]
-
 use nexus_common::*;
 use std::env;
-use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
 
 mod a2a_client;
+// The legacy agent/communication/execution modules are consumed by the Windows
+// service path (svc.rs). On non-Windows they appear unused to the binary target.
+#[allow(dead_code)]
 mod agent;
+#[allow(dead_code)]
 mod communication;
 #[cfg(feature = "embedded-certs")]
 mod embedded_certs;
+#[allow(dead_code)]
 mod evasion;
+#[allow(dead_code)]
 mod execution;
+#[allow(dead_code)]
 mod harness_ferry;
 mod op_mode;
+#[allow(dead_code)]
 mod persistence;
+#[allow(dead_code)]
 mod registry;
+#[allow(dead_code)]
 mod sandbox;
 mod shell;
+#[allow(dead_code)]
 mod system;
 
 #[cfg(target_os = "windows")]
@@ -39,8 +35,6 @@ mod fiber_execution;
 #[cfg(target_os = "windows")]
 mod svc;
 
-use agent::NexusAgent;
-use communication::NetworkClient;
 use evasion::EnvironmentChecker;
 
 fn main() {
@@ -157,6 +151,7 @@ fn hex_peer_id(peer_id: [u8; 32]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::agent::NexusAgent;
 
     #[tokio::test]
     async fn test_agent_initialization() {
@@ -164,7 +159,7 @@ mod tests {
         let key = [0u8; 32];
 
         // This should not panic
-        let agent = NexusAgent::new(server_addr, key).await;
-        assert!(agent.is_ok());
+        let _agent = NexusAgent::new(server_addr, key).await;
+        assert!(_agent.is_ok());
     }
 }
